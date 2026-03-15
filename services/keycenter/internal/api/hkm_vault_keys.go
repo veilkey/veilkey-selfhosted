@@ -179,7 +179,7 @@ func (s *Server) handleVaultList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta, int, []byte, error) {
-	resp, err := http.Get(agentURL + "/api/secrets/meta/" + name)
+	resp, err := s.httpClient.Get(agentURL + "/api/secrets/meta/" + name)
 	if err != nil {
 		return nil, 0, nil, err
 	}

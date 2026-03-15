@@ -19,7 +19,7 @@ type globalFunctionEnvelope struct {
 }
 
 func (s *Server) SyncGlobalFunctions(endpoint string) (int, int, error) {
-	resp, err := http.Get(endpoint)
+	resp, err := s.httpClient.Get(endpoint)
 	if err != nil {
 		return 0, 0, err
 	}

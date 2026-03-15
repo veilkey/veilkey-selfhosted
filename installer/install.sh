@@ -555,6 +555,9 @@ write_component_env_templates() {
 VEILKEY_PASSWORD=
 VEILKEY_ADDR=:10181
 VEILKEY_DB_PATH=/opt/veilkey/keycenter/data/veilkey.db
+VEILKEY_TLS_CERT=
+VEILKEY_TLS_KEY=
+VEILKEY_TLS_CA=
 EOF
 
   cat > "${veilkey_etc}/localvault.env.example" <<'EOF'
@@ -562,6 +565,9 @@ VEILKEY_PASSWORD=
 VEILKEY_ADDR=:10180
 VEILKEY_DB_PATH=/opt/veilkey/localvault/data/veilkey.db
 VEILKEY_KEYCENTER_URL=
+VEILKEY_TLS_CERT=
+VEILKEY_TLS_KEY=
+VEILKEY_TLS_CA=
 EOF
 
   cat > "${veilkey_etc}/proxy.env.example" <<'EOF'
@@ -627,11 +633,11 @@ render_profile_envs() {
   enable_proxy="${VEILKEY_ENABLE_PROXY:-${default_enable_proxy}}"
   default_keycenter_addr=":10180"
   default_localvault_addr=":10180"
-  default_keycenter_url="http://127.0.0.1:10180"
+  default_keycenter_url="https://127.0.0.1:10180"
   if [[ "${default_enable_keycenter}" = "1" && "${default_enable_localvault}" = "1" ]]; then
     default_keycenter_addr=":10181"
     default_localvault_addr=":10180"
-    default_keycenter_url="http://127.0.0.1:10181"
+    default_keycenter_url="https://127.0.0.1:10181"
   fi
   keycenter_addr="${VEILKEY_KEYCENTER_ADDR:-${default_keycenter_addr}}"
   keycenter_db="${VEILKEY_KEYCENTER_DB_PATH:-/opt/veilkey/keycenter/data/veilkey.db}"
@@ -639,7 +645,7 @@ render_profile_envs() {
   localvault_db="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
   localvault_trusted_ips="${VEILKEY_LOCALVAULT_TRUSTED_IPS:-}"
   keycenter_url="${VEILKEY_KEYCENTER_URL:-${default_keycenter_url}}"
-  proxy_localvault_url="${VEILKEY_PROXY_LOCALVAULT_URL:-http://127.0.0.1:10180}"
+  proxy_localvault_url="${VEILKEY_PROXY_LOCALVAULT_URL:-https://127.0.0.1:10180}"
   proxy_hub_url="${VEILKEY_PROXY_HUB_URL:-${keycenter_url}}"
 
   cat > "${installer_state}" <<EOF
@@ -656,6 +662,9 @@ EOF
 VEILKEY_PASSWORD=${VEILKEY_KEYCENTER_PASSWORD:-}
 VEILKEY_ADDR=${keycenter_addr}
 VEILKEY_DB_PATH=${keycenter_db}
+VEILKEY_TLS_CERT=${VEILKEY_TLS_CERT:-}
+VEILKEY_TLS_KEY=${VEILKEY_TLS_KEY:-}
+VEILKEY_TLS_CA=${VEILKEY_TLS_CA:-}
 EOF
 
   cat > "${veilkey_etc}/localvault.env" <<EOF
@@ -664,6 +673,9 @@ VEILKEY_ADDR=${localvault_addr}
 VEILKEY_DB_PATH=${localvault_db}
 VEILKEY_KEYCENTER_URL=${keycenter_url}
 VEILKEY_TRUSTED_IPS=${localvault_trusted_ips}
+VEILKEY_TLS_CERT=${VEILKEY_TLS_CERT:-}
+VEILKEY_TLS_KEY=${VEILKEY_TLS_KEY:-}
+VEILKEY_TLS_CA=${VEILKEY_TLS_CA:-}
 EOF
 
   cat > "${veilkey_etc}/proxy.env" <<EOF

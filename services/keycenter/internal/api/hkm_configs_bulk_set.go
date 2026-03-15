@@ -84,7 +84,7 @@ func (s *Server) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				checkMu.Unlock()
 				return
 			}
-			resp, err := http.DefaultClient.Do(httpReq)
+			resp, err := s.httpClient.Do(httpReq)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
 					resp.Body.Close()
@@ -190,7 +190,7 @@ func (s *Server) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			httpReq.Header.Set("Content-Type", "application/json")
-			resp, err := http.DefaultClient.Do(httpReq)
+			resp, err := s.httpClient.Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ai: ai, err: err}
 				return
@@ -263,7 +263,7 @@ func (s *Server) rollbackBulkSet(ctx context.Context, agents []*agentInfo, check
 				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")
-					resp, err := http.DefaultClient.Do(httpReq)
+					resp, err := s.httpClient.Do(httpReq)
 					if err == nil {
 						resp.Body.Close()
 					}
@@ -275,7 +275,7 @@ func (s *Server) rollbackBulkSet(ctx context.Context, agents []*agentInfo, check
 				defer wg.Done()
 				httpReq, _ := http.NewRequestWithContext(ctx, "DELETE", ai.URL()+"/api/configs/"+key, nil)
 				if httpReq != nil {
-					resp, err := http.DefaultClient.Do(httpReq)
+					resp, err := s.httpClient.Do(httpReq)
 					if err == nil {
 						resp.Body.Close()
 					}

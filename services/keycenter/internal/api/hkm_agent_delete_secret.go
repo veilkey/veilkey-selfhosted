@@ -18,7 +18,7 @@ func (s *Server) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request)
 	}
 
 	var trackedRef string
-	metaResp, err := http.Get(agent.URL() + "/api/secrets/meta/" + name)
+	metaResp, err := s.httpClient.Get(agent.URL() + "/api/secrets/meta/" + name)
 	if err == nil {
 		defer metaResp.Body.Close()
 		if metaResp.StatusCode == http.StatusOK {
@@ -37,7 +37,7 @@ func (s *Server) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request)
 	}
 
 	req, _ := http.NewRequest("DELETE", agent.URL()+"/api/secrets/"+name, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

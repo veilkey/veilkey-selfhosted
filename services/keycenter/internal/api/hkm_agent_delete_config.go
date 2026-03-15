@@ -18,7 +18,7 @@ func (s *Server) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request)
 
 	trackedRef := ""
 	preReq, _ := http.NewRequestWithContext(r.Context(), "GET", agent.URL()+"/api/configs/"+key, nil)
-	preResp, err := http.DefaultClient.Do(preReq)
+	preResp, err := s.httpClient.Do(preReq)
 	if err == nil {
 		defer preResp.Body.Close()
 		if preResp.StatusCode == http.StatusOK {
@@ -36,7 +36,7 @@ func (s *Server) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request)
 	}
 
 	req, _ := http.NewRequestWithContext(r.Context(), "DELETE", agent.URL()+"/api/configs/"+key, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

@@ -37,7 +37,7 @@ func (s *Server) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), "POST", agent.URL()+"/api/configs", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

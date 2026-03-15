@@ -46,6 +46,7 @@ type Server struct {
 	trustedCIDRs []*net.IPNet
 	identity     *NodeIdentity
 	timeouts     Timeouts
+	httpClient   *http.Client
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
@@ -94,7 +95,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		ipMap[entry] = true
 	}
 	locked := kek == nil
-	srv := &Server{db: database, kek: kek, locked: locked, trustedIPs: ipMap, trustedCIDRs: cidrs, timeouts: DefaultTimeouts()}
+	srv := &Server{db: database, kek: kek, locked: locked, trustedIPs: ipMap, trustedCIDRs: cidrs, timeouts: DefaultTimeouts(), httpClient: InitHTTPClientFromEnv()}
 	if database.HasNodeInfo() {
 		if info, err := database.GetNodeInfo(); err == nil {
 			srv.identity = &NodeIdentity{

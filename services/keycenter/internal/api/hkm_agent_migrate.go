@@ -33,7 +33,7 @@ func (s *Server) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
 		"version": 100,
 	})
 
-	resp, err := http.Post(agent.URL()+"/api/rekey", "application/json", bytes.NewReader(rekeyBody))
+	resp, err := s.httpClient.Post(agent.URL()+"/api/rekey", "application/json", bytes.NewReader(rekeyBody))
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

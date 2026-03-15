@@ -80,7 +80,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"version":         version,
 	})
 
-	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
