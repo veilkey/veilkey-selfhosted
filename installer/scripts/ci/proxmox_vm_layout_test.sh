@@ -14,12 +14,14 @@ LOCAL_SRC_TARBALL="${VEILKEY_E2E_SRC_TARBALL:-${ROOT_DIR}/.tmp/veilkey-installer
 PROXMOX_NODE="${PROXMOX_NODE:-$(hostname -s)}"
 PROXMOX_TEST_NAME="${PROXMOX_TEST_NAME:-veilkey-installer-e2e-${PROFILE}-${PROXMOX_TEST_VMID}}"
 PROXMOX_SSH_USER="${PROXMOX_SSH_USER:-root}"
+PROXMOX_TEST_USER="${PROXMOX_TEST_USER:-}"
 PROXMOX_SSH_PORT="${PROXMOX_SSH_PORT:-22}"
 PROXMOX_TEST_GW="${PROXMOX_TEST_GW:-}"
 PROXMOX_SSH_KEY_PATH="${PROXMOX_SSH_KEY_PATH:-/root/.ssh/id_rsa.pub}"
 PROXMOX_SSH_PRIVATE_KEY="${PROXMOX_SSH_PRIVATE_KEY:-}"
 PROXMOX_CLONE_MODE="${PROXMOX_CLONE_MODE:-linked}"
 KEEP_FAILED_VM="${KEEP_FAILED_VM:-0}"
+VEILKEY_E2E_ACCOUNT_SMOKE="${VEILKEY_E2E_ACCOUNT_SMOKE:-0}"
 
 resolve_package_pat() {
   local candidate
@@ -67,6 +69,21 @@ wait_for_ssh() {
     sleep 2
   done
   echo "SSH did not become ready: ${host}" >&2
+  return 1
+}
+
+wait_for_ssh_user() {
+  local host="$1"
+  local user="$2"
+  local tries="${3:-60}"
+  local i
+  for i in $(seq 1 "${tries}"); do
+    if ssh "${ssh_opts[@]}" "${user}@${host}" "echo ok" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  echo "SSH did not become ready: ${user}@${host}" >&2
   return 1
 }
 
@@ -236,6 +253,31 @@ run_remote_test() {
       ./install.sh plan-activate /
       ./install.sh post-install-health /
     "
+
+  if [[ "${VEILKEY_E2E_ACCOUNT_SMOKE}" = "1" && -n "${PROXMOX_TEST_USER}" ]]; then
+    local key_b64
+    key_b64="$(base64 -w0 < "${PROXMOX_SSH_KEY_PATH}")"
+
+    ssh "${ssh_opts[@]}" "${PROXMOX_SSH_USER}@${host}" "set -euo pipefail
+      id -u '${PROXMOX_TEST_USER}' >/dev/null 2>&1 || useradd -m -s /bin/bash '${PROXMOX_TEST_USER}'
+      install -d -m 700 -o '${PROXMOX_TEST_USER}' -g '${PROXMOX_TEST_USER}' '/home/${PROXMOX_TEST_USER}/.ssh'
+      printf '%s' '${key_b64}' | base64 -d > '/home/${PROXMOX_TEST_USER}/.ssh/authorized_keys'
+      chown '${PROXMOX_TEST_USER}:${PROXMOX_TEST_USER}' '/home/${PROXMOX_TEST_USER}/.ssh/authorized_keys'
+      chmod 600 '/home/${PROXMOX_TEST_USER}/.ssh/authorized_keys'
+    "
+
+    wait_for_ssh_user "${host}" "${PROXMOX_TEST_USER}" 30
+
+    ssh "${ssh_opts[@]}" "${PROXMOX_TEST_USER}@${host}" "set -euo pipefail
+      id
+      test -d \"\$HOME\"
+      curl -fsS http://127.0.0.1:10180/health >/dev/null || curl -fsS http://127.0.0.1:10180/api/status >/dev/null
+    "
+
+    if [[ "${PROFILE}" = "proxmox-lxc-allinone" ]]; then
+      ssh "${ssh_opts[@]}" "${PROXMOX_TEST_USER}@${host}" "curl -fsS http://127.0.0.1:10181/health >/dev/null"
+    fi
+  fi
 }
 
 prepare_bundle

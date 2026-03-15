@@ -1,0 +1,138 @@
+stages:
+  - verify
+  - validate
+  - e2e
+
+default:
+  tags:
+    - shell
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+facts-validate:
+  stage: validate
+  script:
+    - bash docs/tools/doctor.sh
+  rules:
+    - changes:
+        - docs/cue/**/*
+        - docs/**/*.md
+        - docs/generated/**/*
+        - docs/tools/check-hardcoded-values.sh
+        - docs/tools/check-generated.sh
+        - docs/tools/generate.sh
+        - docs/tools/report-hardcoded-values.sh
+        - cue.mod/**/*
+        - docs/tools/validate.sh
+        - tests/test_cue_facts.sh
+        - README.md
+        - services/keycenter/README.md
+        - services/localvault/README.md
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+installer-validate:
+  stage: validate
+  script:
+    - cd installer
+    - ./install.sh init
+    - ./install.sh validate
+    - ./install.sh doctor
+    - ./install.sh detect-os
+    - ./install.sh plan-install proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
+    - ./install.sh configure proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
+    - ./install.sh plan-activate "$CI_PROJECT_DIR/.tmp/rootfs"
+    - bash tests/test_proxy_component.sh
+    - bash tests/test_install_profile_command.sh
+    - bash tests/test_proxmox_wrapper_commands.sh
+  rules:
+    - changes:
+        - installer/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+keycenter-validate:
+  stage: validate
+  script:
+    - cd services/keycenter
+    - go test ./cmd/... ./internal/api/... ./internal/db/...
+  rules:
+    - changes:
+        - services/keycenter/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+localvault-validate:
+  stage: validate
+  script:
+    - cd services/localvault
+    - go test ./cmd/... ./internal/api/... ./internal/db/...
+  rules:
+    - changes:
+        - services/localvault/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+cli-validate:
+  stage: validate
+  script:
+    - cd client/cli
+    - go test ./...
+    - bash tests/test_session_config.sh
+    - bash tests/test_install_user_boundary.sh
+    - bash tests/test_veilroot_session.sh
+    - bash tests/test_veilroot_egress_guard.sh
+    - bash tests/test_veilroot_shell_hook.sh
+  rules:
+    - changes:
+        - client/cli/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+proxy-validate:
+  stage: validate
+  script:
+    - cd services/proxy
+    - go test ./...
+    - bash tests/run-shell-tests.sh
+  rules:
+    - changes:
+        - services/proxy/**/*
+        - .gitlab-ci.yml
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+selfhosted-e2e-proxmox-allinone:
+  stage: e2e
+  script:
+    - cd installer
+    - ./scripts/ci/proxmox_vm_layout_test.sh proxmox-lxc-allinone
+  rules:
+    - if: '$SELFHOSTED_E2E_PROXMOX == "1"'
+      when: manual
+    - when: never
+
+selfhosted-e2e-proxmox-runtime:
+  stage: e2e
+  script:
+    - cd installer
+    - ./scripts/ci/proxmox_vm_layout_test.sh proxmox-lxc-runtime
+  rules:
+    - if: '$SELFHOSTED_E2E_PROXMOX == "1"'
+      when: manual
+    - when: never
+
+selfhosted-e2e-proxmox-account-smoke:
+  stage: e2e
+  script:
+    - cd installer
+    - export VEILKEY_E2E_ACCOUNT_SMOKE=1
+    - export PROXMOX_TEST_USER=veilkey-smoke
+    - ./scripts/ci/proxmox_vm_layout_test.sh proxmox-lxc-runtime
+  rules:
+    - if: '$SELFHOSTED_E2E_PROXMOX == "1"'
+      when: manual
+    - when: never
