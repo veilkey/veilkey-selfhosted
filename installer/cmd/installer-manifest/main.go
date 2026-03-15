@@ -33,6 +33,7 @@ type componentConfig struct {
 	InstallOrder      int      `toml:"install_order"`
 	ArtifactURL       string   `toml:"artifact_url"`
 	ArtifactFilename  string   `toml:"artifact_filename"`
+	SHA256            string   `toml:"sha256"`
 	StageAssets       []string `toml:"stage_assets"`
 	PostInstallVerify []string `toml:"post_install_verify"`
 }
@@ -166,11 +167,16 @@ func printDownloadPlan(data *manifest, profile string) error {
 		if item.Component.ArtifactURL == "" {
 			return fmt.Errorf("component %s missing artifact_url for download plan", item.Name)
 		}
-		fmt.Printf("%3d %-12s %s %s\n",
+		sha256 := item.Component.SHA256
+		if sha256 == "" {
+			sha256 = "none"
+		}
+		fmt.Printf("%3d %-12s %s %s %s\n",
 			item.Component.InstallOrder,
 			item.Name,
 			artifactFilenameFor(item.Name, item.Component),
 			item.Component.ArtifactURL,
+			sha256,
 		)
 	}
 	return nil
@@ -190,7 +196,7 @@ func printStagePlan(data *manifest, profile string) error {
 	fmt.Printf("release_channel=%s\n", data.Release.Channel)
 	fmt.Printf("profile=%s\n", profile)
 	for _, item := range components {
-		fmt.Printf("component=%s;project=%s;ref=%s;type=%s;install_order=%d;artifact_url=%s;artifact_filename=%s;stage_assets=%s;post_install_verify=%s\n",
+		fmt.Printf("component=%s;project=%s;ref=%s;type=%s;install_order=%d;artifact_url=%s;artifact_filename=%s;sha256=%s;stage_assets=%s;post_install_verify=%s\n",
 			item.Name,
 			item.Component.Project,
 			item.Component.Ref,
@@ -198,6 +204,7 @@ func printStagePlan(data *manifest, profile string) error {
 			item.Component.InstallOrder,
 			item.Component.ArtifactURL,
 			artifactFilenameFor(item.Name, item.Component),
+			item.Component.SHA256,
 			encodeListField(item.Component.StageAssets),
 			encodeListField(item.Component.PostInstallVerify),
 		)

@@ -38,6 +38,8 @@ package:
     - mkdir -p dist/package/scripts
     - install -m 755 scripts/deploy-lxc.sh dist/package/scripts/deploy-lxc.sh
     - tar -C dist/package -czf "dist/${PKG_NAME}.tar.gz" .
+    - sha256sum "dist/${PKG_NAME}.tar.gz" | awk '{print $1}' > "dist/${PKG_NAME}.tar.gz.sha256"
+    - echo "SHA256 checksum:" && cat "dist/${PKG_NAME}.tar.gz.sha256"
     - |
       PACKAGE_API_URL="${VEILKEY_GITLAB_API_URL:-http://10.50.100.210/api/v4}"
       PACKAGE_TOKEN="${VEILKEY_GITLAB_PACKAGE_PAT:-}"
@@ -47,9 +49,13 @@ package:
       curl --fail --header "PRIVATE-TOKEN: ${PACKAGE_TOKEN}" \
         --upload-file "dist/${PKG_NAME}.tar.gz" \
         "${PACKAGE_API_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PKG_NAME}/${PKG_VERSION}/${PKG_NAME}.tar.gz"
+      curl --fail --header "PRIVATE-TOKEN: ${PACKAGE_TOKEN}" \
+        --upload-file "dist/${PKG_NAME}.tar.gz.sha256" \
+        "${PACKAGE_API_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PKG_NAME}/${PKG_VERSION}/${PKG_NAME}.tar.gz.sha256"
   artifacts:
     paths:
       - dist/veilkey-localvault.tar.gz
+      - dist/veilkey-localvault.tar.gz.sha256
     expire_in: 1 week
   tags:
     - vhost-shell-runner-shared

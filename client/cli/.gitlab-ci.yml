@@ -52,6 +52,12 @@ release:
     - |
       for f in dist/*; do
         filename=$(basename "$f")
+        sha256sum "$f" | awk '{print $1}' > "${f}.sha256"
+        echo "SHA256 ${filename}: $(cat "${f}.sha256")"
+      done
+    - |
+      for f in dist/*; do
+        filename=$(basename "$f")
         curl --fail --header "JOB-TOKEN: ${CI_JOB_TOKEN}" \
           --upload-file "$f" \
           "${CI_API_V4_URL}/projects/${CI_PROJECT_ID}/packages/generic/veilkey-cli/${CI_COMMIT_TAG}/${filename}"
