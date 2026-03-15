@@ -325,9 +325,8 @@ normalize_download_url() {
   fi
 
   if [[ -z "${api_base}" ]]; then
-    case "${url}" in
-      *) printf '%s\n' "${url}"; return 0 ;;
-    esac
+    printf '%s\n' "${url}"
+    return 0
   fi
 
   case "${api_base}" in
