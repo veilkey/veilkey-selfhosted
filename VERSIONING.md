@@ -2,9 +2,7 @@
 
 This repository uses a single product version for the self-hosted VeilKey surface.
 
-Current product version:
-
-- `0.1.0`
+The canonical current version lives in `VERSION`.
 
 ## Scope
 

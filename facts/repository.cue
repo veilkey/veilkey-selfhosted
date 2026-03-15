@@ -1,18 +1,17 @@
 package facts
 
 repo: {
-	name:          "veilkey-selfhosted"
-	domain:        "self-hosted"
-	product_version: "0.1.0"
-	root_readme:   "README.md"
-	facts_dir:     "facts"
+	name:        "veilkey-selfhosted"
+	domain:      "self-hosted"
+	root_readme: "README.md"
+	facts_dir:   "facts"
 	version_files: {
 		current: "VERSION"
 		policy:  "VERSIONING.md"
 	}
 	canonical_docs: {
-		root:       "README.md"
-		keycenter:  "services/keycenter/README.md"
+		root:      "README.md"
+		keycenter: "services/keycenter/README.md"
 		localvault: "services/localvault/README.md"
 	}
 	paths: {
