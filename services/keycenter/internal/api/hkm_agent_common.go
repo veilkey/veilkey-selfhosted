@@ -45,7 +45,7 @@ func (a *agentInfo) URL() string {
 	if port == 0 {
 		port = db.DefaultAgentPort
 	}
-	return fmt.Sprintf("http://%s:%d", a.IP, port)
+	return fmt.Sprintf("%s://%s:%d", AgentScheme(), a.IP, port)
 }
 
 type cipherSecret struct {
@@ -155,7 +155,7 @@ func (s *Server) respondAgentLookupError(w http.ResponseWriter, err error) {
 }
 
 func (s *Server) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, error) {
-	resp, err := http.Get(agentURL + "/api/cipher/" + ref)
+	resp, err := s.httpClient.Get(agentURL + "/api/cipher/" + ref)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
@@ -182,7 +182,7 @@ func (s *Server) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, erro
 }
 
 func (s *Server) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*cipherSecretField, error) {
-	resp, err := http.Get(agentURL + "/api/cipher/" + ref + "/fields/" + fieldKey)
+	resp, err := s.httpClient.Get(agentURL + "/api/cipher/" + ref + "/fields/" + fieldKey)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}

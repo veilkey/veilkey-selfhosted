@@ -42,7 +42,7 @@ func (s *Server) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Reque
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), "PUT", agent.URL()+"/api/configs/bulk", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

@@ -35,7 +35,7 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	metaResp, err := http.Get(agent.URL() + "/api/secrets/meta/" + name)
+	metaResp, err := s.httpClient.Get(agent.URL() + "/api/secrets/meta/" + name)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -103,7 +103,7 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 		s.respondError(w, http.StatusInternalServerError, "failed to marshal request body")
 		return
 	}
-	resp, err := http.Post(agent.URL()+"/api/secrets/fields", "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(agent.URL()+"/api/secrets/fields", "application/json", bytes.NewReader(body))
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -148,7 +148,7 @@ func (s *Server) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	metaResp, err := http.Get(agent.URL() + "/api/secrets/meta/" + name)
+	metaResp, err := s.httpClient.Get(agent.URL() + "/api/secrets/meta/" + name)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -229,7 +229,7 @@ func (s *Server) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Req
 		s.respondError(w, http.StatusInternalServerError, "failed to build delete request")
 		return
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

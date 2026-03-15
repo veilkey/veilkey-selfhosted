@@ -43,9 +43,19 @@ func runServer() {
 	server.StartHeartbeat(hubURL, hostname, listenPort, 5*time.Minute)
 
 	handler := server.SetupRoutes()
-	log.Printf("veilkey-localvault starting on %s", addr)
-	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
+	tlsKey := os.Getenv("VEILKEY_TLS_KEY")
+	if tlsCert != "" && tlsKey != "" {
+		log.Printf("veilkey-localvault starting on %s (TLS)", addr)
+		if err := http.ListenAndServeTLS(addr, tlsCert, tlsKey, handler); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
+	} else {
+		log.Printf("veilkey-localvault starting on %s", addr)
+		log.Println("WARNING: TLS not configured (set VEILKEY_TLS_CERT and VEILKEY_TLS_KEY to enable)")
+		if err := http.ListenAndServe(addr, handler); err != nil {
+			log.Fatalf("Server failed: %v", err)
+		}
 	}
 }
 

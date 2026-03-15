@@ -51,7 +51,7 @@ func (s *Server) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := s.httpClient.Do(req)
 			if err != nil {
 				return
 			}

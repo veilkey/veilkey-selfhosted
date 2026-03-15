@@ -591,6 +591,9 @@ write_component_env_templates() {
 VEILKEY_PASSWORD_FILE=/etc/veilkey/keycenter.password
 VEILKEY_ADDR=:10181
 VEILKEY_DB_PATH=/opt/veilkey/keycenter/data/veilkey.db
+VEILKEY_TLS_CERT=
+VEILKEY_TLS_KEY=
+VEILKEY_TLS_CA=
 EOF
 
   cat > "${veilkey_etc}/localvault.env.example" <<'EOF'
@@ -600,6 +603,9 @@ VEILKEY_PASSWORD_FILE=/etc/veilkey/localvault.password
 VEILKEY_ADDR=:10180
 VEILKEY_DB_PATH=/opt/veilkey/localvault/data/veilkey.db
 VEILKEY_KEYCENTER_URL=
+VEILKEY_TLS_CERT=
+VEILKEY_TLS_KEY=
+VEILKEY_TLS_CA=
 EOF
 
   cat > "${veilkey_etc}/proxy.env.example" <<'EOF'
@@ -704,6 +710,9 @@ EOF
 VEILKEY_PASSWORD_FILE=${veilkey_etc}/keycenter.password
 VEILKEY_ADDR=${keycenter_addr}
 VEILKEY_DB_PATH=${keycenter_db}
+VEILKEY_TLS_CERT=${VEILKEY_TLS_CERT:-}
+VEILKEY_TLS_KEY=${VEILKEY_TLS_KEY:-}
+VEILKEY_TLS_CA=${VEILKEY_TLS_CA:-}
 EOF
 
   cat > "${veilkey_etc}/localvault.env" <<EOF
@@ -712,6 +721,9 @@ VEILKEY_ADDR=${localvault_addr}
 VEILKEY_DB_PATH=${localvault_db}
 VEILKEY_KEYCENTER_URL=${keycenter_url}
 VEILKEY_TRUSTED_IPS=${localvault_trusted_ips}
+VEILKEY_TLS_CERT=${VEILKEY_TLS_CERT:-}
+VEILKEY_TLS_KEY=${VEILKEY_TLS_KEY:-}
+VEILKEY_TLS_CA=${VEILKEY_TLS_CA:-}
 EOF
 
   cat > "${veilkey_etc}/proxy.env" <<EOF

@@ -71,7 +71,7 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 			if err != nil {
 				return
 			}
-			resp, err := http.DefaultClient.Do(httpReq)
+			resp, err := s.httpClient.Do(httpReq)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
 					resp.Body.Close()
@@ -164,7 +164,7 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 				return
 			}
 			httpReq.Header.Set("Content-Type", "application/json")
-			resp, err := http.DefaultClient.Do(httpReq)
+			resp, err := s.httpClient.Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ac: ac, err: err}
 				return
@@ -209,7 +209,7 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ac.ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")
-					resp, err := http.DefaultClient.Do(httpReq)
+					resp, err := s.httpClient.Do(httpReq)
 					if err == nil {
 						resp.Body.Close()
 					}
