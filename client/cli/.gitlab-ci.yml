@@ -5,6 +5,10 @@ stages:
   - build
   - release
 
+default:
+  before_script:
+    - cd client/cli
+
 variables:
   VERSION: "0.3.0"
 
@@ -15,6 +19,7 @@ lint:
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -30,11 +35,12 @@ test:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     paths:
-      - coverage.out
+      - client/cli/coverage.out
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -46,6 +52,7 @@ gosec:
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -57,6 +64,7 @@ govulncheck:
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -66,11 +74,12 @@ build:
     - make build-all
   artifacts:
     paths:
-      - bin/
+      - client/cli/bin/
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH
     - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -93,7 +102,7 @@ release:
       done
   artifacts:
     paths:
-      - dist/
+      - client/cli/dist/
     expire_in: 30 days
   rules:
     - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/

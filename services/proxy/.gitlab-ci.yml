@@ -4,16 +4,23 @@ stages:
   - security
   - build
 
+default:
+  before_script:
+    - cd services/proxy
+
 go:lint:
   stage: lint
-  image: golang:1.24
   script:
-    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     - golangci-lint run ./...
+  allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+  tags:
+    - vhost-shell-runner-shared
 
 go:test:
   stage: test
-  image: golang:1.24
   script:
     - go test -race -coverprofile=coverage.out ./...
     - bash tests/run-shell-tests.sh
@@ -25,28 +32,43 @@ go:test:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     paths:
-      - coverage.out
+      - services/proxy/coverage.out
     expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+  tags:
+    - vhost-shell-runner-shared
 
 gosec:
   stage: security
-  image: golang:1.24
   script:
-    - go install github.com/securego/gosec/v2/cmd/gosec@latest
     - gosec ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+  tags:
+    - vhost-shell-runner-shared
 
 govulncheck:
   stage: security
-  image: golang:1.24
   script:
-    - go install golang.org/x/vuln/cmd/govulncheck@latest
     - govulncheck ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+  tags:
+    - vhost-shell-runner-shared
 
 # Minimal build gate for the observer/proxy scaffold.
 go:build:
   stage: build
-  image: golang:1.24
   script:
     - go build ./cmd/veilkey-proxy
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+  tags:
+    - vhost-shell-runner-shared

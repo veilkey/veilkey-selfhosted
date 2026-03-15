@@ -5,6 +5,10 @@ stages:
   - manifest
   - e2e
 
+default:
+  before_script:
+    - cd installer
+
 validate-components:
   stage: validate
   script:
@@ -24,6 +28,7 @@ validate-components:
     - shell
   rules:
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
 
 validate-install-layout:
   stage: validate
@@ -49,6 +54,7 @@ validate-install-layout:
     - shell
   rules:
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
 
 shellcheck:
   stage: security
@@ -59,6 +65,7 @@ shellcheck:
     - shell
   rules:
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
 
 govulncheck:
   stage: security
@@ -69,6 +76,7 @@ govulncheck:
     - shell
   rules:
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
 
 export-component-manifest:
   stage: manifest
@@ -81,12 +89,13 @@ export-component-manifest:
     - cat out/components.toml
   artifacts:
     paths:
-      - out/components.json
-      - out/components.toml
+      - installer/out/components.json
+      - installer/out/components.toml
   tags:
     - shell
   rules:
     - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
 
 e2e-proxmox-single-node:
   stage: e2e
@@ -131,6 +140,7 @@ mr-guard:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -142,5 +152,6 @@ rulebook-format:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
