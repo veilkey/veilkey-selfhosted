@@ -9,7 +9,7 @@ project = "veilkey/veilkey-keycenter"
 ref = "fc194ea706e847783e0050a9f987f277e0a8214e"
 type = "binary"
 install_order = 10
-artifact_url = "https://gitlab.ranode.net/api/v4/projects/veilkey%2Fveilkey-keycenter/packages/generic/veilkey-keycenter/fc194ea706e847783e0050a9f987f277e0a8214e/veilkey-keycenter.tar.gz"
+artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-keycenter/packages/generic/veilkey-keycenter/fc194ea706e847783e0050a9f987f277e0a8214e/veilkey-keycenter.tar.gz"
 
 [components.localvault]
 source = "gitlab"
@@ -17,7 +17,7 @@ project = "veilkey/veilkey-localvault"
 ref = "1778f521624b36b2d7f8034e2788e0994ddc6710"
 type = "binary"
 install_order = 20
-artifact_url = "https://gitlab.ranode.net/api/v4/projects/veilkey%2Fveilkey-localvault/packages/generic/veilkey-localvault/1778f521624b36b2d7f8034e2788e0994ddc6710/veilkey-localvault.tar.gz"
+artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-localvault/packages/generic/veilkey-localvault/1778f521624b36b2d7f8034e2788e0994ddc6710/veilkey-localvault.tar.gz"
 
 [components.proxy]
 source = "gitlab"
@@ -25,7 +25,7 @@ project = "veilkey/veilkey-proxy"
 ref = "670d1e33736adab35149275428ed3aa75b4e787b"
 type = "source_archive"
 install_order = 30
-artifact_url = "https://gitlab.ranode.net/api/v4/projects/veilkey%2Fveilkey-proxy/repository/archive.tar.gz?sha=670d1e33736adab35149275428ed3aa75b4e787b"
+artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-proxy/repository/archive.tar.gz?sha=670d1e33736adab35149275428ed3aa75b4e787b"
 artifact_filename = "veilkey-proxy-670d1e33736adab35149275428ed3aa75b4e787b.tar.gz"
 stage_assets = [
   "deploy/lxc/install-proxy-lxc.sh",
