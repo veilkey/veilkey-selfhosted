@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-SERVICE_NAME="veilkey-keycenter"
-TARGET_NAME="veilkey-keycenter"
+SERVICE_NAME="${VEILKEY_DEPLOY_SERVICE_NAME:-veilkey-keycenter}"
+TARGET_NAME="${VEILKEY_DEPLOY_TARGET_NAME:-veilkey-keycenter}"
 
 require_cmd() {
   local cmd="$1"
@@ -21,12 +21,33 @@ lxc_exec() {
   pct exec "$vmid" -- bash -lc "$*"
 }
 
+resolve_target() {
+  local vmid
+  vmid="$(pct list 2>/dev/null | awk -v name="$TARGET_NAME" '$3==name{print $1; exit}')"
+  if [[ -n "$vmid" ]]; then
+    printf '%s' "$vmid"
+    return 0
+  fi
+
+  if [[ -z "${VEILKEY_DEPLOY_TARGET_NAME:-}" && -z "${VEILKEY_DEPLOY_SERVICE_NAME:-}" ]]; then
+    vmid="$(pct list 2>/dev/null | awk '$3=="veilkey-allinone"{print $1; exit}')"
+    if [[ -n "$vmid" ]]; then
+      TARGET_NAME="veilkey-allinone"
+      SERVICE_NAME="veilkey-server"
+      printf '%s' "$vmid"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 BUILD_BIN="${CI_PROJECT_DIR:-$(pwd)}/.tmp/${SERVICE_NAME}"
 mkdir -p "$(dirname "$BUILD_BIN")"
 CGO_ENABLED=1 go build -o "$BUILD_BIN" ./cmd/
 build_sha="$(sha256sum "$BUILD_BIN" | awk '{print $1}')"
 
-vmid="$(pct list 2>/dev/null | awk -v name="$TARGET_NAME" '$3==name{print $1; exit}')"
+vmid="$(resolve_target)"
 [[ -n "$vmid" ]] || { echo "Error: target LXC not found: $TARGET_NAME" >&2; exit 1; }
 
 service_unit="$(lxc_exec "$vmid" "systemctl cat ${SERVICE_NAME}.service" 2>/dev/null)"
