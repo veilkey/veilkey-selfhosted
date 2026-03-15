@@ -111,7 +111,10 @@ CGO_ENABLED=1 go build -ldflags="-s -w" -o veilkey-keycenter ./cmd/main.go
 ### Root Node Initialization
 
 ```bash
-veilkey-keycenter init --root --password <master_password>
+# Interactive:
+veilkey-keycenter init --root
+# Or via stdin:
+echo "your-password" | veilkey-keycenter init --root
 ```
 
 Output:
@@ -128,8 +131,7 @@ VeilKey HKM initialized (root node).
 ```bash
 veilkey-keycenter init --child \
   --parent http://your-keycenter:10180 \
-  --password <master_password> \
-  --label my-service \
+--label my-service \
   --install
 ```
 
@@ -153,7 +155,7 @@ VeilKey HKM initialized (child node).
 docker run -d --name veilkey \
   -p 10180:10180 \
   -v veilkey-data:/data \
-  -e VEILKEY_PASSWORD=<master_password> \
+-v /opt/veilkey/password:/run/secrets/veilkey_password:ro \
   -e VEILKEY_MODE=root \
   veilkey-keycenter:latest
 
@@ -161,7 +163,7 @@ docker run -d --name veilkey \
 docker run -d --name veilkey \
   -p 10180:10180 \
   -v veilkey-data:/data \
-  -e VEILKEY_PASSWORD=<master_password> \
+-v /opt/veilkey/password:/run/secrets/veilkey_password:ro \
   -e VEILKEY_MODE=child \
   -e VEILKEY_PARENT_URL=http://your-keycenter:10180 \
   -e VEILKEY_LABEL=my-service \
@@ -179,10 +181,10 @@ services:
     volumes:
       - veilkey-data:/data
     environment:
-      VEILKEY_PASSWORD: ${VEILKEY_PASSWORD}
-      VEILKEY_MODE: root          # or child
-      # VEILKEY_PARENT_URL: ...   # required for child mode
-      # VEILKEY_LABEL: ...        # recommended for child mode
+VEILKEY_PASSWORD_FILE: /run/secrets/veilkey_password
+      VEILKEY_MODE: root          # 또는 child
+      # VEILKEY_PARENT_URL: ...   # child 모드 시 필수
+      # VEILKEY_LABEL: ...        # child 모드 시 권장
     restart: unless-stopped
 
 volumes:
@@ -320,21 +322,21 @@ This script must be run on a Proxmox host, and the CI deploy job must run on a `
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `VEILKEY_DB_PATH` | `/opt/veilkey/data/veilkey.db` | SQLite database path |
-| `VEILKEY_ADDR` | `:10180` | Server bind address |
-| `VEILKEY_PASSWORD` | (none) | Master password (required during initialization) |
-| `VEILKEY_TRUSTED_IPS` | (none) | Trusted IP ranges (comma-separated CIDR) |
-| `VEILKEY_MODE` | (none) | Docker mode: `root` or `child` |
-| `VEILKEY_PARENT_URL` | (none) | Parent node URL (for child mode) |
-| `VEILKEY_LABEL` | hostname | Node label (for child mode) |
-| `VEILKEY_EXTERNAL_URL` | auto-detected | URL reported in heartbeats |
-| `VEILKEY_HEARTBEAT_INTERVAL` | `5m` | Heartbeat send interval |
-| `VEILKEY_HEARTBEAT_TIMEOUT` | `5s` | Heartbeat HTTP timeout |
-| `VEILKEY_TIMEOUT_CASCADE` | (default) | Cascade resolve timeout |
-| `VEILKEY_TIMEOUT_PARENT` | (default) | Parent forward timeout |
-| `VEILKEY_TIMEOUT_DEPLOY` | (default) | Deploy-related timeout |
+| 변수 | 기본값 | 설명 |
+|------|--------|------|
+| `VEILKEY_DB_PATH` | `/opt/veilkey/data/veilkey.db` | SQLite DB 경로 |
+| `VEILKEY_ADDR` | `:10180` | 서버 바인드 주소 |
+| `VEILKEY_PASSWORD_FILE` | (없음) | 마스터 패스워드 파일 경로 (mode 0600, 자동 언락용) |
+| `VEILKEY_TRUSTED_IPS` | (없음) | 신뢰 IP 대역 (쉼표 구분 CIDR) |
+| `VEILKEY_MODE` | (없음) | Docker 모드: `root` 또는 `child` |
+| `VEILKEY_PARENT_URL` | (없음) | 부모 노드 URL (child 모드 시) |
+| `VEILKEY_LABEL` | hostname | 노드 라벨 (child 모드 시) |
+| `VEILKEY_EXTERNAL_URL` | 자동감지 | heartbeat에 보고할 자신의 URL |
+| `VEILKEY_HEARTBEAT_INTERVAL` | `5m` | heartbeat 전송 주기 |
+| `VEILKEY_HEARTBEAT_TIMEOUT` | `5s` | heartbeat HTTP 타임아웃 |
+| `VEILKEY_TIMEOUT_CASCADE` | (기본) | cascade resolve 타임아웃 |
+| `VEILKEY_TIMEOUT_PARENT` | (기본) | 부모 forward 타임아웃 |
+| `VEILKEY_TIMEOUT_DEPLOY` | (기본) | 배포 관련 타임아웃 |
 
 ## Tests
 
