@@ -552,13 +552,17 @@ write_component_env_templates() {
   mkdir -p "${veilkey_etc}"
 
   cat > "${veilkey_etc}/keycenter.env.example" <<'EOF'
-VEILKEY_PASSWORD=
+# VEILKEY_PASSWORD_FILE: path to a file containing the KEK password (mode 0600).
+# Do NOT use VEILKEY_PASSWORD env var — it exposes the password in the process table.
+VEILKEY_PASSWORD_FILE=/etc/veilkey/keycenter.password
 VEILKEY_ADDR=:10181
 VEILKEY_DB_PATH=/opt/veilkey/keycenter/data/veilkey.db
 EOF
 
   cat > "${veilkey_etc}/localvault.env.example" <<'EOF'
-VEILKEY_PASSWORD=
+# VEILKEY_PASSWORD_FILE: path to a file containing the KEK password (mode 0600).
+# Do NOT use VEILKEY_PASSWORD env var — it exposes the password in the process table.
+VEILKEY_PASSWORD_FILE=/etc/veilkey/localvault.password
 VEILKEY_ADDR=:10180
 VEILKEY_DB_PATH=/opt/veilkey/localvault/data/veilkey.db
 VEILKEY_KEYCENTER_URL=
@@ -652,14 +656,24 @@ VEILKEY_PROXY_LOCALVAULT_URL=${proxy_localvault_url}
 VEILKEY_PROXY_HUB_URL=${proxy_hub_url}
 EOF
 
+  # Write password files with restricted permissions (never store in env files)
+  if [[ -n "${VEILKEY_KEYCENTER_PASSWORD:-}" ]]; then
+    printf '%s' "${VEILKEY_KEYCENTER_PASSWORD}" > "${veilkey_etc}/keycenter.password"
+    chmod 600 "${veilkey_etc}/keycenter.password"
+  fi
+  if [[ -n "${VEILKEY_LOCALVAULT_PASSWORD:-}" ]]; then
+    printf '%s' "${VEILKEY_LOCALVAULT_PASSWORD}" > "${veilkey_etc}/localvault.password"
+    chmod 600 "${veilkey_etc}/localvault.password"
+  fi
+
   cat > "${veilkey_etc}/keycenter.env" <<EOF
-VEILKEY_PASSWORD=${VEILKEY_KEYCENTER_PASSWORD:-}
+VEILKEY_PASSWORD_FILE=${veilkey_etc}/keycenter.password
 VEILKEY_ADDR=${keycenter_addr}
 VEILKEY_DB_PATH=${keycenter_db}
 EOF
 
   cat > "${veilkey_etc}/localvault.env" <<EOF
-VEILKEY_PASSWORD=${VEILKEY_LOCALVAULT_PASSWORD:-}
+VEILKEY_PASSWORD_FILE=${veilkey_etc}/localvault.password
 VEILKEY_ADDR=${localvault_addr}
 VEILKEY_DB_PATH=${localvault_db}
 VEILKEY_KEYCENTER_URL=${keycenter_url}
@@ -709,6 +723,8 @@ EnvironmentFile=-/etc/veilkey/keycenter.env
 ExecStart=/usr/local/bin/veilkey-keycenter
 Restart=on-failure
 RestartSec=3
+# Restrict access to password file
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target
@@ -726,6 +742,8 @@ EnvironmentFile=-/etc/veilkey/localvault.env
 ExecStart=/usr/local/bin/veilkey-localvault
 Restart=on-failure
 RestartSec=3
+# Restrict access to password file
+UMask=0077
 
 [Install]
 WantedBy=multi-user.target

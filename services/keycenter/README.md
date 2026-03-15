@@ -114,7 +114,10 @@ CGO_ENABLED=1 go build -ldflags="-s -w" -o veilkey-keycenter ./cmd/main.go
 ### Root 노드 초기화
 
 ```bash
-veilkey-keycenter init --root --password <마스터_패스워드>
+# Interactive:
+veilkey-keycenter init --root
+# Or via stdin:
+echo "your-password" | veilkey-keycenter init --root
 ```
 
 출력:
@@ -131,8 +134,7 @@ VeilKey HKM initialized (root node).
 ```bash
 veilkey-keycenter init --child \
   --parent http://your-keycenter:10180 \
-  --password <마스터_패스워드> \
-  --label my-service \
+    --label my-service \
   --install
 ```
 
@@ -156,7 +158,7 @@ VeilKey HKM initialized (child node).
 docker run -d --name veilkey \
   -p 10180:10180 \
   -v veilkey-data:/data \
-  -e VEILKEY_PASSWORD=<마스터_패스워드> \
+  -v /opt/veilkey/password:/run/secrets/veilkey_password:ro \
   -e VEILKEY_MODE=root \
   veilkey-keycenter:latest
 
@@ -164,7 +166,7 @@ docker run -d --name veilkey \
 docker run -d --name veilkey \
   -p 10180:10180 \
   -v veilkey-data:/data \
-  -e VEILKEY_PASSWORD=<마스터_패스워드> \
+  -v /opt/veilkey/password:/run/secrets/veilkey_password:ro \
   -e VEILKEY_MODE=child \
   -e VEILKEY_PARENT_URL=http://your-keycenter:10180 \
   -e VEILKEY_LABEL=my-service \
@@ -182,7 +184,7 @@ services:
     volumes:
       - veilkey-data:/data
     environment:
-      VEILKEY_PASSWORD: ${VEILKEY_PASSWORD}
+      VEILKEY_PASSWORD_FILE: /run/secrets/veilkey_password
       VEILKEY_MODE: root          # 또는 child
       # VEILKEY_PARENT_URL: ...   # child 모드 시 필수
       # VEILKEY_LABEL: ...        # child 모드 시 권장
@@ -330,7 +332,7 @@ Tracked ref audit는 top-level class를 두 개만 유지합니다.
 |------|--------|------|
 | `VEILKEY_DB_PATH` | `/opt/veilkey/data/veilkey.db` | SQLite DB 경로 |
 | `VEILKEY_ADDR` | `:10180` | 서버 바인드 주소 |
-| `VEILKEY_PASSWORD` | (없음) | 마스터 패스워드 (초기화 시 필수) |
+| `VEILKEY_PASSWORD_FILE` | (없음) | 마스터 패스워드 파일 경로 (mode 0600, 자동 언락용) |
 | `VEILKEY_TRUSTED_IPS` | (없음) | 신뢰 IP 대역 (쉼표 구분 CIDR) |
 | `VEILKEY_MODE` | (없음) | Docker 모드: `root` 또는 `child` |
 | `VEILKEY_PARENT_URL` | (없음) | 부모 노드 URL (child 모드 시) |
