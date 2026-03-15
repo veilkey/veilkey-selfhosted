@@ -1315,10 +1315,21 @@
                                         </template>
                                         <template v-else-if="activeTab() === '관리자'">
                                             <div class="card">
-                                                <div class="card-title">Minimal Admin Settings</div>
+                                                <div class="card-title">System Update</div>
                                                 <div class="stack">
-                                                    <div class="value">This first pass keeps Admin settings small and uses the same UI config backing store.</div>
-                                                    <div class="value">Install, approval, and auth stay out of primary navigation.</div>
+                                                    <div class="value">Current deployed version and update target are managed here.</div>
+                                                    <div class="value">Update execution only runs when the server has a configured update script.</div>
+                                                </div>
+                                            </div>
+                                            <div class="card" v-if="state.systemUpdate">
+                                                <div class="card-title">Update Status</div>
+                                                <div class="inline-grid">
+                                                    <div class="kv"><span class="label">Current Version</span><span class="value">{{ state.systemUpdate.current_version || '-' }}</span></div>
+                                                    <div class="kv"><span class="label">Target Version</span><span class="value">{{ state.systemUpdate.target_version || '-' }}</span></div>
+                                                    <div class="kv"><span class="label">Release Channel</span><span class="value">{{ state.systemUpdate.release_channel || '-' }}</span></div>
+                                                    <div class="kv"><span class="label">Update Available</span><span class="value">{{ state.systemUpdate.update_available ? 'yes' : 'no' }}</span></div>
+                                                    <div class="kv"><span class="label">Update Enabled</span><span class="value">{{ state.systemUpdate.update_enabled ? 'yes' : 'no' }}</span></div>
+                                                    <div class="kv"><span class="label">Last Status</span><span class="value">{{ (state.systemUpdate.state && state.systemUpdate.state.status) || '-' }}</span></div>
                                                 </div>
                                             </div>
                                         </template>
@@ -1343,12 +1354,32 @@
                                         </template>
                                         <template v-else-if="activeTab() === '관리자'">
                                             <div class="card">
-                                                <div class="card-title">Current</div>
+                                                <div class="card-title">Update Control</div>
                                                 <div class="inline-grid">
-                                                    <div class="kv"><span class="label">Locale</span><span class="value">{{ state.uiConfig.locale || '-' }}</span></div>
-                                                    <div class="kv"><span class="label">Default Email</span><span class="value">{{ state.uiConfig.default_email || '-' }}</span></div>
+                                                    <div class="kv"><span class="label">Configured Script</span><span class="value">{{ (state.systemUpdate && state.systemUpdate.script_path) || 'not configured' }}</span></div>
+                                                    <div class="kv"><span class="label">Last Error</span><span class="value">{{ (state.systemUpdate && state.systemUpdate.state && state.systemUpdate.state.last_error) || '-' }}</span></div>
                                                 </div>
                                             </div>
+                                            <form class="stack" data-form="save-admin-update-settings">
+                                                <div class="card">
+                                                    <div class="card-title">Update Settings</div>
+                                                    <div class="stack">
+                                                        <div class="kv"><span class="label">Target Version</span><input class="field" name="target_version" :value="state.uiConfig.target_version || ''" placeholder="0.2.0"></div>
+                                                        <div class="kv">
+                                                            <span class="label">Release Channel</span>
+                                                            <select class="select" name="release_channel">
+                                                                <option value="stable" :selected="(state.uiConfig.release_channel || 'stable') === 'stable'">stable</option>
+                                                                <option value="candidate" :selected="(state.uiConfig.release_channel || 'stable') === 'candidate'">candidate</option>
+                                                                <option value="nightly" :selected="(state.uiConfig.release_channel || 'stable') === 'nightly'">nightly</option>
+                                                            </select>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <div class="inline-actions">
+                                                    <button class="btn btn-primary" type="submit">Save Update Settings</button>
+                                                    <button class="btn" type="button" data-action="run-system-update">Run Update</button>
+                                                </div>
+                                            </form>
                                         </template>
                                         <template v-else>
                                             <form class="stack" data-form="save-settings">
@@ -1405,6 +1436,7 @@
         message: null,
         status: null,
         uiConfig: null,
+        systemUpdate: null,
         globalQuery: '',
         vaults: [],
         selectedVault: null,
@@ -2999,6 +3031,14 @@
         }
     }
 
+    async function loadSystemUpdate() {
+        try {
+            state.systemUpdate = await request('/api/system/update');
+        } catch (err) {
+            setMessage('error', 'Failed to load update status: ' + err.message);
+        }
+    }
+
     async function loadVaults() {
         try {
             const data = await request('/api/vaults?limit=200');
@@ -3436,6 +3476,7 @@
                 await loadAuditVaultFeed();
             } else if (state.activePage === 'settings') {
                 await loadUIConfig();
+                await loadSystemUpdate();
             }
             setMessage(null, null);
         } catch (err) {
@@ -3743,7 +3784,9 @@
             if (formType === 'save-settings') {
                 const payload = {
                     locale: String(data.get('locale') || state.uiConfig.locale || 'ko'),
-                    default_email: String(data.get('default_email') || '')
+                    default_email: String(data.get('default_email') || ''),
+                    target_version: String(state.uiConfig.target_version || ''),
+                    release_channel: String(state.uiConfig.release_channel || 'stable')
                 };
                 state.uiConfig = await request('/api/ui/config', {
                     method: 'PATCH',
@@ -3751,6 +3794,23 @@
                 });
                 setMessage('ok', 'Settings saved.');
                 await syncPageData();
+                return;
+            }
+            if (formType === 'save-admin-update-settings') {
+                const payload = {
+                    locale: String(state.uiConfig.locale || 'ko'),
+                    default_email: String(state.uiConfig.default_email || ''),
+                    target_version: String(data.get('target_version') || ''),
+                    release_channel: String(data.get('release_channel') || state.uiConfig.release_channel || 'stable')
+                };
+                state.uiConfig = await request('/api/ui/config', {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+                await loadSystemUpdate();
+                setMessage('ok', 'Update settings saved.');
+                await syncPageData();
+                return;
             }
         } catch (err) {
             setMessage('error', err.message);
@@ -3780,6 +3840,15 @@
             }
             if (action === 'clear-audit-key') {
                 state.auditKey = null;
+                return syncPageData();
+            }
+            if (action === 'run-system-update') {
+                await request('/api/system/update', {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+                await loadSystemUpdate();
+                setMessage('ok', 'Update started.');
                 return syncPageData();
             }
             if (action === 'new-key') {
