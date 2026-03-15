@@ -57,7 +57,11 @@ func runObserve(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "collector close: %v\n", closeErr)
+		}
+	}()
 
 	if err := c.Preflight(); err != nil {
 		return err
@@ -88,7 +92,11 @@ func runDoctor() error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "collector close: %v\n", closeErr)
+		}
+	}()
 
 	if err := c.Preflight(); err != nil {
 		return err
