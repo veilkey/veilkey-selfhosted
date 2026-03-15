@@ -2,7 +2,7 @@
 # VeilKey KeyCenter — Docker 통합 설치 스크립트
 # Usage:
 #   bash install-docker.sh                          # 대화형
-#   VEILKEY_PASSWORD=xxx NONINTERACTIVE=1 bash install-docker.sh  # 자동
+#   VEILKEY_PASSWORD_FILE=/path/to/pw NONINTERACTIVE=1 bash install-docker.sh  # 자동
 set -euo pipefail
 
 INSTALL_DIR="${VEILKEY_INSTALL_DIR:-/opt/veilkey-keycenter}"
@@ -28,7 +28,10 @@ echo ""
 
 # --- Collect Config ---
 if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
-    [[ -z "${VEILKEY_PASSWORD:-}" ]] && error "NONINTERACTIVE mode: VEILKEY_PASSWORD required"
+    if [[ -n "${VEILKEY_PASSWORD_FILE:-}" && -f "${VEILKEY_PASSWORD_FILE}" ]]; then
+        VEILKEY_PASSWORD="$(cat "${VEILKEY_PASSWORD_FILE}")"
+    fi
+    [[ -z "${VEILKEY_PASSWORD:-}" ]] && error "NONINTERACTIVE mode: VEILKEY_PASSWORD_FILE required"
     VEILKEY_MODE="${VEILKEY_MODE:-root}"
     VEILKEY_PORT="${VEILKEY_PORT:-10180}"
     VEILKEY_TRUSTED_IPS="${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
@@ -93,8 +96,9 @@ services:
       - "${VEILKEY_PORT:-10180}:10180"
     volumes:
       - veilkey-data:/data
+      - ${VEILKEY_PASSWORD_DIR:-./secrets}/password:/run/secrets/veilkey_password:ro
     environment:
-      VEILKEY_PASSWORD: ${VEILKEY_PASSWORD}
+      VEILKEY_PASSWORD_FILE: /run/secrets/veilkey_password
       VEILKEY_MODE: ${VEILKEY_MODE:-root}
       VEILKEY_ADDR: ":10180"
       VEILKEY_DB_PATH: /data/veilkey.db
@@ -108,9 +112,14 @@ volumes:
 COMPOSEYML
 fi
 
-# Write .env
+# Write password file (never store in .env)
+mkdir -p "$INSTALL_DIR/secrets"
+printf '%s' "$VEILKEY_PASSWORD" > "$INSTALL_DIR/secrets/password"
+chmod 600 "$INSTALL_DIR/secrets/password"
+
+# Write .env (no password here)
 cat > "$INSTALL_DIR/.env" << ENVFILE
-VEILKEY_PASSWORD=$VEILKEY_PASSWORD
+VEILKEY_PASSWORD_DIR=$INSTALL_DIR/secrets
 VEILKEY_MODE=$VEILKEY_MODE
 VEILKEY_PORT=$VEILKEY_PORT
 VEILKEY_TRUSTED_IPS=$VEILKEY_TRUSTED_IPS
@@ -119,7 +128,7 @@ VEILKEY_LABEL=$VEILKEY_LABEL
 VEILKEY_REGISTRY=${VEILKEY_REGISTRY:-ghcr.io}
 ENVFILE
 chmod 600 "$INSTALL_DIR/.env"
-info ".env 생성 완료"
+info ".env 생성 완료 (패스워드는 secrets/password에 별도 저장)"
 
 # Start
 info "컨테이너 시작..."

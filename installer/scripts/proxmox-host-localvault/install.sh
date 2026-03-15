@@ -63,7 +63,7 @@ init_localvault_if_needed() {
 
   stage "initializing LocalVault root node at ${db_path}"
   mkdir -p "$(dirname "${db_path}")"
-  VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-localvault init --root --password "${VEILKEY_LOCALVAULT_PASSWORD}"
+  echo "${VEILKEY_LOCALVAULT_PASSWORD}" | VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-localvault init --root
 }
 
 args=()
