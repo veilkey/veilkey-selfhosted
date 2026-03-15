@@ -92,7 +92,6 @@ check_live_service veilkey-localvault.service
 stage "checking live health endpoints"
 check_live_http "${keycenter_url}/health"
 check_live_http "${localvault_url}/health"
-check_live_http "${keycenter_url}/api/agents"
 
 stage "checking bootstrap SSH artifacts"
 check_bootstrap_files

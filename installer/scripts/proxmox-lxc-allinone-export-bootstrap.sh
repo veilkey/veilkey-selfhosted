@@ -27,12 +27,21 @@ stage() {
   printf '[lxc-allinone/export] %s\n' "$*"
 }
 
-read_from_lxc() {
-  local path="$1"
-  vibe_lxc_ops "${vmid}" "base64 -w0 '${path}'"
+run_in_lxc() {
+  local command="$1"
+  if command -v vibe_lxc_ops >/dev/null 2>&1; then
+    vibe_lxc_ops "${vmid}" "${command}"
+    return 0
+  fi
+  pct exec "${vmid}" -- bash -lc "${command}"
 }
 
-hostname_from_lxc="$(vibe_lxc_ops "${vmid}" 'hostname' | tail -n 1)"
+read_from_lxc() {
+  local path="$1"
+  run_in_lxc "base64 -w0 '${path}'"
+}
+
+hostname_from_lxc="$(run_in_lxc 'hostname' | tail -n 1)"
 [[ -n "${hostname_from_lxc}" ]] || {
   echo "Error: unable to resolve hostname from LXC ${vmid}" >&2
   exit 1

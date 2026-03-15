@@ -151,6 +151,8 @@ Operator-facing wrappers:
 
 ./scripts/proxmox-lxc-allinone-install.sh --activate /
 ./scripts/proxmox-lxc-allinone-health.sh /
+./scripts/proxmox-lxc-runtime-install.sh --activate /
+./scripts/proxmox-lxc-runtime-health.sh /
 ./scripts/proxmox-lxc-allinone-purge.sh /
 ./scripts/proxmox-lxc-allinone-export-bootstrap.sh <vmid> [dest_root]
 ```
@@ -168,8 +170,10 @@ Important behavior:
 
 - `install-profile` reuses an existing `bundle_root` when present
 - fresh installs can download artifacts directly from the internal GitLab HTTPS source
+- when using the example manifest, set `VEILKEY_INSTALLER_GITLAB_API_BASE=https://gitlab.60.internal.kr/api/v4` so placeholder package URLs normalize to the active GitLab API
 - `post-install-health` validates the installed scaffold
 - wrapper commands add target-specific runtime checks on top
+- `proxmox-lxc-allinone` stages proxy assets by default but does not auto-enable proxy units unless `VEILKEY_ENABLE_PROXY=1` is set explicitly
 
 ## Bootstrap SSH Export
 
@@ -215,6 +219,38 @@ Each validated object log records:
 ## Installation Guide
 
 For copy-paste installation steps, see [`INSTALL.md`](./INSTALL.md).
+
+## Fresh Proxmox LXC Smoke Path
+
+This is the currently validated live install path on a Proxmox host:
+
+```bash
+cd installer
+export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
+./install.sh init
+./install.sh bundle proxmox-lxc-allinone /tmp/veilkey-allinone-bundle
+./install.sh bundle proxmox-lxc-runtime /tmp/veilkey-runtime-bundle
+```
+
+Create a fresh Debian LXC, copy the installer tree and bundle into the container, then run:
+
+```bash
+VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password' \
+VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
+./scripts/proxmox-lxc-allinone-install.sh --activate / /root/all-bundle
+
+./scripts/proxmox-lxc-allinone-health.sh /
+```
+
+For a second LocalVault-only runtime LXC that registers into the all-in-one KeyCenter:
+
+```bash
+VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
+VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181' \
+./scripts/proxmox-lxc-runtime-install.sh --activate / /root/runtime-bundle
+
+./scripts/proxmox-lxc-runtime-health.sh /
+```
 
 ## Status
 
