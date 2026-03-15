@@ -52,7 +52,7 @@ func TestInstallCustodyChallengeRoundTripOnLockedServer(t *testing.T) {
 		"session_id":  sessionResp.Session.SessionID,
 		"email":       "tex02@naver.com",
 		"secret_name": "INSTALL_PASSWORD__TEST",
-		"base_url":    "https://veilkey.example.internal",
+		"base_url":    "https://veilkey.test.internal",
 	})
 	if request.Code != 201 {
 		t.Fatalf("create custody challenge: expected 201, got %d: %s", request.Code, request.Body.String())
@@ -168,7 +168,7 @@ func TestInstallCustodyChallengeAllowsMissingEmail(t *testing.T) {
 	request := postJSON(handler, "/api/install/custody/request", map[string]any{
 		"session_id":  sessionResp.Session.SessionID,
 		"secret_name": "INSTALL_PASSWORD__TEST",
-		"base_url":    "https://veilkey.example.internal",
+		"base_url":    "https://veilkey.test.internal",
 	})
 	if request.Code != 201 {
 		t.Fatalf("create custody challenge without email: expected 201, got %d: %s", request.Code, request.Body.String())
@@ -242,10 +242,10 @@ func TestLegacyInstallCustodyRouteStillWorksDuringTransition(t *testing.T) {
 }
 
 func TestInstallCustodyRequestRespectsTrustedIP(t *testing.T) {
-	srv, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
+	srv, handler := setupTrustedIPServer(t, []string{"10.0.0.100"})
 	_ = srv
 
-	createSession := postJSONFromIP(handler, "/api/install/session", "10.10.10.10:1234", map[string]any{
+	createSession := postJSONFromIP(handler, "/api/install/session", "10.0.0.100:1234", map[string]any{
 		"language":        "ko",
 		"flow":            "wizard",
 		"deployment_mode": "docker",
@@ -276,11 +276,11 @@ func TestInstallCustodyRequestRespectsTrustedIP(t *testing.T) {
 	t.Setenv("VEILKEY_OTP_SENDMAIL", sendmail)
 	t.Setenv("VEILKEY_OTP_SMTP_HOST", "")
 
-	allowed := postJSONFromIP(handler, "/api/install/custody/request", "10.10.10.10:9999", map[string]any{
+	allowed := postJSONFromIP(handler, "/api/install/custody/request", "10.0.0.100:9999", map[string]any{
 		"session_id":  sessionResp.Session.SessionID,
 		"email":       "tex02@naver.com",
 		"secret_name": "INSTALL_PASSWORD__TEST",
-		"base_url":    "https://veilkey.example.internal",
+		"base_url":    "https://veilkey.test.internal",
 	})
 	if allowed.Code != 201 {
 		t.Fatalf("expected 201 for allowed IP, got %d: %s", allowed.Code, allowed.Body.String())

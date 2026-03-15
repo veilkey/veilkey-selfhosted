@@ -132,7 +132,7 @@ func TestSecretInputChallengeAllowsMissingEmail(t *testing.T) {
 }
 
 func TestSecretInputRequestRespectsTrustedIP(t *testing.T) {
-	srv, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
+	srv, handler := setupTrustedIPServer(t, []string{"10.0.0.100"})
 	_ = srv
 
 	blocked := postJSONFromIP(handler, "/api/approvals/secret-input/request", "192.168.1.50:9999", map[string]any{
@@ -145,7 +145,7 @@ func TestSecretInputRequestRespectsTrustedIP(t *testing.T) {
 		t.Fatalf("expected 403 for blocked IP, got %d: %s", blocked.Code, blocked.Body.String())
 	}
 
-	allowed := postJSONFromIP(handler, "/api/approvals/secret-input/request", "10.10.10.10:9999", map[string]any{
+	allowed := postJSONFromIP(handler, "/api/approvals/secret-input/request", "10.0.0.100:9999", map[string]any{
 		"email":       "tex02@naver.com",
 		"endpoint":    "http://127.0.0.1:10180/api/agents/veilkey-hostvault",
 		"vault":       "hostvault",

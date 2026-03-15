@@ -47,7 +47,7 @@ func TestInstallBootstrapChallengeRoundTrip(t *testing.T) {
 	request := postJSON(handler, "/api/install/bootstrap/request", map[string]any{
 		"session_id": sessionResp.Session.SessionID,
 		"email":      "tex02@naver.com",
-		"base_url":   "https://veilkey.50.internal.kr",
+		"base_url":   "https://veilkey.test.internal",
 	})
 	if request.Code != http.StatusCreated {
 		t.Fatalf("create bootstrap request: expected 201, got %d: %s", request.Code, request.Body.String())
@@ -59,7 +59,7 @@ func TestInstallBootstrapChallengeRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(request.Body.Bytes(), &requestResp); err != nil {
 		t.Fatalf("decode bootstrap request response: %v", err)
 	}
-	if requestResp.Token == "" || requestResp.Link != "https://veilkey.50.internal.kr/approve/t/"+requestResp.Token {
+	if requestResp.Token == "" || requestResp.Link != "https://veilkey.test.internal/approve/t/"+requestResp.Token {
 		t.Fatalf("unexpected bootstrap request response: %+v", requestResp)
 	}
 	if raw, err := os.ReadFile(secretInbox); err != nil || !strings.Contains(string(raw), requestResp.Link) {
