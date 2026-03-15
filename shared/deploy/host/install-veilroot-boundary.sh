@@ -3,6 +3,10 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 user_name="${VEILKEY_VEILROOT_USER:-veilroot}"
+if ! [[ "$user_name" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+  echo "invalid user name: $user_name" >&2
+  exit 2
+fi
 config_src="${1:-/etc/veilkey/session-tools.toml}"
 bin_dir="${VEILKEY_VEILROOT_BIN_DIR:-/usr/local/bin}"
 systemd_dir="${VEILKEY_VEILROOT_SYSTEMD_DIR:-/etc/systemd/system}"
@@ -114,14 +118,7 @@ install -m 0644 "$repo_root/deploy/host/veilkey-veilroot-egress-guard@.service" 
 
 install -d "$sudoers_dir" "$profile_dir"
 
-cat >"${sudoers_dir}/${user_name}" <<'EOF'
-Defaults:veilroot !authenticate
-veilroot ALL=(ALL) NOPASSWD: ALL
-EOF
-if [[ "$user_name" != "veilroot" ]]; then
-  sed -i "s/^Defaults:veilroot !authenticate$/Defaults:${user_name} !authenticate/" "${sudoers_dir}/${user_name}"
-  sed -i "s/^veilroot ALL=(ALL) NOPASSWD: ALL$/${user_name} ALL=(ALL) NOPASSWD: ALL/" "${sudoers_dir}/${user_name}"
-fi
+printf '%s\n' "Defaults:${user_name} !authenticate" "${user_name} ALL=(ALL) NOPASSWD: ALL" >"${sudoers_dir}/${user_name}"
 chmod 0440 "${sudoers_dir}/${user_name}"
 "$visudo_bin" -cf "${sudoers_dir}/${user_name}" >/dev/null
 

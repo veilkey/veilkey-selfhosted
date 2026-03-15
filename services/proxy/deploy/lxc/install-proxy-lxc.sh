@@ -72,7 +72,7 @@ vibe_lxc_ops "$vmid" "systemctl stop veilkey-egress-proxy@default.service veilke
 
 mapfile -t bundle_files < <(find "$bundle_dir" -type f | sort)
 for file in "${bundle_files[@]}"; do
-  rel="${file#$bundle_dir/}"
+  rel="${file#"$bundle_dir"/}"
   if ! pct push "$vmid" "$file" "/$rel"; then
     echo "failed to push $rel into LXC $vmid" >&2
     exit 1

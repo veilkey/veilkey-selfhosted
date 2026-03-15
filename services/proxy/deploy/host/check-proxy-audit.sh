@@ -4,6 +4,7 @@ set -euo pipefail
 profile="${1:-default}"
 vmid="${2:-100208}"
 lines="${3:-10}"
+[[ "$lines" =~ ^[0-9]+$ ]] || { echo "lines must be a positive integer" >&2; exit 2; }
 
 access="/var/log/veilkey-proxy/${profile}.jsonl"
 rewrite="/var/log/veilkey-proxy/${profile}-rewrite.jsonl"
