@@ -7,9 +7,11 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -78,9 +80,16 @@ func (c *linuxCollector) observeConnect(ctx context.Context, emit func(events.Ev
 			return fmt.Errorf("read connect ringbuf: %w", err)
 		}
 
+		expectedSize := int(unsafe.Sizeof(connectEvent{}))
+		if len(record.RawSample) < expectedSize {
+			log.Printf("connect: undersized record (%d < %d), skipping", len(record.RawSample), expectedSize)
+			continue
+		}
+
 		var raw connectEvent
 		if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &raw); err != nil {
-			return fmt.Errorf("decode connect event: %w", err)
+			log.Printf("connect: decode error: %v, skipping", err)
+			continue
 		}
 
 		if c.cfg.TargetUID != 0 && uint(raw.UID) != c.cfg.TargetUID {

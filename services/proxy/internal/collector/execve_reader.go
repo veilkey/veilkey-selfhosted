@@ -7,8 +7,10 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"strings"
 	"time"
+	"unsafe"
 
 	"github.com/cilium/ebpf/link"
 	"github.com/cilium/ebpf/ringbuf"
@@ -81,9 +83,16 @@ func (c *linuxCollector) observeExec(ctx context.Context, emit func(events.Event
 			return fmt.Errorf("read execve ringbuf: %w", err)
 		}
 
+		expectedSize := int(unsafe.Sizeof(execveEvent{}))
+		if len(record.RawSample) < expectedSize {
+			log.Printf("execve: undersized record (%d < %d), skipping", len(record.RawSample), expectedSize)
+			continue
+		}
+
 		var raw execveEvent
 		if err := binary.Read(bytes.NewReader(record.RawSample), binary.LittleEndian, &raw); err != nil {
-			return fmt.Errorf("decode execve event: %w", err)
+			log.Printf("execve: decode error: %v, skipping", err)
+			continue
 		}
 
 		if c.cfg.TargetUID != 0 && uint(raw.UID) != c.cfg.TargetUID {

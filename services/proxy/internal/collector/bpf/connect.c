@@ -90,7 +90,13 @@ int trace_enter_connect(struct sys_enter_connect_args *ctx) {
     bpf_get_current_comm(&event->comm, sizeof(event->comm));
     event->family = storage.sa_family;
 
+    __u64 addrlen = ctx->addrlen;
+
     if (storage.sa_family == AF_INET) {
+        if (addrlen < sizeof(struct vk_sockaddr_in)) {
+            bpf_ringbuf_discard(event, 0);
+            return 0;
+        }
         struct vk_sockaddr_in *sin = (struct vk_sockaddr_in *)uservaddr;
         struct vk_sockaddr_in sin_copy = {};
         if (bpf_probe_read_user(&sin_copy, sizeof(sin_copy), sin) != 0) {
@@ -100,6 +106,10 @@ int trace_enter_connect(struct sys_enter_connect_args *ctx) {
         event->port = bpf_ntohs(sin_copy.sin_port);
         event->addr4 = sin_copy.sin_addr.s_addr;
     } else if (storage.sa_family == AF_INET6) {
+        if (addrlen < sizeof(struct vk_sockaddr_in6)) {
+            bpf_ringbuf_discard(event, 0);
+            return 0;
+        }
         struct vk_sockaddr_in6 *sin6 = (struct vk_sockaddr_in6 *)uservaddr;
         struct vk_sockaddr_in6 sin6_copy = {};
         if (bpf_probe_read_user(&sin6_copy, sizeof(sin6_copy), sin6) != 0) {
