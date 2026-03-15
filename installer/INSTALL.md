@@ -22,10 +22,12 @@ Clone the installer repository and initialize the local manifest:
 ```bash
 git clone git@<YOUR_GITLAB_HOST>:veilkey/veilkey-installer.git
 cd veilkey-installer
+export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
 ./install.sh init
 ```
 
 If `components.toml` already exists, the wrappers reuse it.
+The example manifest keeps placeholder package URLs; `VEILKEY_INSTALLER_GITLAB_API_BASE` is required for fresh `bundle` or `download` commands unless you already rewrote the manifest URLs.
 
 ## 2. Install a Host LocalVault
 
@@ -100,6 +102,12 @@ Validated runtime ports:
 - KeyCenter: `10181`
 - LocalVault: `10180`
 
+Important behavior:
+
+- the installer writes password files under `/etc/veilkey/*.password` and runtime env files use `VEILKEY_PASSWORD_FILE`
+- proxy assets are installed, but proxy units are not enabled unless you set `VEILKEY_ENABLE_PROXY=1`
+- a fresh live LXC install needs `curl`, `openssl`, and `ssh-keygen`; the all-in-one wrapper installs them with `apt-get` when missing
+
 ## 4. Verify IP Access for All-in-One
 
 After installation, verify both services by IP:
@@ -113,7 +121,38 @@ Expected result:
 
 - both endpoints return an `ok` health response
 
-## 5. Export Bootstrap SSH Artifacts
+If you need to inspect agent registration immediately, unlock KeyCenter once and restart LocalVault to force a fresh heartbeat:
+
+```bash
+curl -X POST http://127.0.0.1:10181/api/unlock \
+  -H 'Content-Type: application/json' \
+  --data '{"password":"replace-keycenter-password"}'
+systemctl restart veilkey-localvault.service
+curl http://127.0.0.1:10181/api/agents
+```
+
+## 5. Install a Runtime-Only LocalVault LXC
+
+Use this when you want a second LXC with LocalVault only, bound to an existing KeyCenter.
+
+Required input:
+
+- `VEILKEY_LOCALVAULT_PASSWORD`
+- `VEILKEY_KEYCENTER_URL`
+
+Example:
+
+```bash
+echo -n 'replace-runtime-localvault-password' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
+export VEILKEY_LOCALVAULT_PASSWORD='replace-runtime-localvault-password'
+export VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181'
+
+./scripts/proxmox-lxc-runtime-install.sh --activate /
+./scripts/proxmox-lxc-runtime-health.sh /
+```
+
+## 6. Export Bootstrap SSH Artifacts
 
 The all-in-one install generates bootstrap SSH material on first install.
 
@@ -134,7 +173,7 @@ Default host output layout:
 
 The private key remains inside the LXC.
 
-## 6. Remove an All-in-One Node
+## 7. Remove an All-in-One Node
 
 To remove the all-in-one runtime from inside the LXC:
 
@@ -164,6 +203,7 @@ If downloads fail, verify:
 
 - GitLab availability
 - internal routing to the GitLab artifact source
+- `VEILKEY_INSTALLER_GITLAB_API_BASE` is set to the active GitLab API base
 
 ### Existing bundle reuse
 
@@ -186,4 +226,11 @@ All-in-one LXC:
 ./scripts/proxmox-lxc-allinone-health.sh /
 ./scripts/proxmox-lxc-allinone-export-bootstrap.sh <vmid>
 ./scripts/proxmox-lxc-allinone-purge.sh /
+```
+
+Runtime LXC:
+
+```bash
+./scripts/proxmox-lxc-runtime-install.sh --activate /
+./scripts/proxmox-lxc-runtime-health.sh /
 ```

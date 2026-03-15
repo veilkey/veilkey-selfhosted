@@ -29,15 +29,20 @@ ensure_bootstrap_tools() {
   local missing=0
   command -v ssh-keygen >/dev/null 2>&1 || missing=1
   command -v openssl >/dev/null 2>&1 || missing=1
+  command -v curl >/dev/null 2>&1 || missing=1
   if [[ "${missing}" = "0" ]]; then
     return 0
   fi
   if command -v apt-get >/dev/null 2>&1; then
-    stage "installing bootstrap tools (openssh-client openssl)"
+    stage "installing bootstrap tools (curl openssh-client openssl)"
     export DEBIAN_FRONTEND=noninteractive
     apt-get update >/dev/null
-    apt-get install -y openssh-client openssl >/dev/null
+    apt-get install -y curl openssh-client openssl >/dev/null
   fi
+  command -v curl >/dev/null 2>&1 || {
+    echo "Error: curl is required for all-in-one install" >&2
+    exit 1
+  }
   command -v ssh-keygen >/dev/null 2>&1 || {
     echo "Error: ssh-keygen is required for all-in-one bootstrap" >&2
     exit 1

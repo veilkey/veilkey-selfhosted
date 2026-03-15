@@ -528,13 +528,17 @@ install_component_payload() {
       install -m 0755 "${component_src}/veilkey-localvault" "${VEILKEY_OS_BIN_DIR}/veilkey-localvault"
       ;;
     proxy)
-      local session_config_tmp
+      local session_config_tmp proxy_real_bin
       mkdir -p "${root%/}/usr/local/lib/veilkey-proxy" "${root%/}/etc/veilkey" "${root%/}/var/log/veilkey-proxy"
-      if command -v "${GO_BIN}" >/dev/null 2>&1 && [[ -f "${component_src}/go.mod" ]] && [[ -f "${component_src}/cmd/veilkey-session-config/main.go" ]]; then
+      if [[ -f "${component_src}/go.mod" ]] && [[ -f "${component_src}/cmd/veilkey-session-config/main.go" ]]; then
         require_go
         session_config_tmp="$(mktemp)"
+        proxy_real_bin="${root%/}/root/veilkey-proxy/bin/veilkey-session-config"
+        mkdir -p "$(dirname "${proxy_real_bin}")"
         (cd "${component_src}" && "${GO_BIN}" build -o "${session_config_tmp}" ./cmd/veilkey-session-config)
-        install -m 0755 "${session_config_tmp}" "${VEILKEY_OS_BIN_DIR}/veilkey-session-config"
+        install -m 0755 "${session_config_tmp}" "${proxy_real_bin}"
+        install -m 0755 "${component_src}/deploy/shared/veilkey-session-config" \
+          "${VEILKEY_OS_BIN_DIR}/veilkey-session-config"
         rm -f "${session_config_tmp}"
       else
         install -m 0755 "${component_src}/deploy/shared/veilkey-session-config" \
@@ -661,7 +665,10 @@ render_profile_envs() {
     default_enable_localvault=0
   fi
   if profile_has_component "${profile}" "proxy"; then
-    default_enable_proxy=1
+    # Proxy runtime still depends on a veilkey-cli binary that is not yet
+    # packaged as part of the default installer surface. Keep proxy assets
+    # staged, but require an explicit opt-in before enabling proxy units.
+    default_enable_proxy=0
   else
     default_enable_proxy=0
   fi
@@ -846,7 +853,7 @@ if [[ "${VEILKEY_ENABLE_LOCALVAULT:-0}" = "1" ]]; then
 fi
 check_file /etc/veilkey/keycenter.env.example
 check_file /etc/veilkey/localvault.env.example
-if [[ -f "${veilkey_etc}/proxy.env" ]]; then
+if [[ "${VEILKEY_ENABLE_PROXY:-0}" = "1" ]]; then
   check_cmd /usr/local/bin/veilkey-session-config
   check_cmd /usr/local/bin/veilkey-proxy-launch
   check_cmd /usr/local/lib/veilkey-proxy/verify-proxy-lxc.sh
