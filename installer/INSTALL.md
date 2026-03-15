@@ -39,7 +39,10 @@ Required input:
 Example:
 
 ```bash
-export VEILKEY_LOCALVAULT_PASSWORD='replace-me'
+# Write password to a file (never use env vars for passwords)
+echo -n 'replace-me' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
+export VEILKEY_LOCALVAULT_PASSWORD='replace-me'  # installer input only; store the source secret in a file
 export VEILKEY_KEYCENTER_URL='https://<YOUR_KEYCENTER_HOST>'
 
 ./scripts/proxmox-host-localvault/install.sh --activate /
@@ -81,7 +84,11 @@ Required input:
 Example:
 
 ```bash
+echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
+chmod 600 /etc/veilkey/keycenter.password
 export VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password'
+echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
 export VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password'
 
 ./scripts/proxmox-lxc-allinone-install.sh --activate /

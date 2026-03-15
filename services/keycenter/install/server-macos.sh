@@ -13,7 +13,7 @@ set -euo pipefail
 #   VEILKEY_INSTALL_DIR   Install path (default: /usr/local/veilkey)
 #   VEILKEY_BRANCH        Branch (default: main)
 #   GO_VERSION            Go version (default: 1.24.4)
-#   VEILKEY_PASSWORD      KEK password (if set, skips interactive prompt)
+#   VEILKEY_PASSWORD_FILE  Path to file containing KEK password (if set, skips interactive prompt)
 
 INSTALL_DIR="${VEILKEY_INSTALL_DIR:-/usr/local/veilkey}"
 BRANCH="${VEILKEY_BRANCH:-main}"
@@ -105,7 +105,10 @@ setup_init() {
     echo "  Lost password = unrecoverable data."
     echo ""
 
-    local password="${VEILKEY_PASSWORD:-}"
+    local password=""
+    if [[ -n "${VEILKEY_PASSWORD_FILE:-}" && -f "${VEILKEY_PASSWORD_FILE}" ]]; then
+        password="$(cat "${VEILKEY_PASSWORD_FILE}")"
+    fi
     if [[ -z "$password" ]]; then
         read -rsp "Enter KEK password (min 8 chars): " password </dev/tty
         echo ""
@@ -122,6 +125,11 @@ setup_init() {
         exit 1
     fi
 
+    # Write password to restricted file for auto-unlock
+    local pw_file="${DATA_DIR}/password"
+    printf '%s' "$password" > "$pw_file"
+    chmod 600 "$pw_file"
+
     echo "$password" | VEILKEY_DB_PATH="${DATA_DIR}/veilkey.db" "${INSTALL_DIR}/bin/veilkey-keycenter" --init
     echo ""
 }
@@ -130,8 +138,9 @@ setup_init() {
 setup_launchd() {
     local trusted_ips="${VEILKEY_TRUSTED_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1}"
     local password_env=""
-    if [[ -n "${VEILKEY_PASSWORD:-}" ]]; then
-        password_env="<key>VEILKEY_PASSWORD</key><string>${VEILKEY_PASSWORD}</string>"
+    local pw_file="${DATA_DIR}/password"
+    if [[ -f "$pw_file" ]]; then
+        password_env="<key>VEILKEY_PASSWORD_FILE</key><string>${pw_file}</string>"
     fi
 
     local plist="/Library/LaunchDaemons/${SERVICE_LABEL}.plist"

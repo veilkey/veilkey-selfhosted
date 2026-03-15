@@ -5,6 +5,14 @@ DATA_DIR="/data"
 SALT_FILE="$DATA_DIR/salt"
 ADDR="${VEILKEY_ADDR:-:10180}"
 AUTO_INSTALL_COMPLETE="${VEILKEY_AUTO_COMPLETE_INSTALL_FLOW:-0}"
+PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:-/run/secrets/veilkey_password}"
+
+# Reject legacy VEILKEY_PASSWORD env var
+if [ -n "${VEILKEY_PASSWORD:-}" ]; then
+  echo "ERROR: VEILKEY_PASSWORD env var is no longer supported (exposes password in process environment)."
+  echo "Use VEILKEY_PASSWORD_FILE instead (default: /run/secrets/veilkey_password)."
+  exit 1
+fi
 
 wait_for_http() {
   url="$1"
@@ -52,8 +60,9 @@ seed_install_complete() {
 }
 
 if [ ! -f "$SALT_FILE" ]; then
-  if [ -z "$VEILKEY_PASSWORD" ]; then
-    echo "ERROR: VEILKEY_PASSWORD required for first run."
+  if [ ! -f "$PASSWORD_FILE" ]; then
+    echo "ERROR: VEILKEY_PASSWORD_FILE ($PASSWORD_FILE) required for first run."
+    echo "Mount a Docker secret or bind-mount a password file."
     exit 1
   fi
 
@@ -62,7 +71,7 @@ if [ ! -f "$SALT_FILE" ]; then
   case "$MODE" in
     root)
       echo "=== VeilKey HKM Init (root) ==="
-      echo "$VEILKEY_PASSWORD" | veilkey-keycenter init --root
+      veilkey-keycenter init --root < "$PASSWORD_FILE"
       ;;
     child)
       if [ -z "$VEILKEY_PARENT_URL" ]; then
@@ -71,9 +80,9 @@ if [ ! -f "$SALT_FILE" ]; then
       fi
       LABEL="${VEILKEY_LABEL:-$(hostname)}"
       echo "=== VeilKey HKM Init (child) ==="
-      echo "$VEILKEY_PASSWORD" | veilkey-keycenter init --child \
+      veilkey-keycenter init --child \
         --parent "$VEILKEY_PARENT_URL" \
-        --label "$LABEL"
+        --label "$LABEL" < "$PASSWORD_FILE"
       ;;
     *)
       echo "ERROR: Unknown VEILKEY_MODE '$MODE'. Use 'root' or 'child'."

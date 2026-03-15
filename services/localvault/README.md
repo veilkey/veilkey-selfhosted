@@ -114,8 +114,7 @@ Initialization is performed automatically via the KeyCenter `init --child` comma
 ```bash
 veilkey-keycenter init --child \
   --parent http://KEYCENTER_IP:10180 \
-  --password <password> \
-  --label my-service \
+--label my-service \
   --install
 ```
 

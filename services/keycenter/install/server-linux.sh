@@ -13,7 +13,7 @@ set -euo pipefail
 #   VEILKEY_INSTALL_DIR   Install path (default: /opt/veilkey)
 #   VEILKEY_BRANCH        Branch (default: main)
 #   GO_VERSION            Go version (default: 1.24.4)
-#   VEILKEY_PASSWORD      KEK password (if set, skips interactive prompt)
+#   VEILKEY_PASSWORD_FILE  Path to file containing KEK password (if set, skips interactive prompt)
 
 INSTALL_DIR="${VEILKEY_INSTALL_DIR:-/opt/veilkey}"
 BRANCH="${VEILKEY_BRANCH:-main}"
@@ -136,8 +136,11 @@ setup_init() {
     echo "  Lost password = unrecoverable data."
     echo ""
 
-    local password="${VEILKEY_PASSWORD:-}"
-    if [[ -z "$password" ]]; then
+    local password=""
+    local pw_file="${VEILKEY_PASSWORD_FILE:-}"
+    if [[ -n "$pw_file" && -f "$pw_file" ]]; then
+        password="$(cat "$pw_file")"
+    else
         read -rsp "Enter KEK password (min 8 chars): " password </dev/tty
         echo ""
         read -rsp "Confirm KEK password: " password2 </dev/tty
@@ -153,6 +156,11 @@ setup_init() {
         exit 1
     fi
 
+    # Write password to a restricted file for auto-unlock (never pass via env)
+    local runtime_pw_file="${DATA_DIR}/password"
+    printf '%s' "$password" > "$runtime_pw_file"
+    chmod 600 "$runtime_pw_file"
+
     # Run server --init with password on stdin
     echo "$password" | /usr/local/bin/${SERVICE_NAME} --init
     echo ""
@@ -165,15 +173,13 @@ setup_systemd() {
         trusted_ips="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
     fi
 
-    # If VEILKEY_PASSWORD is set, store it for auto-unlock on restart
+    # Use password file for auto-unlock (never store password in env vars)
     local env_file_line=""
     local password_env=""
-    if [[ -n "${VEILKEY_PASSWORD:-}" ]]; then
-        local pw_file="${DATA_DIR}/password"
-        echo "VEILKEY_PASSWORD=${VEILKEY_PASSWORD}" > "$pw_file"
-        chmod 600 "$pw_file"
-        env_file_line="EnvironmentFile=${pw_file}"
-        password_env="# Auto-unlock enabled via ${pw_file}"
+    local pw_file="${DATA_DIR}/password"
+    if [[ -f "$pw_file" ]]; then
+        env_file_line="Environment=VEILKEY_PASSWORD_FILE=${pw_file}"
+        password_env="# Auto-unlock enabled via VEILKEY_PASSWORD_FILE=${pw_file}"
     else
         password_env="# Manual unlock required: POST /api/unlock {\"password\":\"...\"}"
     fi

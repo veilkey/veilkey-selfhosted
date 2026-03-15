@@ -89,7 +89,7 @@ init_keycenter_if_needed() {
   fi
   mkdir -p "$(dirname "${db_path}")"
   stage "initializing KeyCenter root node at ${db_path}"
-  VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-keycenter init --root --password "${VEILKEY_KEYCENTER_PASSWORD}"
+  echo "${VEILKEY_KEYCENTER_PASSWORD}" | VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-keycenter init --root
 }
 
 init_localvault_if_needed() {
@@ -105,7 +105,7 @@ init_localvault_if_needed() {
   fi
   mkdir -p "$(dirname "${db_path}")"
   stage "initializing LocalVault root node at ${db_path}"
-  VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-localvault init --root --password "${VEILKEY_LOCALVAULT_PASSWORD}"
+  echo "${VEILKEY_LOCALVAULT_PASSWORD}" | VEILKEY_DB_PATH="${db_path}" /usr/local/bin/veilkey-localvault init --root
 }
 
 ensure_bootstrap_ssh_material() {

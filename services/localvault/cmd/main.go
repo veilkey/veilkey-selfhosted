@@ -103,13 +103,15 @@ func mustLoadServer() (*api.Server, string, int) {
 	})
 	log.Printf("VeilKey agent: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
 
-	if pw := os.Getenv("VEILKEY_PASSWORD"); pw != "" {
+	if pw := readPasswordFromFileEnv(); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
 			log.Fatalf("Failed to unlock: invalid password")
 		}
 		server.Unlock(kek)
-		log.Println("Server unlocked via VEILKEY_PASSWORD")
+		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
+	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
+		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {
 		log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 	}
@@ -244,25 +246,23 @@ func defaultVaultHash(nodeID string) string {
 
 func runInit() {
 	isRoot := false
-	password := ""
 	for i := 2; i < len(os.Args); i++ {
 		switch os.Args[i] {
 		case "--root":
 			isRoot = true
 		case "--password":
-			if i+1 < len(os.Args) {
-				password = os.Args[i+1]
-				i++
-			}
+			log.Fatal("--password flag is no longer supported (password exposed in ps/proc). Provide password via stdin or interactive prompt.")
 		}
 	}
 
 	if !isRoot {
-		fmt.Println("Usage: veilkey-localvault init --root [--password <pwd>]")
+		fmt.Println("Usage: veilkey-localvault init --root")
 		fmt.Println("  --root      Initialize as HKM node")
-		fmt.Println("  --password  KEK password (or enter interactively)")
+		fmt.Println("  Password is read from stdin (pipe) or interactive TTY prompt.")
 		os.Exit(1)
 	}
+
+	password := ""
 
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
 	if dbPath == "" {
@@ -336,6 +336,24 @@ func runInit() {
 	fmt.Printf("  DB:      %s\n", dbPath)
 	fmt.Println("")
 	fmt.Println("  IMPORTANT: Remember your password. Lost password = unrecoverable data.")
+}
+
+// readPasswordFromFileEnv reads the password from the file path specified in VEILKEY_PASSWORD_FILE.
+// Returns empty string if the env var is not set.
+func readPasswordFromFileEnv() string {
+	path := os.Getenv("VEILKEY_PASSWORD_FILE")
+	if path == "" {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		log.Fatalf("Failed to read VEILKEY_PASSWORD_FILE (%s): %v", path, err)
+	}
+	pw := strings.TrimRight(string(data), "\n\r")
+	if pw == "" {
+		log.Fatalf("VEILKEY_PASSWORD_FILE (%s) is empty", path)
+	}
+	return pw
 }
 
 func readPassword(prompt string) string {
