@@ -85,6 +85,11 @@ int trace_enter_execve(struct sys_enter_execve_args *ctx) {
     if (argv != 0)
         copy_argv(event, argv);
 
+    if (event->argc == 0) {
+        bpf_ringbuf_discard(event, 0);
+        return 0;
+    }
+
     bpf_ringbuf_submit(event, 0);
     return 0;
 }

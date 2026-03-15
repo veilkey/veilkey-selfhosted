@@ -47,9 +47,10 @@ func loadExecveProbeObjects(obj interface{}, opts *ebpf.CollectionOptions) error
 type execveProbeSpecs struct {
 	execveProbeProgramSpecs
 	execveProbeMapSpecs
+	execveProbeVariableSpecs
 }
 
-// execveProbeSpecs contains programs before they are loaded into the kernel.
+// execveProbeProgramSpecs contains programs before they are loaded into the kernel.
 //
 // It can be passed ebpf.CollectionSpec.Assign.
 type execveProbeProgramSpecs struct {
@@ -63,12 +64,19 @@ type execveProbeMapSpecs struct {
 	ExecveEvents *ebpf.MapSpec `ebpf:"execve_events"`
 }
 
+// execveProbeVariableSpecs contains global variables before they are loaded into the kernel.
+//
+// It can be passed ebpf.CollectionSpec.Assign.
+type execveProbeVariableSpecs struct {
+}
+
 // execveProbeObjects contains all objects after they have been loaded into the kernel.
 //
 // It can be passed to loadExecveProbeObjects or ebpf.CollectionSpec.LoadAndAssign.
 type execveProbeObjects struct {
 	execveProbePrograms
 	execveProbeMaps
+	execveProbeVariables
 }
 
 func (o *execveProbeObjects) Close() error {
@@ -89,6 +97,12 @@ func (m *execveProbeMaps) Close() error {
 	return _ExecveProbeClose(
 		m.ExecveEvents,
 	)
+}
+
+// execveProbeVariables contains all global variables after they have been loaded into the kernel.
+//
+// It can be passed to loadExecveProbeObjects or ebpf.CollectionSpec.LoadAndAssign.
+type execveProbeVariables struct {
 }
 
 // execveProbePrograms contains all programs after they have been loaded into the kernel.
