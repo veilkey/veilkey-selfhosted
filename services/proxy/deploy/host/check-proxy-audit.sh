@@ -4,6 +4,8 @@ set -euo pipefail
 profile="${1:-default}"
 vmid="${2:-100208}"
 lines="${3:-10}"
+[[ "$profile" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "invalid profile name: $profile" >&2; exit 2; }
+[[ "$vmid" =~ ^[0-9]+$ ]] || { echo "vmid must be a positive integer" >&2; exit 2; }
 [[ "$lines" =~ ^[0-9]+$ ]] || { echo "lines must be a positive integer" >&2; exit 2; }
 
 access="/var/log/veilkey-proxy/${profile}.jsonl"
