@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +21,7 @@ type VeilKeyClient struct {
 
 func NewVeilKeyClient(baseURL string) *VeilKeyClient {
 	return &VeilKeyClient{
-		baseURL: baseURL,
+		baseURL: strings.TrimRight(baseURL, "/"),
 		client: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -101,7 +102,7 @@ func resolveCandidates(token string) []string {
 }
 
 func (c *VeilKeyClient) resolveOnce(ref string) (string, error) {
-	resp, err := c.client.Get(c.baseURL + "/api/resolve/" + ref)
+	resp, err := c.client.Get(c.baseURL + "/api/resolve/" + url.PathEscape(ref))
 	if err != nil {
 		return "", err
 	}

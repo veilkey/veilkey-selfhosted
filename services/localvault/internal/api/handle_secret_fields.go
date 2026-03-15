@@ -39,6 +39,10 @@ func (s *Server) handleSaveSecretFields(w http.ResponseWriter, r *http.Request) 
 		s.respondError(w, http.StatusBadRequest, "name and fields are required")
 		return
 	}
+	if len(req.Fields) > maxBulkItems {
+		s.respondError(w, http.StatusBadRequest, "too many fields (max 200)")
+		return
+	}
 
 	secret, err := s.db.GetSecretByName(req.Name)
 	if err != nil {
@@ -91,6 +95,10 @@ func (s *Server) handleCipherField(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "ref and field are required")
 		return
 	}
+	if !isValidResourceName(fieldKey) {
+		s.respondError(w, http.StatusBadRequest, "field key must match [A-Z_][A-Z0-9_]*")
+		return
+	}
 
 	secret, err := s.db.GetSecretByRef(ref)
 	if err != nil {
@@ -124,6 +132,14 @@ func (s *Server) handleDeleteSecretField(w http.ResponseWriter, r *http.Request)
 	fieldKey := r.PathValue("field")
 	if name == "" || fieldKey == "" {
 		s.respondError(w, http.StatusBadRequest, "name and field are required")
+		return
+	}
+	if !isValidResourceName(name) {
+		s.respondError(w, http.StatusBadRequest, "name must match [A-Z_][A-Z0-9_]*")
+		return
+	}
+	if !isValidResourceName(fieldKey) {
+		s.respondError(w, http.StatusBadRequest, "field key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
 

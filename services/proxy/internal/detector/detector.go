@@ -36,6 +36,10 @@ func (d *Detector) Apply(ev events.Event) events.Event {
 	haystack = append(haystack, ev.Argv...)
 
 	joined := strings.Join(haystack, "\n")
+	const maxHaystackLen = 1 << 20 // 1 MiB
+	if len(joined) > maxHaystackLen {
+		joined = joined[:maxHaystackLen]
+	}
 	var matches []string
 	for _, rule := range d.rules {
 		if rule.Pattern.MatchString(joined) {

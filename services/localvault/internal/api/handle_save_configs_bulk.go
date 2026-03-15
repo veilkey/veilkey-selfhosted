@@ -18,6 +18,10 @@ func (s *Server) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "configs map is required")
 		return
 	}
+	if len(req.Configs) > maxBulkItems {
+		s.respondError(w, http.StatusBadRequest, "too many configs (max 200)")
+		return
+	}
 
 	for k := range req.Configs {
 		if !isValidResourceName(k) {

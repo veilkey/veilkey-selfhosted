@@ -30,6 +30,11 @@ func (s *Server) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Re
 		s.respondError(w, http.StatusBadRequest, "email is required")
 		return
 	}
+	email := strings.TrimSpace(req.Email)
+	if !strings.Contains(email, "@") || !strings.Contains(email[strings.Index(email, "@"):], ".") {
+		s.respondError(w, http.StatusBadRequest, "invalid email format")
+		return
+	}
 	token := vcrypto.GenerateUUID()
 	challenge := &db.EmailOTPChallenge{
 		Token:  token,

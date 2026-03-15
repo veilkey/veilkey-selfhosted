@@ -160,6 +160,27 @@ func TestVeilKeyClientResolveError(t *testing.T) {
 	}
 }
 
+func TestVeilKeyClientResolveURLEncoding(t *testing.T) {
+	var receivedRawPath string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedRawPath = r.URL.RawPath
+		json.NewEncoder(w).Encode(map[string]string{"value": "ok"})
+	}))
+	defer server.Close()
+
+	client := NewVeilKeyClient(server.URL)
+	_, err := client.Resolve("VK:ref/with/slashes")
+	if err != nil {
+		t.Fatalf("Resolve failed: %v", err)
+	}
+	if receivedRawPath == "" {
+		t.Fatal("RawPath should be set when path contains encoded characters")
+	}
+	if !strings.Contains(receivedRawPath, "%2F") {
+		t.Fatalf("ref slashes should be percent-encoded in raw path, got: %s", receivedRawPath)
+	}
+}
+
 func TestVeilKeyClientHealthCheck(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {

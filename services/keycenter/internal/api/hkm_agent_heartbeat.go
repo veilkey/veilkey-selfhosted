@@ -77,6 +77,10 @@ func (s *Server) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "vault_node_uuid (or node_id), label, vault_hash, and vault_name are required")
 		return
 	}
+	if req.Port < 0 || req.Port > 65535 {
+		s.respondError(w, http.StatusBadRequest, "port must be between 0 and 65535")
+		return
+	}
 	if req.KeyVersion == 0 {
 		req.KeyVersion = 1
 	}

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 )
 
 // handleSetParent sets the parent_url in node_info
@@ -19,7 +21,13 @@ func (s *Server) handleSetParent(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "parent_url is required")
 		return
 	}
-	_, err := s.db.SetParentURL(req.ParentURL)
+	parsed, err := url.Parse(strings.TrimSpace(req.ParentURL))
+	if err != nil || (parsed.Scheme != "http" && parsed.Scheme != "https") || parsed.Host == "" {
+		s.respondError(w, http.StatusBadRequest, "parent_url must be a valid http(s) URL")
+		return
+	}
+	req.ParentURL = strings.TrimRight(parsed.String(), "/")
+	_, err = s.db.SetParentURL(req.ParentURL)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, err.Error())
 		return

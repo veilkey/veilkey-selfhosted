@@ -134,6 +134,10 @@ func (s *Server) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request)
 		s.respondError(w, 400, "workflow name and steps are required")
 		return
 	}
+	if len(req.Steps) > maxBulkItems {
+		s.respondError(w, 400, "too many steps (max 200)")
+		return
+	}
 	checks := make([]map[string]any, 0, len(req.Steps))
 	for _, step := range req.Steps {
 		err := validateBulkApplyStep(step)
@@ -382,6 +386,10 @@ func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) 
 	}
 	if strings.TrimSpace(req.Name) == "" || len(req.Steps) == 0 {
 		s.respondError(w, 400, "workflow name and steps are required")
+		return
+	}
+	if len(req.Steps) > maxBulkItems {
+		s.respondError(w, 400, "too many steps (max 200)")
 		return
 	}
 	results := make([]map[string]any, 0, len(req.Steps))

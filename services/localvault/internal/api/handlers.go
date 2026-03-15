@@ -130,6 +130,10 @@ func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "secret name is required")
 		return
 	}
+	if !isValidResourceName(name) {
+		s.respondError(w, http.StatusBadRequest, "name must match [A-Z_][A-Z0-9_]*")
+		return
+	}
 
 	if err := s.db.DeleteSecret(name); err != nil {
 		s.respondError(w, http.StatusNotFound, err.Error())

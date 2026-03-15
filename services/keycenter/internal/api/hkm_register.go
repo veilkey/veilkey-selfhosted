@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"veilkey-keycenter/internal/crypto"
 	"veilkey-keycenter/internal/db"
 )
@@ -27,6 +29,14 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if nodeID == "" {
 		s.respondError(w, http.StatusBadRequest, "vault_node_uuid or node_id is required")
 		return
+	}
+	if req.URL != "" {
+		parsedURL, err := url.Parse(strings.TrimSpace(req.URL))
+		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" {
+			s.respondError(w, http.StatusBadRequest, "url must be a valid http(s) URL")
+			return
+		}
+		req.URL = strings.TrimRight(parsedURL.String(), "/")
 	}
 
 	// Check if child already exists

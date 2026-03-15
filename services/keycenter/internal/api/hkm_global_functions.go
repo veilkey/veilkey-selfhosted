@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"veilkey-keycenter/internal/db"
 )
 
@@ -22,6 +23,10 @@ func (s *Server) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) {
 		var req db.GlobalFunction
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			s.respondError(w, http.StatusBadRequest, "invalid json body")
+			return
+		}
+		if strings.TrimSpace(req.Name) == "" {
+			s.respondError(w, http.StatusBadRequest, "function name is required")
 			return
 		}
 		if err := s.db.SaveGlobalFunction(&req); err != nil {

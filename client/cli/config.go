@@ -93,6 +93,19 @@ func LoadConfig(path string) (*CompiledConfig, error) {
 		cc.SensitiveBoost = 15
 	}
 
+	if cc.Entropy.MinLength < 0 {
+		return nil, fmt.Errorf("entropy.min_length must not be negative")
+	}
+	if cc.Entropy.Threshold < 0 || cc.Entropy.Threshold > 8 {
+		return nil, fmt.Errorf("entropy.threshold must be between 0 and 8")
+	}
+	if cc.Entropy.ConfidenceBoost < 0 || cc.Entropy.ConfidenceBoost > 100 {
+		return nil, fmt.Errorf("entropy.confidence_boost must be between 0 and 100")
+	}
+	if cc.SensitiveBoost < 0 || cc.SensitiveBoost > 100 {
+		return nil, fmt.Errorf("sensitive_context.confidence_boost must be between 0 and 100")
+	}
+
 	for _, p := range cfg.Patterns {
 		re, err := regexp.Compile(p.Regex)
 		if err != nil {

@@ -8,6 +8,10 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "key is required")
 		return
 	}
+	if !isValidResourceName(key) {
+		s.respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
+		return
+	}
 
 	config, err := s.db.GetConfig(key)
 	if err != nil {

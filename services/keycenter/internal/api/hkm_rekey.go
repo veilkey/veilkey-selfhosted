@@ -22,6 +22,10 @@ func (s *Server) handleRekey(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "DEK must be 32 bytes")
 		return
 	}
+	if req.Version <= 0 {
+		s.respondError(w, http.StatusBadRequest, "version must be positive")
+		return
+	}
 
 	oldDEK, err := s.getLocalDEK()
 	if err != nil {

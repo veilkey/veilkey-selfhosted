@@ -91,6 +91,10 @@ func (s *Server) handleFunctions(w http.ResponseWriter, r *http.Request) {
 			s.respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}
+		if req.Name == "" {
+			s.respondError(w, http.StatusBadRequest, "function name is required")
+			return
+		}
 		if strings.EqualFold(req.Scope, "GLOBAL") {
 			s.respondError(w, http.StatusBadRequest, "GLOBAL functions are managed by KeyCenter sync only")
 			return

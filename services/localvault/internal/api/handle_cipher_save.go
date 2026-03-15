@@ -100,6 +100,10 @@ func (s *Server) handleGetSecretMeta(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "secret name is required")
 		return
 	}
+	if !isValidResourceName(name) {
+		s.respondError(w, http.StatusBadRequest, "name must match [A-Z_][A-Z0-9_]*")
+		return
+	}
 
 	secret, err := s.db.GetSecretByName(name)
 	if err != nil {
