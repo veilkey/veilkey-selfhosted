@@ -83,7 +83,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
 
-	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

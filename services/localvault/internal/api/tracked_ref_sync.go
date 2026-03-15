@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
 	"strings"
 )
 
@@ -43,7 +42,7 @@ func (s *Server) syncTrackedRefWithKeycenter(ref string, previousRef string, ver
 		return result
 	}
 
-	resp, err := http.Post(target.URL+"/api/tracked-refs/sync", "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(target.URL+"/api/tracked-refs/sync", "application/json", bytes.NewReader(body))
 	if err != nil {
 		result.Status = "degraded"
 		result.Error = err.Error()

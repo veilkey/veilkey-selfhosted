@@ -29,6 +29,7 @@ type Server struct {
 	trustedCIDRs    []*net.IPNet
 	identity        *NodeIdentity
 	unlockLimiter   *UnlockRateLimiter
+	httpClient      *http.Client
 }
 
 const keycenterOnlyDecryptMessage = "localvault direct plaintext handling is disabled; use keycenter"
@@ -51,7 +52,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		}
 		ipMap[entry] = true
 	}
-	return &Server{db: database, kek: kek, locked: kek == nil, trustedIPs: ipMap, trustedCIDRs: cidrs, unlockLimiter: NewUnlockRateLimiter()}
+	return &Server{db: database, kek: kek, locked: kek == nil, trustedIPs: ipMap, trustedCIDRs: cidrs, unlockLimiter: NewUnlockRateLimiter(), httpClient: InitHTTPClientFromEnv()}
 }
 
 func (s *Server) SetSalt(salt []byte) {

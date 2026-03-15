@@ -98,7 +98,7 @@ func (s *Server) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				req.Header.Set("X-VeilKey-Cascade", "true")
-				resp, err := http.DefaultClient.Do(req)
+				resp, err := s.httpClient.Do(req)
 				if err != nil || resp.StatusCode != http.StatusOK {
 					if resp != nil {
 						resp.Body.Close()

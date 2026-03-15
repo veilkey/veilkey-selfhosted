@@ -47,16 +47,21 @@ func shellQuote(value string) string {
 
 func (s *Server) localFunctionBaseURL() string {
 	addr := strings.TrimSpace(os.Getenv("VEILKEY_ADDR"))
+	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
+	scheme := "http"
+	if tlsCert != "" {
+		scheme = "https"
+	}
 	if addr == "" {
-		return "http://127.0.0.1:10180"
+		return scheme + "://127.0.0.1:10180"
 	}
 	if strings.HasPrefix(addr, ":") {
-		return "http://127.0.0.1" + addr
+		return scheme + "://127.0.0.1" + addr
 	}
 	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
 		return addr
 	}
-	return "http://" + addr
+	return scheme + "://" + addr
 }
 
 func (s *Server) resolveFunctionRef(ref string) (string, error) {
@@ -65,7 +70,7 @@ func (s *Server) resolveFunctionRef(ref string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("resolve %s request build failed: %w", ref, err)
 	}
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return "", fmt.Errorf("resolve %s failed: %w", ref, err)
 	}
