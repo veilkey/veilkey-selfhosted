@@ -7,6 +7,33 @@ import (
 	"veilkey-localvault/internal/db"
 )
 
+func TestReadPasswordFromFileEnv(t *testing.T) {
+	t.Run("not set returns empty", func(t *testing.T) {
+		t.Setenv("VEILKEY_PASSWORD_FILE", "")
+		if got := readPasswordFromFileEnv(); got != "" {
+			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("reads password from file", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "pw")
+		os.WriteFile(f, []byte("my-secret"), 0600)
+		t.Setenv("VEILKEY_PASSWORD_FILE", f)
+		if got := readPasswordFromFileEnv(); got != "my-secret" {
+			t.Fatalf("got %q, want my-secret", got)
+		}
+	})
+
+	t.Run("trims trailing newlines", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "pw")
+		os.WriteFile(f, []byte("secret\n\r\n"), 0600)
+		t.Setenv("VEILKEY_PASSWORD_FILE", f)
+		if got := readPasswordFromFileEnv(); got != "secret" {
+			t.Fatalf("got %q, want secret", got)
+		}
+	})
+}
+
 func TestDefaultVaultHash(t *testing.T) {
 	got := defaultVaultHash("93a8094e-ad3f-4143-b3f3-8551275f24a7")
 	if got != "93a8094e" {

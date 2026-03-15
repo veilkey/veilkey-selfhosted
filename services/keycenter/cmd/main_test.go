@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -47,6 +48,33 @@ func TestGetEnvDefault(t *testing.T) {
 	if got := getEnvDefault("TEST_GED_UNSET", "fallback"); got != "fallback" {
 		t.Errorf("unset env: got %q, want fallback", got)
 	}
+}
+
+func TestReadPasswordFromFileEnv(t *testing.T) {
+	t.Run("not set returns empty", func(t *testing.T) {
+		t.Setenv("VEILKEY_PASSWORD_FILE", "")
+		if got := readPasswordFromFileEnv(); got != "" {
+			t.Fatalf("expected empty, got %q", got)
+		}
+	})
+
+	t.Run("reads password from file", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "pw")
+		os.WriteFile(f, []byte("my-secret"), 0600)
+		t.Setenv("VEILKEY_PASSWORD_FILE", f)
+		if got := readPasswordFromFileEnv(); got != "my-secret" {
+			t.Fatalf("got %q, want my-secret", got)
+		}
+	})
+
+	t.Run("trims trailing newlines", func(t *testing.T) {
+		f := filepath.Join(t.TempDir(), "pw")
+		os.WriteFile(f, []byte("secret\n\r\n"), 0600)
+		t.Setenv("VEILKEY_PASSWORD_FILE", f)
+		if got := readPasswordFromFileEnv(); got != "secret" {
+			t.Fatalf("got %q, want secret", got)
+		}
+	})
 }
 
 func TestDetectExternalIP(t *testing.T) {
