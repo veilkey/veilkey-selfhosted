@@ -37,15 +37,16 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db           *db.DB
-	kek          []byte
-	kekMu        sync.RWMutex
-	locked       bool
-	salt         []byte
-	trustedIPs   map[string]bool
-	trustedCIDRs []*net.IPNet
-	identity     *NodeIdentity
-	timeouts     Timeouts
+	db              *db.DB
+	kek             []byte
+	kekMu           sync.RWMutex
+	locked          bool
+	salt            []byte
+	trustedIPs      map[string]bool
+	trustedCIDRs    []*net.IPNet
+	identity        *NodeIdentity
+	timeouts        Timeouts
+	unlockLimiter   *UnlockRateLimiter
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
@@ -94,7 +95,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		ipMap[entry] = true
 	}
 	locked := kek == nil
-	srv := &Server{db: database, kek: kek, locked: locked, trustedIPs: ipMap, trustedCIDRs: cidrs, timeouts: DefaultTimeouts()}
+	srv := &Server{db: database, kek: kek, locked: locked, trustedIPs: ipMap, trustedCIDRs: cidrs, timeouts: DefaultTimeouts(), unlockLimiter: NewUnlockRateLimiter()}
 	if database.HasNodeInfo() {
 		if info, err := database.GetNodeInfo(); err == nil {
 			srv.identity = &NodeIdentity{
@@ -329,7 +330,7 @@ func (s *Server) SetupRoutes() http.Handler {
 
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
-	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.handleUnlock))
+	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
 	s.SetupAPIRoutes(mux)
 	s.SetupAdminRoutes(mux)
 	if s.IsHKM() {

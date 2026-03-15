@@ -20,14 +20,15 @@ type NodeIdentity struct {
 }
 
 type Server struct {
-	db           *db.DB
-	kek          []byte
-	kekMu        sync.RWMutex
-	locked       bool
-	salt         []byte
-	trustedIPs   map[string]bool
-	trustedCIDRs []*net.IPNet
-	identity     *NodeIdentity
+	db              *db.DB
+	kek             []byte
+	kekMu           sync.RWMutex
+	locked          bool
+	salt            []byte
+	trustedIPs      map[string]bool
+	trustedCIDRs    []*net.IPNet
+	identity        *NodeIdentity
+	unlockLimiter   *UnlockRateLimiter
 }
 
 const keycenterOnlyDecryptMessage = "localvault direct plaintext handling is disabled; use keycenter"
@@ -50,7 +51,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		}
 		ipMap[entry] = true
 	}
-	return &Server{db: database, kek: kek, locked: kek == nil, trustedIPs: ipMap, trustedCIDRs: cidrs}
+	return &Server{db: database, kek: kek, locked: kek == nil, trustedIPs: ipMap, trustedCIDRs: cidrs, unlockLimiter: NewUnlockRateLimiter()}
 }
 
 func (s *Server) SetSalt(salt []byte) {
@@ -152,7 +153,7 @@ func (s *Server) SetupRoutes() http.Handler {
 
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
-	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.handleUnlock))
+	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
 
 	// Status
 	mux.HandleFunc("GET /api/status", s.requireUnlocked(s.handleStatus))
