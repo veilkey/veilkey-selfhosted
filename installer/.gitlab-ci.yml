@@ -15,6 +15,7 @@ validate-components:
     - ./install.sh configure proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
     - ./install.sh plan-activate "$CI_PROJECT_DIR/.tmp/rootfs"
     - export VEILKEY_GITLAB_PACKAGE_PAT="$VEILKEY_GITLAB_PACKAGE_PAT"
+    - bash tests/test_download_checksum.sh
     - bash tests/test_proxy_component.sh
     - bash tests/test_install_profile_command.sh
     - bash tests/test_proxmox_wrapper_commands.sh

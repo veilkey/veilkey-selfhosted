@@ -349,10 +349,39 @@ cmd_doctor() {
   manifest_cmd lint-legacy-layout
 }
 
+verify_sha256() {
+  local file="$1"
+  local expected="$2"
+
+  if [[ -z "${expected}" || "${expected}" == "none" ]]; then
+    echo "  WARNING: no sha256 checksum configured; skipping verification"
+    return 0
+  fi
+
+  local actual
+  if command -v sha256sum >/dev/null 2>&1; then
+    actual="$(sha256sum "${file}" | awk '{print $1}')"
+  elif command -v shasum >/dev/null 2>&1; then
+    actual="$(shasum -a 256 "${file}" | awk '{print $1}')"
+  else
+    echo "  WARNING: sha256sum/shasum not found; skipping verification" >&2
+    return 0
+  fi
+
+  if [[ "${actual}" != "${expected}" ]]; then
+    echo "ERROR: SHA256 mismatch for ${file}" >&2
+    echo "  expected: ${expected}" >&2
+    echo "  actual:   ${actual}" >&2
+    rm -f "${file}"
+    return 1
+  fi
+  echo "  SHA256 verified: ${actual}"
+}
+
 cmd_download() {
   local profile="${1:-proxmox-lxc-allinone}"
   local dest="${2:-${ROOT_DIR}/downloads/${profile}}"
-  local order name filename url resolved_url
+  local order name filename url sha256 resolved_url
   local -a auth_args=() tls_args=()
 
   require_curl
@@ -361,7 +390,7 @@ cmd_download() {
     auth_args+=("${arg}")
   done < <(curl_auth_args)
 
-  while read -r order name filename url; do
+  while read -r order name filename url sha256; do
     [[ -z "${order:-}" ]] && continue
     if [[ "${order}" == "[profile]" ]]; then
       continue
@@ -373,6 +402,7 @@ cmd_download() {
     esac
     echo "Downloading ${name} -> ${dest}/${filename}"
     curl -fsSL "${tls_args[@]}" "${auth_args[@]}" "${resolved_url}" -o "${dest}/${filename}"
+    verify_sha256 "${dest}/${filename}" "${sha256:-}"
   done < <(manifest_cmd plan-download "${profile}")
 }
 
