@@ -24,6 +24,24 @@ header() {
   echo "=== $1 ==="
 }
 
+ensure_cue() {
+  if command -v cue >/dev/null 2>&1; then
+    command -v cue
+    return
+  fi
+
+  if command -v go >/dev/null 2>&1; then
+    mkdir -p "$REPO_ROOT/.tmp/bin"
+    GOBIN="$REPO_ROOT/.tmp/bin" go install cuelang.org/go/cmd/cue@v0.14.0 >/dev/null 2>&1
+    if [[ -x "$REPO_ROOT/.tmp/bin/cue" ]]; then
+      echo "$REPO_ROOT/.tmp/bin/cue"
+      return
+    fi
+  fi
+
+  return 1
+}
+
 echo "doctor.sh — VeilKey self-hosted docs governance validation"
 
 # ---------------------------------------------------------------------------
@@ -165,17 +183,34 @@ done
 # ---------------------------------------------------------------------------
 header "CUE schema validation"
 
-if command -v cue &>/dev/null; then
-  if cue_output=$(cd "$REPO_ROOT" && cue vet docs/cue/docs_contract.cue 2>&1); then
-    pass "cue vet docs/cue/docs_contract.cue succeeded"
+if cue_cmd="$(ensure_cue)"; then
+  if cue_output=$(cd "$REPO_ROOT" && "$cue_cmd" vet -c=false docs/cue/*.cue 2>&1); then
+    pass "cue vet docs/cue/*.cue succeeded"
   else
-    fail "cue vet docs/cue/docs_contract.cue failed"
+    fail "cue vet docs/cue/*.cue failed"
+    echo "$cue_output" | while IFS= read -r line; do
+      echo "         $line"
+    done
+  fi
+
+  tmp_version_file="$(mktemp --suffix=.cue)"
+  trap 'rm -f "$tmp_version_file"' EXIT
+  cat > "$tmp_version_file" <<EOF
+package docs
+
+version: "$(tr -d '[:space:]' < "$REPO_ROOT/VERSION")"
+EOF
+
+  if cue_output=$(cd "$REPO_ROOT" && "$cue_cmd" vet -c=false docs/cue/docs_contract.cue "$tmp_version_file" 2>&1); then
+    pass "VERSION unifies with docs/cue/docs_contract.cue"
+  else
+    fail "VERSION does not unify with docs/cue/docs_contract.cue"
     echo "$cue_output" | while IFS= read -r line; do
       echo "         $line"
     done
   fi
 else
-  echo "  [SKIP] cue CLI not found -- skipping schema validation"
+  fail "cue CLI not found and could not be installed"
 fi
 
 # ---------------------------------------------------------------------------

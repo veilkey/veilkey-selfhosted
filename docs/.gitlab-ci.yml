@@ -5,7 +5,8 @@ docs:doctor:
   stage: validate
   image: alpine:3.20
   before_script:
-    - apk add --no-cache bash coreutils
+    - apk add --no-cache bash coreutils git go
+    - GOBIN=/usr/local/bin go install cuelang.org/go/cmd/cue@v0.14.0
   script:
     - bash docs/tools/doctor.sh
   rules:
@@ -21,8 +22,6 @@ docs:doctor:
         - VERSION
         - VERSIONING.md
         - facts/**/*
-  allow_failure: true
-
 docs:generate:
   stage: validate
   image: alpine:3.20
@@ -58,4 +57,3 @@ docs:generate:
         - VERSION
         - VERSIONING.md
         - facts/**/*
-  allow_failure: true

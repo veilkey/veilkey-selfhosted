@@ -8,10 +8,11 @@ package docs
 import "strings"
 
 // version must match the content of the VERSION file (trimmed).
-// During CI or manual audit, compare this against $(cat VERSION).
+// The repository VERSION file is the single source of truth and is unified
+// into this schema by docs/tools/doctor.sh.
 #Version: =~"^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-zA-Z0-9.]+)?(\\+[a-zA-Z0-9.]+)?$"
 
-version: #Version & "0.1.0"
+version: #Version
 
 // ---------------------------------------------------------------------------
 // Directory structure contract
@@ -89,9 +90,7 @@ blocked_terms: #BlockedTerms & [
 // ---------------------------------------------------------------------------
 // Version cross-check helper
 // ---------------------------------------------------------------------------
-// When evaluated, `version` above must equal the trimmed content of VERSION.
-// A CI step can run:
-//   cue eval docs/cue/docs_contract.cue -e version
-// and compare with $(cat VERSION).
+// `docs/tools/doctor.sh` injects the trimmed VERSION file content and vets it
+// against this schema so the contract does not duplicate product version state.
 
 _version_note: strings.TrimSpace(version)
