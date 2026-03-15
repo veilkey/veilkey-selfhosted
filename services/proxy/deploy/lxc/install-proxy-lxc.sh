@@ -10,7 +10,7 @@ if [[ -z "$vmid" ]]; then
 fi
 
 bin_src="${VEILKEY_PROXY_CLI_SRC:-/opt/veilkey/artifacts/hostvault/veilkey-cli}"
-config_src="${VEILKEY_PROXY_POLICY_SRC:-$repo_root/policy/proxy-profiles.toml}"
+config_src="${VEILKEY_PROXY_POLICY_SRC:?VEILKEY_PROXY_POLICY_SRC must be set (see policy/proxy-profiles.toml.example)}"
 access_log_format="${VEILKEY_PROXY_ACCESS_LOG_FORMAT:-jsonl}"
 
 if [[ ! -f "$bin_src" ]]; then

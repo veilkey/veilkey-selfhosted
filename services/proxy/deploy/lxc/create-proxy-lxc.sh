@@ -10,15 +10,15 @@ usage: create-proxy-lxc.sh <vmid> <hostname> <ip> [options]
 required:
   vmid                      target VMID
   hostname                  target hostname
-  ip                        IPv4 CIDR for net0 (example: 10.50.2.9/8)
+  ip                        IPv4 CIDR for net0 (example: 10.0.0.9/8)
 
 options:
   --template <volid>        LXC template volid
   --storage <storage>       rootfs storage
   --disk <size>             rootfs size (default: 20G)
   --bridge <bridge>         bridge name (default: vmbr1)
-  --gw <ip>                 gateway (default: 10.50.0.1)
-  --nameserver <ip>         nameserver (default: 10.50.0.1)
+  --gw <ip>                 gateway (default: $VEILKEY_LXC_GATEWAY)
+  --nameserver <ip>         nameserver (default: $VEILKEY_LXC_NAMESERVER)
   --cores <n>               cpu cores (default: 2)
   --memory <mb>             memory mb (default: 2048)
   --swap <mb>               swap mb (default: 512)
@@ -31,7 +31,7 @@ options:
   --skip-verify             skip verify-proxy-lxc.sh
 
 example:
-  ./deploy/lxc/create-proxy-lxc.sh 100209 veilkey-proxy-test 10.50.2.9/8 \
+  ./deploy/lxc/create-proxy-lxc.sh 100209 veilkey-proxy-test 10.0.0.9/8 \
     --admin-user proxyops \
     --admin-pubkey ~/.ssh/id_ed25519.pub \
     --onboot 0
@@ -49,8 +49,8 @@ template="local:vztmpl/debian-12-standard_12.12-1_amd64.tar.zst"
 storage="nvme-hp-4tb"
 disk_size="20G"
 bridge="vmbr1"
-gateway="10.50.0.1"
-nameserver="10.50.0.1"
+gateway="${VEILKEY_LXC_GATEWAY:?VEILKEY_LXC_GATEWAY must be set}"
+nameserver="${VEILKEY_LXC_NAMESERVER:?VEILKEY_LXC_NAMESERVER must be set}"
 cores="2"
 memory="2048"
 swap="512"

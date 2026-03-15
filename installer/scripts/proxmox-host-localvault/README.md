@@ -42,7 +42,7 @@
 - `VEILKEY_LOCALVAULT_TRUSTED_IPS`
   - 기본값: `10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1`
 - `VEILKEY_KEYCENTER_URL`
-  - env가 없으면 `https://keycenter.60.internal.kr`를 자동 감지한다.
+  - env가 없으면 `VEILKEY_KEYCENTER_HOST` 환경변수를 이용해 자동 감지한다.
 - `VEILKEY_LOCALVAULT_PASSWORD`
   - env가 없으면 `/opt/veilkey/data/password`에서 `VEILKEY_PASSWORD`를 읽어 사용한다.
 

@@ -20,7 +20,7 @@ The currently validated install targets are:
 Clone the installer repository and initialize the local manifest:
 
 ```bash
-git clone git@10.60.100.210:veilkey/veilkey-installer.git
+git clone git@<YOUR_GITLAB_HOST>:veilkey/veilkey-installer.git
 cd veilkey-installer
 ./install.sh init
 ```
@@ -40,7 +40,7 @@ Example:
 
 ```bash
 export VEILKEY_LOCALVAULT_PASSWORD='replace-me'
-export VEILKEY_KEYCENTER_URL='https://keycenter.60.internal.kr'
+export VEILKEY_KEYCENTER_URL='https://<YOUR_KEYCENTER_HOST>'
 
 ./scripts/proxmox-host-localvault/install.sh --activate /
 ./scripts/proxmox-host-localvault/health.sh /

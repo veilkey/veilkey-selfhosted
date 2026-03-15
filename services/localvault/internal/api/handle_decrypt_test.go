@@ -43,7 +43,7 @@ func TestHandleDecryptRejectsUntrustedCaller(t *testing.T) {
 	handler := server.SetupRoutes()
 
 	req := httptest.NewRequest(http.MethodPost, "/api/decrypt", bytes.NewBufferString(`{"ciphertext":"VK:100:Zm9v"}`))
-	req.RemoteAddr = "10.1.2.3:12345"
+	req.RemoteAddr = "10.0.0.1:12345"
 	w := httptest.NewRecorder()
 
 	handler.ServeHTTP(w, req)

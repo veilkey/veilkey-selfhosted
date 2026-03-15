@@ -3,35 +3,38 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+TEST_PROXY_HOST="10.0.0.3"
+TEST_NO_PROXY_DOMAINS=".test.internal,.vhost.test"
+
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/home/workspace"
 
-cat > "$tmp/session-config" <<'SCRIPT'
+cat > "$tmp/session-config" <<SCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
-cmd="$1"
+cmd="\$1"
 shift
-case "$cmd" in
+case "\$cmd" in
   tool-shell-exports)
-    tool="$1"
-    case "$tool" in
+    tool="\$1"
+    case "\$tool" in
       codex)
-        cat <<'EOF'
-export VEILKEY_PROXY_URL=http://10.50.2.8:18081
-export HTTP_PROXY=http://10.50.2.8:18081
-export HTTPS_PROXY=http://10.50.2.8:18081
-export ALL_PROXY=http://10.50.2.8:18081
-export NO_PROXY=127.0.0.1,localhost,.internal.kr,.vhost.kr
+        cat <<EOF
+export VEILKEY_PROXY_URL=http://${TEST_PROXY_HOST}:18081
+export HTTP_PROXY=http://${TEST_PROXY_HOST}:18081
+export HTTPS_PROXY=http://${TEST_PROXY_HOST}:18081
+export ALL_PROXY=http://${TEST_PROXY_HOST}:18081
+export NO_PROXY=127.0.0.1,localhost,${TEST_NO_PROXY_DOMAINS}
 EOF
         ;;
       claude)
-        cat <<'EOF'
-export VEILKEY_PROXY_URL=http://10.50.2.8:18084
-export HTTP_PROXY=http://10.50.2.8:18084
-export HTTPS_PROXY=http://10.50.2.8:18084
-export ALL_PROXY=http://10.50.2.8:18084
-export NO_PROXY=127.0.0.1,localhost,.internal.kr,.vhost.kr
+        cat <<EOF
+export VEILKEY_PROXY_URL=http://${TEST_PROXY_HOST}:18084
+export HTTP_PROXY=http://${TEST_PROXY_HOST}:18084
+export HTTPS_PROXY=http://${TEST_PROXY_HOST}:18084
+export ALL_PROXY=http://${TEST_PROXY_HOST}:18084
+export NO_PROXY=127.0.0.1,localhost,${TEST_NO_PROXY_DOMAINS}
 EOF
         ;;
       *)
@@ -40,10 +43,10 @@ EOF
     esac
     ;;
   tool-proxy-url)
-    tool="$1"
-    case "$tool" in
-      codex) echo http://10.50.2.8:18081 ;;
-      claude) echo http://10.50.2.8:18084 ;;
+    tool="\$1"
+    case "\$tool" in
+      codex) echo http://${TEST_PROXY_HOST}:18081 ;;
+      claude) echo http://${TEST_PROXY_HOST}:18084 ;;
       *) exit 2 ;;
     esac
     ;;
@@ -118,7 +121,7 @@ install_script="$PWD/deploy/host/install-veilroot-boundary.sh"
 install_codex_script="$PWD/deploy/host/install-veilroot-codex.sh"
 
 out="$(HOME="$tmp/home" TMPDIR="$tmp" VEILKEY_SESSION_CONFIG_BIN="$tmp/session-config" SYSTEMD_RUN_BIN="$tmp/systemd-run" SHELL_BIN="$tmp/cgroup-cat" VEILKEY_VEILROOT_SCOPE='veilroot-codex.scope' "$launcher" codex)"
-printf '%s\n' "$out" | grep -q '^VEILKEY_PROXY_URL=http://10.50.2.8:18081$'
+printf '%s\n' "$out" | grep -q "^VEILKEY_PROXY_URL=http://${TEST_PROXY_HOST}:18081$"
 printf '%s\n' "$out" | grep -q '^VEILKEY_VEILROOT=1$'
 printf '%s\n' "$out" | grep -q '^VEILKEY_VEILROOT_PROFILE=codex$'
 grep -q -- '--unit' "$tmp/systemd-run.args"

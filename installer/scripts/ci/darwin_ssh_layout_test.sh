@@ -12,10 +12,12 @@ LOCAL_SRC_TARBALL="${VEILKEY_E2E_SRC_TARBALL:-${ROOT_DIR}/.tmp/veilkey-installer
 
 resolve_package_pat() {
   local candidate
+  local hosts=()
+  [[ -n "${VEILKEY_MIRROR_IP:-}" ]] && hosts+=("protocol=http\nhost=${VEILKEY_MIRROR_IP}\n\n")
+  [[ -n "${VEILKEY_GITLAB_HOST:-}" ]] && hosts+=("protocol=https\nhost=${VEILKEY_GITLAB_HOST}\n\n")
+  [[ -n "${VEILKEY_VAULT_IP:-}" ]] && hosts+=("protocol=http\nhost=${VEILKEY_VAULT_IP}\n\n")
   for candidate in \
-    "protocol=http\nhost=10.60.100.210\n\n" \
-    "protocol=https\nhost=gitlab.ranode.net\n\n" \
-    "protocol=http\nhost=10.50.100.210\n\n"
+    "${hosts[@]}"
   do
     if printf '%b' "${candidate}" | git credential fill 2>/dev/null | awk -F= '/^password=/{print $2; found=1; exit} END{exit(found?0:1)}'; then
       return 0

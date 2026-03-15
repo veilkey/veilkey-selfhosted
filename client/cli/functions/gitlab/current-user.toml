@@ -1,6 +1,6 @@
 name = "current-user"
 description = "Fetch the current GitLab user using a VeilKey-managed token"
-command = """curl -sS -H PRIVATE-TOKEN:{%{GITLAB_TOKEN}%} https://gitlab.ranode.net/api/v4/user"""
+command = """curl -sS -H PRIVATE-TOKEN:{%{GITLAB_TOKEN}%} https://gitlab.example.com/api/v4/user"""
 
 [vars]
 GITLAB_TOKEN = "VK:LOCAL:f33f06f1"

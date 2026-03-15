@@ -31,7 +31,7 @@ func TestAgentHeartbeatStoresVaultIdentityAndKeyVersion(t *testing.T) {
 		"vault_name":    "proxmox-test-lab-veilkey",
 		"managed_paths": []string{"/var/www/services/demo", "/var/www/services/demo", "relative/path"},
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -105,8 +105,8 @@ func TestAgentHeartbeatPrefersForwardedIPWhenRequestPassesThroughProxy(t *testin
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/heartbeat", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-For", "10.60.100.210, 10.60.0.100")
-	req.Header.Set("X-Real-IP", "10.60.100.210")
+	req.Header.Set("X-Forwarded-For", "10.0.0.60, 10.0.0.61")
+	req.Header.Set("X-Real-IP", "10.0.0.60")
 	req.RemoteAddr = "127.0.0.1:54321"
 
 	w := httptest.NewRecorder()
@@ -135,8 +135,8 @@ func TestAgentHeartbeatPrefersForwardedIPWhenRequestPassesThroughProxy(t *testin
 	if resp.Agents[0].NodeID != "node-forwarded" {
 		t.Fatalf("node_id = %q", resp.Agents[0].NodeID)
 	}
-	if resp.Agents[0].IP != "10.60.100.210" {
-		t.Fatalf("ip = %q, want 10.60.100.210", resp.Agents[0].IP)
+	if resp.Agents[0].IP != "10.0.0.60" {
+		t.Fatalf("ip = %q, want 10.0.0.60", resp.Agents[0].IP)
 	}
 }
 
@@ -156,8 +156,8 @@ func TestAgentHeartbeatIgnoresForwardedIPFromUntrustedClient(t *testing.T) {
 	}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/agents/heartbeat", body)
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Forwarded-For", "10.60.100.210, 10.60.0.100")
-	req.Header.Set("X-Real-IP", "10.60.100.210")
+	req.Header.Set("X-Forwarded-For", "10.0.0.60, 10.0.0.61")
+	req.Header.Set("X-Real-IP", "10.0.0.60")
 	req.RemoteAddr = "198.51.100.55:54321"
 
 	w := httptest.NewRecorder()
@@ -234,7 +234,7 @@ func TestAgentHeartbeatRejectsKeyVersionMismatch(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "proxmox-test-lab-veilkey",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -250,7 +250,7 @@ func TestAgentHeartbeatRejectsKeyVersionMismatch(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "proxmox-test-lab-veilkey",
 		"key_version":   8,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -360,7 +360,7 @@ func TestAgentHeartbeatBlocksAfterRepeatedRebindAttempts(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "rebind-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -377,7 +377,7 @@ func TestAgentHeartbeatBlocksAfterRepeatedRebindAttempts(t *testing.T) {
 			"vault_hash":    "93a8094e",
 			"vault_name":    "rebind-vault",
 			"key_version":   8,
-			"ip":            "10.50.100.204",
+			"ip":            "10.0.0.50",
 			"port":          10180,
 			"secrets_count": 2,
 			"configs_count": 3,
@@ -394,7 +394,7 @@ func TestAgentHeartbeatBlocksAfterRepeatedRebindAttempts(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "rebind-vault",
 		"key_version":   8,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -444,7 +444,7 @@ func TestAgentHeartbeatReportsNextRetryTimestamp(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "retry-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -460,7 +460,7 @@ func TestAgentHeartbeatReportsNextRetryTimestamp(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "retry-vault",
 		"key_version":   8,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -494,7 +494,7 @@ func TestAgentHeartbeatSupportsPlannedRotation(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "rotate-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -525,7 +525,7 @@ func TestAgentHeartbeatSupportsPlannedRotation(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "rotate-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -554,7 +554,7 @@ func TestAgentHeartbeatSupportsPlannedRotation(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "rotate-vault",
 		"key_version":   8,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -574,7 +574,7 @@ func TestRotateAllBlocksUnresponsivePlannedRotationAfterRetries(t *testing.T) {
 		"vault_hash":    "93a8094e",
 		"vault_name":    "stale-rotate-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -620,7 +620,7 @@ func TestAgentListAdvancesPendingRotationsToBlocked(t *testing.T) {
 		"vault_hash":    "1199aa22",
 		"vault_name":    "list-rotate-vault",
 		"key_version":   3,
-		"ip":            "10.50.100.205",
+		"ip":            "10.0.0.51",
 		"port":          10180,
 		"secrets_count": 1,
 		"configs_count": 1,
@@ -669,7 +669,7 @@ func TestHeartbeatClearsKeyVersionMismatchRebindWhenVersionMatches(t *testing.T)
 		"vault_hash":    "93a8094e",
 		"vault_name":    "clear-rebind-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -685,7 +685,7 @@ func TestHeartbeatClearsKeyVersionMismatchRebindWhenVersionMatches(t *testing.T)
 		"vault_hash":    "93a8094e",
 		"vault_name":    "clear-rebind-vault",
 		"key_version":   8,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -701,7 +701,7 @@ func TestHeartbeatClearsKeyVersionMismatchRebindWhenVersionMatches(t *testing.T)
 		"vault_hash":    "93a8094e",
 		"vault_name":    "clear-rebind-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -721,7 +721,7 @@ func TestHeartbeatClearsBlockedKeyVersionMismatchWhenVersionMatches(t *testing.T
 		"vault_hash":    "93a8094e",
 		"vault_name":    "clear-block-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
@@ -738,7 +738,7 @@ func TestHeartbeatClearsBlockedKeyVersionMismatchWhenVersionMatches(t *testing.T
 			"vault_hash":    "93a8094e",
 			"vault_name":    "clear-block-vault",
 			"key_version":   8,
-			"ip":            "10.50.100.204",
+			"ip":            "10.0.0.50",
 			"port":          10180,
 			"secrets_count": 2,
 			"configs_count": 3,
@@ -758,7 +758,7 @@ func TestHeartbeatClearsBlockedKeyVersionMismatchWhenVersionMatches(t *testing.T
 		"vault_hash":    "93a8094e",
 		"vault_name":    "clear-block-vault",
 		"key_version":   7,
-		"ip":            "10.50.100.204",
+		"ip":            "10.0.0.50",
 		"port":          10180,
 		"secrets_count": 2,
 		"configs_count": 3,
