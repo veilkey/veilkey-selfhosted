@@ -8,10 +8,17 @@ stages:
   - docker
   - deploy
 
+default:
+  before_script:
+    - cd services/keycenter
+
 lint:
   stage: lint
   script:
     - golangci-lint run ./...
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -27,8 +34,11 @@ test:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     paths:
-      - coverage.out
+      - services/keycenter/coverage.out
     expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -37,6 +47,9 @@ gosec:
   script:
     - gosec ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -45,6 +58,9 @@ govulncheck:
   script:
     - govulncheck ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -54,7 +70,10 @@ build:
     - CGO_ENABLED=1 go build -o veilkey-keycenter ./cmd/
   artifacts:
     paths:
-      - veilkey-keycenter
+      - services/keycenter/veilkey-keycenter
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell
 
@@ -89,16 +108,20 @@ package:
         "${PACKAGE_API_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PKG_NAME}/${PKG_VERSION}/${PKG_NAME}.tar.gz.sha256"
   artifacts:
     paths:
-      - dist/veilkey-keycenter.tar.gz
-      - dist/veilkey-keycenter.tar.gz.sha256
+      - services/keycenter/dist/veilkey-keycenter.tar.gz
+      - services/keycenter/dist/veilkey-keycenter.tar.gz.sha256
   tags:
     - shell
   rules:
+    - if: $UPSTREAM_SOURCE == "push"
+    - if: $UPSTREAM_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
 
 docker:
   stage: docker
+  before_script:
+    - cd services/keycenter
   script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - DOCKER_BUILDKIT=0 docker build
@@ -117,6 +140,8 @@ docker:
 
 deploy:
   stage: deploy
+  before_script:
+    - cd services/keycenter
   script:
     - bash scripts/deploy-lxc.sh
   rules:
@@ -135,5 +160,6 @@ mr-guard:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - shell

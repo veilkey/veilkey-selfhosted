@@ -8,10 +8,17 @@ stages:
   - docker
   - deploy
 
+default:
+  before_script:
+    - cd services/localvault
+
 lint:
   stage: lint
   script:
     - golangci-lint run ./...
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -27,8 +34,11 @@ test:
   coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
   artifacts:
     paths:
-      - coverage.out
+      - services/localvault/coverage.out
     expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -37,6 +47,9 @@ gosec:
   script:
     - gosec ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -45,6 +58,9 @@ govulncheck:
   script:
     - govulncheck ./...
   allow_failure: true
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -54,8 +70,11 @@ build:
     - CGO_ENABLED=1 go build -o veilkey-localvault ./cmd/
   artifacts:
     paths:
-      - veilkey-localvault
+      - services/localvault/veilkey-localvault
     expire_in: 1 week
+  rules:
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
 
@@ -90,17 +109,21 @@ package:
         "${PACKAGE_API_URL}/projects/${CI_PROJECT_ID}/packages/generic/${PKG_NAME}/${PKG_VERSION}/${PKG_NAME}.tar.gz.sha256"
   artifacts:
     paths:
-      - dist/veilkey-localvault.tar.gz
-      - dist/veilkey-localvault.tar.gz.sha256
+      - services/localvault/dist/veilkey-localvault.tar.gz
+      - services/localvault/dist/veilkey-localvault.tar.gz.sha256
     expire_in: 1 week
   tags:
     - vhost-shell-runner-shared
   rules:
+    - if: $UPSTREAM_SOURCE == "push"
+    - if: $UPSTREAM_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
 
 docker:
   stage: docker
+  before_script:
+    - cd services/localvault
   script:
     - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" "$CI_REGISTRY"
     - DOCKER_BUILDKIT=0 docker build
@@ -120,6 +143,8 @@ docker:
 
 deploy:
   stage: deploy
+  before_script:
+    - cd services/localvault
   script:
     - bash scripts/deploy-lxc.sh
   rules:
@@ -142,5 +167,6 @@ mr-guard:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push"
     - if: $CI_PIPELINE_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
   tags:
     - vhost-shell-runner-shared
