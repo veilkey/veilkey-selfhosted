@@ -3,7 +3,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-TEST_PROXY_HOST="10.50.2.8"
+TEST_PROXY_HOST="10.0.0.3"
 TEST_NO_PROXY_DOMAINS=".internal.example,.vhost.example"
 
 tmp="$(mktemp -d)"

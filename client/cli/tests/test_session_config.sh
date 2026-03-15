@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 . tests/lib/testlib.sh
 
-TEST_HUB_HOST="10.50.2.6"
+TEST_HUB_HOST="10.0.0.1"
 TEST_HUB_URL="http://${TEST_HUB_HOST}:10180"
 
 cfg="$(mktemp)"
