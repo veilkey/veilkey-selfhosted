@@ -228,11 +228,18 @@ resolve_gitlab_pat() {
 import os
 import subprocess
 
-candidates = [
-    ("http", "10.60.100.210"),
-    ("https", "gitlab.ranode.net"),
-    ("http", "10.50.100.210"),
-]
+candidates = []
+
+mirror_ip = os.environ.get("VEILKEY_MIRROR_IP", "").strip()
+gitlab_host = os.environ.get("VEILKEY_GITLAB_HOST", "").strip()
+vault_ip = os.environ.get("VEILKEY_VAULT_IP", "").strip()
+
+if mirror_ip:
+    candidates.append(("http", mirror_ip))
+if gitlab_host:
+    candidates.append(("https", gitlab_host))
+if vault_ip:
+    candidates.append(("http", vault_ip))
 
 extra_host = os.environ.get("VEILKEY_GITLAB_PACKAGE_HOST", "").strip()
 if extra_host:
@@ -319,9 +326,6 @@ normalize_download_url() {
 
   if [[ -z "${api_base}" ]]; then
     case "${url}" in
-      https://gitlab.ranode.net/*) api_base="https://10.60.100.210/api/v4" ;;
-      http://10.50.100.210/*) api_base="http://10.50.100.210/api/v4" ;;
-      http://10.60.100.210/*) api_base="https://10.60.100.210/api/v4" ;;
       *) printf '%s\n' "${url}"; return 0 ;;
     esac
   fi

@@ -39,12 +39,14 @@ resolve_keycenter_url() {
     stage "using VEILKEY_KEYCENTER_URL from environment: ${VEILKEY_KEYCENTER_URL}"
     return 0
   fi
-  if curl -kfsS https://keycenter.60.internal.kr/health >/dev/null 2>&1; then
-    export VEILKEY_KEYCENTER_URL="https://keycenter.60.internal.kr"
-    stage "auto-detected KeyCenter at ${VEILKEY_KEYCENTER_URL}"
-    return 0
+  if [[ -n "${VEILKEY_KEYCENTER_HOST:-}" ]]; then
+    if curl -kfsS "https://${VEILKEY_KEYCENTER_HOST}/health" >/dev/null 2>&1; then
+      export VEILKEY_KEYCENTER_URL="https://${VEILKEY_KEYCENTER_HOST}"
+      stage "auto-detected KeyCenter at ${VEILKEY_KEYCENTER_URL}"
+      return 0
+    fi
   fi
-  echo "Error: VEILKEY_KEYCENTER_URL is required" >&2
+  echo "Error: VEILKEY_KEYCENTER_URL is required (or set VEILKEY_KEYCENTER_HOST for auto-detection)" >&2
   exit 1
 }
 
