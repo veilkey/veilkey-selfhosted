@@ -1,13 +1,48 @@
 stages:
+  - lint
   - test
+  - security
   - build
+
+go:lint:
+  stage: lint
+  image: golang:1.24
+  script:
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    - golangci-lint run ./...
 
 go:test:
   stage: test
   image: golang:1.24
   script:
-    - go test ./...
+    - go test -race -coverprofile=coverage.out ./...
     - bash tests/run-shell-tests.sh
+    - |
+      COVERAGE=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | sed 's/%//')
+      if [ -z "$COVERAGE" ]; then echo "ERROR: could not parse coverage from coverage.out"; exit 1; fi
+      echo "Coverage: ${COVERAGE}%"
+      if echo "$COVERAGE < 40" | bc -l | grep -q '^1'; then echo "Coverage ${COVERAGE}% is below 40% threshold"; exit 1; fi
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    paths:
+      - coverage.out
+    expire_in: 1 week
+
+gosec:
+  stage: security
+  image: golang:1.24
+  script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
+    - gosec ./...
+  allow_failure: true
+
+govulncheck:
+  stage: security
+  image: golang:1.24
+  script:
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
+    - govulncheck ./...
+  allow_failure: true
 
 # Minimal build gate for the observer/proxy scaffold.
 go:build:

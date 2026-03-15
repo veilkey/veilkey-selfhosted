@@ -1,6 +1,7 @@
 stages:
   - verify
   - validate
+  - security
   - manifest
   - e2e
 
@@ -44,6 +45,26 @@ validate-install-layout:
     - test -x "$CI_PROJECT_DIR/.tmp/rootfs/opt/veilkey/installer/bin/veilkey-activate-services"
     - test -f "$CI_PROJECT_DIR/.tmp/rootfs/etc/systemd/system/veilkey-keycenter.service"
     - bash tests/test_proxy_install_layout.sh
+  tags:
+    - shell
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+shellcheck:
+  stage: security
+  script:
+    - find . -name '*.sh' -not -path './.tmp/*' -print0 | xargs -0 shellcheck
+  allow_failure: true
+  tags:
+    - shell
+  rules:
+    - if: $CI_COMMIT_BRANCH
+
+govulncheck:
+  stage: security
+  script:
+    - govulncheck ./...
+  allow_failure: true
   tags:
     - shell
   rules:

@@ -1,0 +1,27 @@
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - bodyclose
+    - nilerr
+    - errname
+
+  settings:
+    errcheck:
+      check-type-assertions: true
+      check-blank: false
+
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - performance
+
+issues:
+  exclude-dirs:
+    - vendor

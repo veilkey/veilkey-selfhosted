@@ -1,15 +1,50 @@
 stages:
   - verify
+  - lint
   - test
+  - security
   - build
   - package
   - docker
   - deploy
 
+lint:
+  stage: lint
+  script:
+    - golangci-lint run ./...
+  tags:
+    - shell
+
 test:
   stage: test
   script:
-    - CGO_ENABLED=1 go test -v -race -count=1 ./...
+    - CGO_ENABLED=1 go test -v -race -count=1 -coverprofile=coverage.out ./...
+    - |
+      COVERAGE=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | sed 's/%//')
+      if [ -z "$COVERAGE" ]; then echo "ERROR: could not parse coverage from coverage.out"; exit 1; fi
+      echo "Coverage: ${COVERAGE}%"
+      if echo "$COVERAGE < 40" | bc -l | grep -q '^1'; then echo "Coverage ${COVERAGE}% is below 40% threshold"; exit 1; fi
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    paths:
+      - coverage.out
+    expire_in: 1 week
+  tags:
+    - shell
+
+gosec:
+  stage: security
+  script:
+    - gosec ./...
+  allow_failure: true
+  tags:
+    - shell
+
+govulncheck:
+  stage: security
+  script:
+    - govulncheck ./...
+  allow_failure: true
   tags:
     - shell
 
