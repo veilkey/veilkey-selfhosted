@@ -42,12 +42,6 @@ Operator-facing boundary scripts belong to `cli`. Outbound enforcement belongs h
   - local secret and config runtime
 - `keycenter`
   - control-plane orchestration
-  - `default` -> `18080`
-  - `codex` -> `18081`
-  - `opencode` -> `18083`
-  - `claude` -> `18084`
-- Default plaintext action: `issue-temp-and-block`
-- Exception hosts are defined per profile in [`policy/proxy-profiles.toml`](policy/proxy-profiles.toml)
 
 ## Quick Start
 
@@ -167,6 +161,18 @@ This performs a real temporary secret issuance and confirms the returned ref is 
 - Verification: [`deploy/lxc/verify-proxy-lxc.sh`](deploy/lxc/verify-proxy-lxc.sh)
 
 ## Policy and Logging
+
+### Proxy Profiles
+
+Port mappings per profile:
+
+- `default` -> `18080`
+- `codex` -> `18081`
+- `opencode` -> `18083`
+- `claude` -> `18084`
+
+- Default plaintext action: `issue-temp-and-block`
+- Exception hosts are defined per profile in [`policy/proxy-profiles.toml`](policy/proxy-profiles.toml)
 
 ### Policy SSOT
 
