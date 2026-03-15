@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -53,9 +54,7 @@ func InitHTTPClientFromEnv() *http.Client {
 
 	client, err := NewTLSHTTPClient(caPath, insecure)
 	if err != nil {
-		return &http.Client{
-			Timeout: 30 * time.Second,
-		}
+		log.Fatalf("TLS client init failed (VEILKEY_TLS_CA=%s): %v", caPath, err)
 	}
 	return client
 }
