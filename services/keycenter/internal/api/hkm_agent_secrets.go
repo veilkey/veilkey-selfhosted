@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 )
 
@@ -21,7 +22,11 @@ func (s *Server) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 
 	var data map[string]interface{}
 	if json.Unmarshal(body, &data) == nil {
@@ -50,5 +55,7 @@ func (s *Server) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("failed to encode response: %v", err)
+	}
 }

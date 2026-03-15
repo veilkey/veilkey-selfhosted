@@ -49,7 +49,10 @@ func (c *VeilKeyClient) Issue(value string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("API returned %d: (unreadable body)", resp.StatusCode)
+		}
 		return "", fmt.Errorf("API returned %d: %s", resp.StatusCode, string(respBody))
 	}
 
@@ -109,7 +112,10 @@ func (c *VeilKeyClient) resolveOnce(ref string) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return "", fmt.Errorf("resolve failed %d: (unreadable body)", resp.StatusCode)
+		}
 		return "", fmt.Errorf("resolve failed %d: %s", resp.StatusCode, string(respBody))
 	}
 

@@ -25,7 +25,10 @@ func (s *Server) SyncGlobalFunctions(endpoint string) (int, int, error) {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return 0, 0, fmt.Errorf("global function sync failed %d: (failed to read body: %v)", resp.StatusCode, err)
+		}
 		return 0, 0, fmt.Errorf("global function sync failed %d: %s", resp.StatusCode, string(body))
 	}
 

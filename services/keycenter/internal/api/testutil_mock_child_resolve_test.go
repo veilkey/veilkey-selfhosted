@@ -15,7 +15,7 @@ func newMockChildResolve(t *testing.T) *httptest.Server {
 				t.Error("child did not receive X-VeilKey-Cascade header")
 			}
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]string{
+			_ = json.NewEncoder(w).Encode(map[string]string{
 				"ref": "test_ref", "name": "CHILD_SECRET", "value": "from-child",
 			})
 			return

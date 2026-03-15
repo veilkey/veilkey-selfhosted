@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"veilkey-keycenter/internal/crypto"
 )
@@ -41,12 +42,16 @@ func (s *Server) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"name":       req.Name,
 		"ciphertext": ciphertext,
 		"nonce":      nonce,
 		"version":    0,
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to marshal request body")
+		return
+	}
 	resp, err := http.Post(agent.URL()+"/api/cipher", "application/json", bytes.NewReader(body))
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
@@ -54,7 +59,11 @@ func (s *Server) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 
 	var data map[string]interface{}
 	if json.Unmarshal(respBody, &data) == nil {
@@ -94,5 +103,7 @@ func (s *Server) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(resp.StatusCode)
-	json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("failed to encode response: %v", err)
+	}
 }

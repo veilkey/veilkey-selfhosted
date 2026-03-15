@@ -15,7 +15,11 @@ func (s *Server) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, _ := io.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
 	var reqData struct {
 		Key    string `json:"key"`
 		Value  string `json:"value"`
@@ -44,7 +48,11 @@ func (s *Server) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode == http.StatusOK {
 		var respData map[string]interface{}
 		if json.Unmarshal(respBody, &respData) == nil {
@@ -78,7 +86,9 @@ func (s *Server) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
 					"status":             status,
 				},
 			)
-			respBody, _ = json.Marshal(respData)
+			if marshaled, marshalErr := json.Marshal(respData); marshalErr == nil {
+				respBody = marshaled
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

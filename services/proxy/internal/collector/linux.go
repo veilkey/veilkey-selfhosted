@@ -76,25 +76,38 @@ func (c *linuxCollector) Observe(ctx context.Context, emit func(events.Event)) e
 }
 
 func (c *linuxCollector) Close() error {
+	var errs []error
 	if c.execveReader != nil {
-		_ = c.execveReader.Close()
+		if err := c.execveReader.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close execve reader: %w", err))
+		}
 	}
 	if c.execveTP != nil {
-		_ = c.execveTP.Close()
+		if err := c.execveTP.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close execve tracepoint: %w", err))
+		}
 	}
 	if c.execveObjs != nil {
-		_ = c.execveObjs.Close()
+		if err := c.execveObjs.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close execve objects: %w", err))
+		}
 	}
 	if c.connectReader != nil {
-		_ = c.connectReader.Close()
+		if err := c.connectReader.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close connect reader: %w", err))
+		}
 	}
 	if c.connectTP != nil {
-		_ = c.connectTP.Close()
+		if err := c.connectTP.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close connect tracepoint: %w", err))
+		}
 	}
 	if c.connectObjs != nil {
-		_ = c.connectObjs.Close()
+		if err := c.connectObjs.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("close connect objects: %w", err))
+		}
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 func requirePath(path string) error {

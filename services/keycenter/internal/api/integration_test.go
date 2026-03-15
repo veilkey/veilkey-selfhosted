@@ -109,7 +109,10 @@ func setupTrustedIPServer(t *testing.T, trustedIPs []string) (*Server, http.Hand
 
 // postJSONFromIP sends a POST with the given RemoteAddr.
 func postJSONFromIP(handler http.Handler, path, remoteAddr string, body interface{}) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(body)
+	b, err := json.Marshal(body)
+	if err != nil {
+		panic("postJSONFromIP: json.Marshal: " + err.Error())
+	}
 	req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = remoteAddr
@@ -138,7 +141,9 @@ func TestIntegration_UnlockLifecycle(t *testing.T) {
 
 	// Server must start locked
 	var healthResp map[string]string
-	json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp)
+	if err := json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp); err != nil {
+		t.Fatalf("unmarshal health: %v", err)
+	}
 	if healthResp["status"] != "locked" {
 		t.Errorf("health before unlock: expected status=locked, got %q", healthResp["status"])
 	}
@@ -155,13 +160,17 @@ func TestIntegration_UnlockLifecycle(t *testing.T) {
 		t.Fatalf("unlock: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var unlockResp map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &unlockResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &unlockResp); err != nil {
+		t.Fatalf("unmarshal unlock: %v", err)
+	}
 	if unlockResp["status"] != "unlocked" {
 		t.Errorf("unlock response status = %v, want unlocked", unlockResp["status"])
 	}
 
 	// Health must now report ok
-	json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp)
+	if err := json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp); err != nil {
+		t.Fatalf("unmarshal health after unlock: %v", err)
+	}
 	if healthResp["status"] != "ok" {
 		t.Errorf("health after unlock: expected status=ok, got %q", healthResp["status"])
 	}
@@ -172,7 +181,9 @@ func TestIntegration_UnlockLifecycle(t *testing.T) {
 		t.Fatalf("second unlock: expected 200, got %d: %s", w.Code, w.Body.String())
 	}
 	var secondUnlock map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &secondUnlock)
+	if err := json.Unmarshal(w.Body.Bytes(), &secondUnlock); err != nil {
+		t.Fatalf("unmarshal second unlock: %v", err)
+	}
 	if secondUnlock["status"] != "already_unlocked" {
 		t.Errorf("second unlock status = %v, want already_unlocked", secondUnlock["status"])
 	}
@@ -251,7 +262,9 @@ func TestIntegration_UnlockWrongPassword(t *testing.T) {
 	}
 
 	var healthResp map[string]string
-	json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp)
+	if err := json.Unmarshal(getJSON(handler, "/health").Body.Bytes(), &healthResp); err != nil {
+		t.Fatalf("unmarshal health: %v", err)
+	}
 	if healthResp["status"] != "locked" {
 		t.Errorf("after wrong password: health status = %q, want locked", healthResp["status"])
 	}
@@ -382,7 +395,9 @@ func TestIntegration_RealHTTPServer(t *testing.T) {
 		}
 		defer resp.Body.Close()
 		var buf bytes.Buffer
-		buf.ReadFrom(resp.Body)
+		if _, err := buf.ReadFrom(resp.Body); err != nil {
+			t.Fatalf("ReadFrom %s: %v", path, err)
+		}
 		return resp, buf.Bytes()
 	}
 

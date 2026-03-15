@@ -22,12 +22,14 @@ func TestExecVKHashResolution(t *testing.T) {
 		if strings.HasPrefix(r.URL.Path, prefix) {
 			ref := strings.TrimPrefix(r.URL.Path, prefix)
 			if plain, ok := resolveMap[ref]; ok {
-				json.NewEncoder(w).Encode(map[string]string{"value": plain})
+				if err := json.NewEncoder(w).Encode(map[string]string{"value": plain}); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+				}
 				return
 			}
 		}
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer server.Close()
 
@@ -100,7 +102,7 @@ func TestExecResolutionFailureKeepsOriginal(t *testing.T) {
 	// Server always returns 404
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer server.Close()
 

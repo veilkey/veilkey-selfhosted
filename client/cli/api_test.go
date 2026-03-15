@@ -18,15 +18,21 @@ func TestVeilKeyClientIssue(t *testing.T) {
 		}
 
 		var req map[string]string
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		if req["plaintext"] == "" {
 			t.Error("plaintext should not be empty")
 		}
 
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"token": "VK:a1b2c3d4",
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -61,9 +67,12 @@ func TestVeilKeyClientResolve(t *testing.T) {
 			t.Errorf("expected GET, got %s", r.Method)
 		}
 
-		json.NewEncoder(w).Encode(map[string]string{
+		if err := json.NewEncoder(w).Encode(map[string]string{
 			"value": "my-secret-value",
-		})
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -133,7 +142,7 @@ func TestVeilKeyClientResolveScopedVKFallsBackToRawRef(t *testing.T) {
 func TestVeilKeyClientIssueError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("internal error"))
+		_, _ = w.Write([]byte("internal error"))
 	}))
 	defer server.Close()
 
@@ -148,7 +157,7 @@ func TestVeilKeyClientIssueError(t *testing.T) {
 func TestVeilKeyClientResolveError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
-		w.Write([]byte("not found"))
+		_, _ = w.Write([]byte("not found"))
 	}))
 	defer server.Close()
 

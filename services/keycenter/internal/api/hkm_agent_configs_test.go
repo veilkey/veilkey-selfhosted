@@ -83,7 +83,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			}
 			result = append(result, entry{Key: k, Value: cfg.Value, Scope: scope, Status: status})
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"configs": result, "count": len(result)})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"configs": result, "count": len(result)})
 	})
 
 	mux.HandleFunc("GET /api/configs/{key}", func(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +93,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		agent.mu.RUnlock()
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		scope := cfg.Scope
@@ -104,7 +104,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		if status == "" {
 			status = "active"
 		}
-		json.NewEncoder(w).Encode(map[string]string{"key": key, "value": cfg.Value, "scope": scope, "status": status})
+		_ = json.NewEncoder(w).Encode(map[string]string{"key": key, "value": cfg.Value, "scope": scope, "status": status})
 	})
 
 	mux.HandleFunc("POST /api/configs", func(w http.ResponseWriter, r *http.Request) {
@@ -114,7 +114,10 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			Scope  string `json:"scope"`
 			Status string `json:"status"`
 		}
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		agent.mu.Lock()
 		scope := req.Scope
 		if scope == "" {
@@ -130,7 +133,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		}
 		agent.configs[req.Key] = mockConfig{Value: req.Value, Scope: scope, Status: status}
 		agent.mu.Unlock()
-		json.NewEncoder(w).Encode(map[string]string{"key": req.Key, "value": req.Value, "scope": scope, "status": status, "action": "saved"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"key": req.Key, "value": req.Value, "scope": scope, "status": status, "action": "saved"})
 	})
 
 	mux.HandleFunc("PUT /api/configs/bulk", func(w http.ResponseWriter, r *http.Request) {
@@ -139,7 +142,10 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			Scope   string            `json:"scope"`
 			Status  string            `json:"status"`
 		}
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		agent.mu.Lock()
 		scope := req.Scope
 		if scope == "" {
@@ -157,7 +163,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			agent.configs[k] = mockConfig{Value: v, Scope: scope, Status: status}
 		}
 		agent.mu.Unlock()
-		json.NewEncoder(w).Encode(map[string]interface{}{"saved": len(req.Configs)})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"saved": len(req.Configs)})
 	})
 
 	mux.HandleFunc("DELETE /api/configs/{key}", func(w http.ResponseWriter, r *http.Request) {
@@ -166,11 +172,11 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		defer agent.mu.Unlock()
 		if _, ok := agent.configs[key]; !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		delete(agent.configs, key)
-		json.NewEncoder(w).Encode(map[string]string{"deleted": key})
+		_ = json.NewEncoder(w).Encode(map[string]string{"deleted": key})
 	})
 
 	// Secrets endpoints (return metadata only, no plaintext)
@@ -196,7 +202,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			}
 			result = append(result, entry{Name: name, Ref: sec.Ref, Scope: scope, Status: status, FieldsCount: len(sec.Fields)})
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"secrets": result, "count": len(result)})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"secrets": result, "count": len(result)})
 	})
 
 	mux.HandleFunc("GET /api/secrets/meta/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -206,7 +212,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		agent.mu.RUnlock()
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		scope := sec.Scope
@@ -221,7 +227,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		for key, field := range sec.Fields {
 			fields = append(fields, map[string]string{"key": key, "type": field.Type})
 		}
-		json.NewEncoder(w).Encode(map[string]interface{}{"name": name, "ref": sec.Ref, "scope": scope, "status": status, "token": "VK:" + scope + ":" + sec.Ref, "version": sec.Version, "fields": fields, "fields_count": len(fields)})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": name, "ref": sec.Ref, "scope": scope, "status": status, "token": "VK:" + scope + ":" + sec.Ref, "version": sec.Version, "fields": fields, "fields_count": len(fields)})
 	})
 
 	mux.HandleFunc("GET /api/cipher/{ref}", func(w http.ResponseWriter, r *http.Request) {
@@ -230,7 +236,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		defer agent.mu.RUnlock()
 		for name, sec := range agent.secrets {
 			if sec.Ref == ref {
-				json.NewEncoder(w).Encode(map[string]interface{}{
+				_ = json.NewEncoder(w).Encode(map[string]interface{}{
 					"name":       name,
 					"ciphertext": sec.Ciphertext,
 					"nonce":      sec.Nonce,
@@ -240,7 +246,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			}
 		}
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 	})
 
 	mux.HandleFunc("POST /api/cipher", func(w http.ResponseWriter, r *http.Request) {
@@ -253,7 +259,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || len(req.Ciphertext) == 0 || len(req.Nonce) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
 			return
 		}
 		agent.mu.Lock()
@@ -279,7 +285,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			sec.Status = "temp"
 		}
 		agent.secrets[req.Name] = sec
-		json.NewEncoder(w).Encode(map[string]interface{}{"name": req.Name, "ref": sec.Ref, "token": "VK:" + sec.Scope + ":" + sec.Ref, "scope": sec.Scope, "status": sec.Status, "action": action})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": req.Name, "ref": sec.Ref, "token": "VK:" + sec.Scope + ":" + sec.Ref, "scope": sec.Scope, "status": sec.Status, "action": action})
 	})
 
 	mux.HandleFunc("POST /api/secrets/fields", func(w http.ResponseWriter, r *http.Request) {
@@ -294,7 +300,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		}
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || len(req.Fields) == 0 {
 			w.WriteHeader(http.StatusBadRequest)
-			json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "invalid request"})
 			return
 		}
 		agent.mu.Lock()
@@ -302,12 +308,12 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		sec, ok := agent.secrets[req.Name]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		if (sec.Scope != "LOCAL" && sec.Scope != "EXTERNAL") || sec.Status != "active" {
 			w.WriteHeader(http.StatusConflict)
-			json.NewEncoder(w).Encode(map[string]string{"error": "secret fields require VK:LOCAL or VK:EXTERNAL active lifecycle"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "secret fields require VK:LOCAL or VK:EXTERNAL active lifecycle"})
 			return
 		}
 		if sec.Fields == nil {
@@ -317,7 +323,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			sec.Fields[field.Key] = mockSecretField{Type: field.Type, Ciphertext: field.Ciphertext, Nonce: field.Nonce}
 		}
 		agent.secrets[req.Name] = sec
-		json.NewEncoder(w).Encode(map[string]interface{}{"name": req.Name, "saved": len(req.Fields)})
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{"name": req.Name, "saved": len(req.Fields)})
 	})
 
 	mux.HandleFunc("GET /api/cipher/{ref}/fields/{field}", func(w http.ResponseWriter, r *http.Request) {
@@ -332,10 +338,10 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			field, ok := sec.Fields[fieldKey]
 			if !ok {
 				w.WriteHeader(http.StatusNotFound)
-				json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+				_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 				return
 			}
-			json.NewEncoder(w).Encode(map[string]interface{}{
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
 				"name":       name,
 				"field":      fieldKey,
 				"type":       field.Type,
@@ -345,7 +351,7 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 			return
 		}
 		w.WriteHeader(http.StatusNotFound)
-		json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+		_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 	})
 
 	mux.HandleFunc("DELETE /api/secrets/{name}/fields/{field}", func(w http.ResponseWriter, r *http.Request) {
@@ -356,17 +362,17 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		sec, ok := agent.secrets[name]
 		if !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		if _, ok := sec.Fields[fieldKey]; !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		delete(sec.Fields, fieldKey)
 		agent.secrets[name] = sec
-		json.NewEncoder(w).Encode(map[string]string{"name": name, "deleted": fieldKey})
+		_ = json.NewEncoder(w).Encode(map[string]string{"name": name, "deleted": fieldKey})
 	})
 
 	mux.HandleFunc("DELETE /api/secrets/{name}", func(w http.ResponseWriter, r *http.Request) {
@@ -375,11 +381,11 @@ func newMockAgent(configs map[string]string, secrets map[string]string) *httptes
 		defer agent.mu.Unlock()
 		if _, ok := agent.secrets[name]; !ok {
 			w.WriteHeader(http.StatusNotFound)
-			json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
+			_ = json.NewEncoder(w).Encode(map[string]string{"error": "not found"})
 			return
 		}
 		delete(agent.secrets, name)
-		json.NewEncoder(w).Encode(map[string]string{"deleted": name})
+		_ = json.NewEncoder(w).Encode(map[string]string{"deleted": name})
 	})
 
 	return httptest.NewServer(mux)
@@ -411,9 +417,18 @@ func registerMockAgent(t *testing.T, srv *Server, label string, configs map[stri
 	}
 
 	// Assign agent hash
-	agentHash, _ := generateAgentHash()
-	agentDEK, _ := crypto.GenerateKey()
-	encDEK, encNonce, _ := crypto.Encrypt(srv.kek, agentDEK)
+	agentHash, err := generateAgentHash()
+	if err != nil {
+		t.Fatalf("generateAgentHash %s: %v", label, err)
+	}
+	agentDEK, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey %s: %v", label, err)
+	}
+	encDEK, encNonce, err := crypto.Encrypt(srv.kek, agentDEK)
+	if err != nil {
+		t.Fatalf("Encrypt %s: %v", label, err)
+	}
 	if err := srv.db.UpdateAgentDEK(nodeID, agentHash, encDEK, encNonce); err != nil {
 		t.Fatalf("UpdateAgentDEK %s: %v", label, err)
 	}
@@ -437,7 +452,9 @@ func TestHKM_AgentConfigsCRUD(t *testing.T) {
 	var listResp struct {
 		Count int `json:"count"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &listResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("unmarshal list configs: %v", err)
+	}
 	if listResp.Count != 2 {
 		t.Errorf("configs count = %d, want 2", listResp.Count)
 	}
@@ -451,7 +468,9 @@ func TestHKM_AgentConfigsCRUD(t *testing.T) {
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &getResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &getResp); err != nil {
+		t.Fatalf("unmarshal get config: %v", err)
+	}
 	if getResp.Value != "test.example.com" {
 		t.Errorf("DOMAIN value = %q, want test.example.com", getResp.Value)
 	}
@@ -574,7 +593,9 @@ func TestHKM_AgentConfigsBulkSave(t *testing.T) {
 	var resp struct {
 		Saved int `json:"saved"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal bulk save: %v", err)
+	}
 	if resp.Saved != 3 {
 		t.Errorf("saved = %d, want 3", resp.Saved)
 	}
@@ -616,7 +637,9 @@ func TestHKM_ConfigsSummary(t *testing.T) {
 		TotalAgents       int `json:"total_agents"`
 		AgentsWithConfigs int `json:"agents_with_configs"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal summary: %v", err)
+	}
 
 	if resp.TotalAgents != 3 {
 		t.Errorf("total_agents = %d, want 3", resp.TotalAgents)
@@ -650,7 +673,9 @@ func TestHKM_ConfigsSearchKey(t *testing.T) {
 		ValueSummary map[string]int `json:"value_summary"`
 		ScopeSummary map[string]int `json:"scope_summary"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal search DOMAIN: %v", err)
+	}
 
 	if resp.MatchCount != 3 {
 		t.Errorf("DOMAIN match_count = %d, want 3", resp.MatchCount)
@@ -667,7 +692,9 @@ func TestHKM_ConfigsSearchKey(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("search PORT: expected 200, got %d", w.Code)
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal search PORT: %v", err)
+	}
 
 	if resp.MatchCount != 3 {
 		t.Errorf("PORT match_count = %d, want 3", resp.MatchCount)
@@ -687,7 +714,9 @@ func TestHKM_ConfigsSearchKey(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Fatalf("search NONEXISTENT: expected 200, got %d", w.Code)
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal search NONEXISTENT: %v", err)
+	}
 	if resp.MatchCount != 0 {
 		t.Errorf("NONEXISTENT match_count = %d, want 0", resp.MatchCount)
 	}
@@ -713,7 +742,9 @@ func TestHKM_ConfigsBulkUpdate_SingleValue(t *testing.T) {
 		Updated int `json:"updated"`
 		Skipped int `json:"skipped"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal bulk-update: %v", err)
+	}
 	if resp.Updated != 2 {
 		t.Errorf("updated = %d, want 2", resp.Updated)
 	}
@@ -725,7 +756,9 @@ func TestHKM_ConfigsBulkUpdate_SingleValue(t *testing.T) {
 			Value string `json:"value"`
 		} `json:"matches"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &searchResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &searchResp); err != nil {
+		t.Fatalf("unmarshal search REDIS_HOST: %v", err)
+	}
 	for _, m := range searchResp.Matches {
 		if m.Value != "198.51.100.200" {
 			t.Errorf("after bulk update, value = %q, want 198.51.100.200", m.Value)
@@ -764,7 +797,9 @@ func TestHKM_ConfigsBulkUpdate_PreservesScope(t *testing.T) {
 		Status string `json:"status"`
 		Value  string `json:"value"`
 	}
-	json.Unmarshal(get.Body.Bytes(), &payload)
+	if err := json.Unmarshal(get.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal get config: %v", err)
+	}
 	if payload.Scope != "EXTERNAL" {
 		t.Fatalf("scope = %q, want EXTERNAL", payload.Scope)
 	}
@@ -807,7 +842,9 @@ func TestHKM_ConfigsBulkSet_PreservesExistingScope(t *testing.T) {
 		Status string `json:"status"`
 		Value  string `json:"value"`
 	}
-	json.Unmarshal(get.Body.Bytes(), &payload)
+	if err := json.Unmarshal(get.Body.Bytes(), &payload); err != nil {
+		t.Fatalf("unmarshal get config: %v", err)
+	}
 	if payload.Scope != "TEMP" {
 		t.Fatalf("scope = %q, want TEMP", payload.Scope)
 	}
@@ -839,7 +876,9 @@ func TestHKM_ConfigsBulkUpdate_MultipleValues_RequiresOldValue(t *testing.T) {
 		UniqueValues int            `json:"unique_values"`
 		ValueSummary map[string]int `json:"value_summary"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &conflictResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &conflictResp); err != nil {
+		t.Fatalf("unmarshal conflict: %v", err)
+	}
 	if conflictResp.UniqueValues != 2 {
 		t.Errorf("unique_values = %d, want 2", conflictResp.UniqueValues)
 	}
@@ -857,7 +896,9 @@ func TestHKM_ConfigsBulkUpdate_MultipleValues_RequiresOldValue(t *testing.T) {
 		Updated int `json:"updated"`
 		Skipped int `json:"skipped"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &resp)
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal bulk-update: %v", err)
+	}
 	if resp.Updated != 1 {
 		t.Errorf("updated = %d, want 1", resp.Updated)
 	}
@@ -885,7 +926,9 @@ func TestHKM_SecretsAndConfigsSeparation(t *testing.T) {
 		Key   string `json:"key"`
 		Value string `json:"value"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &configResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &configResp); err != nil {
+		t.Fatalf("unmarshal config: %v", err)
+	}
 	if configResp.Value != "this-is-config-not-secret" {
 		t.Errorf("config value = %q, want 'this-is-config-not-secret'", configResp.Value)
 	}
@@ -898,7 +941,9 @@ func TestHKM_SecretsAndConfigsSeparation(t *testing.T) {
 			Value string `json:"value"`
 		} `json:"configs"`
 	}
-	json.Unmarshal(w.Body.Bytes(), &listResp)
+	if err := json.Unmarshal(w.Body.Bytes(), &listResp); err != nil {
+		t.Fatalf("unmarshal config list: %v", err)
+	}
 
 	for _, c := range listResp.Configs {
 		if c.Value == "ref12345" {

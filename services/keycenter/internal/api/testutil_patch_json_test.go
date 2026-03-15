@@ -8,7 +8,10 @@ import (
 )
 
 func patchJSON(handler http.Handler, path string, body interface{}) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(body)
+	b, err := json.Marshal(body)
+	if err != nil {
+		panic("patchJSON: json.Marshal: " + err.Error())
+	}
 	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
@@ -17,7 +20,10 @@ func patchJSON(handler http.Handler, path string, body interface{}) *httptest.Re
 }
 
 func patchJSONFromIP(handler http.Handler, path, remoteAddr string, body interface{}) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(body)
+	b, err := json.Marshal(body)
+	if err != nil {
+		panic("patchJSONFromIP: json.Marshal: " + err.Error())
+	}
 	req := httptest.NewRequest(http.MethodPatch, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	req.RemoteAddr = remoteAddr

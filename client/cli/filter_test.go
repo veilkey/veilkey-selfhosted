@@ -13,11 +13,17 @@ func TestProcessStreamWithMockAPI(t *testing.T) {
 	// Mock VeilKey server
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string
-		json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 
 		// Return a deterministic VK token in the format Issue() expects
 		token := "VK:a1b2c3d4"
-		json.NewEncoder(w).Encode(map[string]string{"token": token})
+		if err := json.NewEncoder(w).Encode(map[string]string{"token": token}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 
@@ -69,8 +75,14 @@ func TestProcessStreamWithMockAPI(t *testing.T) {
 func TestProcessLinePreservesExistingVK(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var req map[string]string
-		json.NewDecoder(r.Body).Decode(&req)
-		json.NewEncoder(w).Encode(map[string]string{"token": "VK:ff001122"})
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if err := json.NewEncoder(w).Encode(map[string]string{"token": "VK:ff001122"}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}))
 	defer server.Close()
 

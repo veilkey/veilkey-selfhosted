@@ -178,12 +178,16 @@ func (s *Server) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			}
-			body, _ := json.Marshal(map[string]string{
+			body, marshalErr := json.Marshal(map[string]string{
 				"key":    req.Key,
 				"value":  req.Value,
 				"scope":  appliedScope,
 				"status": appliedStatus,
 			})
+			if marshalErr != nil {
+				results[idx] = applyResult{ai: ai, err: marshalErr}
+				return
+			}
 			httpReq, err := http.NewRequestWithContext(ctx, "POST", ai.URL()+"/api/configs", bytes.NewReader(body))
 			if err != nil {
 				results[idx] = applyResult{ai: ai, err: err}
@@ -254,12 +258,15 @@ func (s *Server) rollbackBulkSet(ctx context.Context, agents []*agentInfo, check
 			// Restore old value
 			go func(ai *agentInfo, oldVal string, oldScope string, oldStatus string) {
 				defer wg.Done()
-				body, _ := json.Marshal(map[string]string{
+				body, marshalErr := json.Marshal(map[string]string{
 					"key":    key,
 					"value":  oldVal,
 					"scope":  oldScope,
 					"status": oldStatus,
 				})
+				if marshalErr != nil {
+					return
+				}
 				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")

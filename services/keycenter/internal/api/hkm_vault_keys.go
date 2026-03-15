@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"slices"
 	"strings"
@@ -82,7 +84,11 @@ func encodeStringArrayJSON(values []string) string {
 	if values == nil {
 		values = []string{}
 	}
-	encoded, _ := json.Marshal(values)
+	encoded, err := json.Marshal(values)
+	if err != nil {
+		log.Printf("failed to marshal string array: %v", err)
+		return "[]"
+	}
 	return string(encoded)
 }
 
@@ -185,7 +191,10 @@ func (s *Server) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta, 
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, nil, fmt.Errorf("failed to read agent response: %w", err)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return nil, resp.StatusCode, body, nil
 	}
@@ -907,10 +916,14 @@ func (s *Server) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.SetPathValue("agent", r.PathValue("vault"))
-	payload, _ := json.Marshal(map[string]string{
+	payload, err := json.Marshal(map[string]string{
 		"name":  name,
 		"value": req.Value,
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to marshal request body")
+		return
+	}
 	r.Body = ioNopCloser{bytes.NewReader(payload)}
 	r.ContentLength = int64(len(payload))
 	r.Header.Set("Content-Type", "application/json")
@@ -1000,13 +1013,17 @@ func (s *Server) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	r.SetPathValue("agent", r.PathValue("vault"))
-	payload, _ := json.Marshal(map[string]any{
+	payload, err := json.Marshal(map[string]any{
 		"fields": []map[string]string{{
 			"key":   fieldKey,
 			"type":  req.Type,
 			"value": req.Value,
 		}},
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to marshal request body")
+		return
+	}
 	r.Body = ioNopCloser{bytes.NewReader(payload)}
 	r.ContentLength = int64(len(payload))
 	r.Header.Set("Content-Type", "application/json")

@@ -28,10 +28,14 @@ func (s *Server) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rekeyBody, _ := json.Marshal(map[string]interface{}{
+	rekeyBody, err := json.Marshal(map[string]interface{}{
 		"dek":     agentDEK,
 		"version": 100,
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to marshal rekey request")
+		return
+	}
 
 	resp, err := http.Post(agent.URL()+"/api/rekey", "application/json", bytes.NewReader(rekeyBody))
 	if err != nil {
@@ -40,9 +44,13 @@ func (s *Server) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	var rekeyResult map[string]interface{}
-	json.Unmarshal(body, &rekeyResult)
+	_ = json.Unmarshal(body, &rekeyResult)
 
 	if resp.StatusCode != http.StatusOK {
 		s.respondError(w, resp.StatusCode, fmt.Sprintf("rekey failed: %s", string(body)))

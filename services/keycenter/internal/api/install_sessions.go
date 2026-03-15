@@ -43,7 +43,10 @@ func encodeStringList(items []string) string {
 	if items == nil {
 		items = []string{}
 	}
-	b, _ := json.Marshal(items)
+	b, err := json.Marshal(items)
+	if err != nil {
+		return "[]"
+	}
 	return string(b)
 }
 

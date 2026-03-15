@@ -25,8 +25,8 @@ func (s *Server) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request)
 			var data struct {
 				Scope string `json:"scope"`
 			}
-			body, _ := io.ReadAll(preResp.Body)
-			if json.Unmarshal(body, &data) == nil {
+			body, readErr := io.ReadAll(preResp.Body)
+			if readErr == nil && json.Unmarshal(body, &data) == nil {
 				scope, _, normalizeErr := normalizeScopeStatus("VE", data.Scope, "", "LOCAL")
 				if normalizeErr == nil {
 					trackedRef = "VE:" + scope + ":" + key
@@ -43,7 +43,11 @@ func (s *Server) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode == http.StatusOK && trackedRef != "" {
 		_ = s.deleteTrackedRef(trackedRef)
 		s.saveAuditEvent(

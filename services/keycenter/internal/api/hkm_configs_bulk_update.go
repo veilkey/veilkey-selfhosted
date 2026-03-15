@@ -148,12 +148,16 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 		updateWg.Add(1)
 		go func(idx int, ac agentConfig) {
 			defer updateWg.Done()
-			body, _ := json.Marshal(map[string]string{
+			body, marshalErr := json.Marshal(map[string]string{
 				"key":    req.Key,
 				"value":  req.NewValue,
 				"scope":  ac.scope,
 				"status": ac.status,
 			})
+			if marshalErr != nil {
+				results[idx] = applyResult{ac: ac, err: marshalErr}
+				return
+			}
 			httpReq, err := http.NewRequestWithContext(ctx, "POST", ac.ai.URL()+"/api/configs", bytes.NewReader(body))
 			if err != nil {
 				results[idx] = applyResult{ac: ac, err: err}
@@ -193,12 +197,15 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 			rollbackWg.Add(1)
 			go func(ac agentConfig) {
 				defer rollbackWg.Done()
-				body, _ := json.Marshal(map[string]string{
+				body, marshalErr := json.Marshal(map[string]string{
 					"key":    req.Key,
 					"value":  ac.value,
 					"scope":  ac.scope,
 					"status": ac.status,
 				})
+				if marshalErr != nil {
+					return
+				}
 				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ac.ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")

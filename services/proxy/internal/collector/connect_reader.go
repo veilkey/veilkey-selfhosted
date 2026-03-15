@@ -42,14 +42,14 @@ func (c *linuxCollector) initConnectReader() error {
 
 	tp, err := link.Tracepoint("syscalls", "sys_enter_connect", objs.TraceEnterConnect, nil)
 	if err != nil {
-		objs.Close()
+		_ = objs.Close()
 		return fmt.Errorf("attach sys_enter_connect tracepoint: %w", err)
 	}
 
 	reader, err := ringbuf.NewReader(objs.ConnectEvents)
 	if err != nil {
-		tp.Close()
-		objs.Close()
+		_ = tp.Close()
+		_ = objs.Close()
 		return fmt.Errorf("open connect ringbuf: %w", err)
 	}
 

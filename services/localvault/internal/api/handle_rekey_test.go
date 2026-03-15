@@ -36,10 +36,13 @@ func TestHandleRekeyMixedSecretsSkipsAlreadyCurrentSecrets(t *testing.T) {
 		t.Fatalf("SaveSecret current: %v", err)
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"dek":     newDEK,
 		"version": 104,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/rekey", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()

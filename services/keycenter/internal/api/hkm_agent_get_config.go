@@ -24,7 +24,11 @@ func (s *Server) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode == http.StatusOK {
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
@@ -41,7 +45,9 @@ func (s *Server) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 			data["vault"] = agent.Label
 			setRuntimeHashAliases(data, agent.AgentHash)
 			_ = s.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
-			body, _ = json.Marshal(data)
+			if marshaled, marshalErr := json.Marshal(data); marshalErr == nil {
+				body = marshaled
+			}
 		}
 	}
 	w.Header().Set("Content-Type", "application/json")

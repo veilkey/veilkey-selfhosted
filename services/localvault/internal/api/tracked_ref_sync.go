@@ -51,9 +51,13 @@ func (s *Server) syncTrackedRefWithKeycenter(ref string, previousRef string, ver
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		payload, _ := io.ReadAll(resp.Body)
+		payload, err := io.ReadAll(resp.Body)
 		result.Status = "degraded"
-		result.Error = fmt.Sprintf("tracked ref sync rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(payload)))
+		if err != nil {
+			result.Error = fmt.Sprintf("tracked ref sync rejected: status=%d (failed to read body: %v)", resp.StatusCode, err)
+		} else {
+			result.Error = fmt.Sprintf("tracked ref sync rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(payload)))
+		}
 		return result
 	}
 	result.Status = "ok"

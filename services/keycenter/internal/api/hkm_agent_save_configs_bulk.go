@@ -15,7 +15,11 @@ func (s *Server) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	body, _ := io.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadRequest, "failed to read request body")
+		return
+	}
 	var reqData struct {
 		Configs map[string]string `json:"configs"`
 		Scope   string            `json:"scope"`
@@ -45,7 +49,11 @@ func (s *Server) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Reque
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode == http.StatusOK {
 		for key := range reqData.Configs {
 			_ = s.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)

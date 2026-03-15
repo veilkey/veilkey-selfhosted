@@ -57,7 +57,11 @@ func runObserve(args []string) error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "collector close: %v\n", closeErr)
+		}
+	}()
 
 	if err := c.Preflight(); err != nil {
 		return err
@@ -88,7 +92,11 @@ func runDoctor() error {
 	if err != nil {
 		return err
 	}
-	defer c.Close()
+	defer func() {
+		if closeErr := c.Close(); closeErr != nil {
+			fmt.Fprintf(os.Stderr, "collector close: %v\n", closeErr)
+		}
+	}()
 
 	if err := c.Preflight(); err != nil {
 		return err
@@ -110,7 +118,9 @@ Usage:
 func printEvent(format string, ev events.Event) {
 	switch format {
 	case "json":
-		_ = json.NewEncoder(os.Stdout).Encode(ev)
+		if err := json.NewEncoder(os.Stdout).Encode(ev); err != nil {
+			fmt.Fprintf(os.Stderr, "json encode error: %v\n", err)
+		}
 	default:
 		fmt.Printf("%s kind=%s uid=%d pid=%d comm=%q cgroup=%q target=%q suspicious=%t matches=%q enforcement=%q argv=%q\n",
 			ev.Time.Format(time.RFC3339),

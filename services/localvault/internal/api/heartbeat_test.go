@@ -100,7 +100,7 @@ func TestSendHeartbeatOnceAppliesPlannedRotation(t *testing.T) {
 		t.Fatalf("identity version = %d, want 8", server.identity.Version)
 	}
 
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"vault_node_uuid": server.identity.NodeID,
 		"node_id":         server.identity.NodeID,
 		"vault_hash":      server.identity.VaultHash,
@@ -112,14 +112,20 @@ func TestSendHeartbeatOnceAppliesPlannedRotation(t *testing.T) {
 		"configs_count":   0,
 		"version":         server.identity.Version,
 	})
-	req, _ := http.NewRequest(http.MethodPost, ts.URL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err := http.NewRequest(http.MethodPost, ts.URL, bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
 	req.Header.Set("Content-Type", "application/json")
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
 		t.Fatalf("second request: %v", err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if attempts != 2 {
 		t.Fatalf("attempts = %d, want 2", attempts)
 	}

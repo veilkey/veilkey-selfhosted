@@ -65,7 +65,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		configsCount = count
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"vault_node_uuid": nodeID,
 		"node_id":         nodeID,
 		"vault_hash":      s.identity.VaultHash,
@@ -79,6 +79,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"configs_count":   configsCount,
 		"version":         version,
 	})
+	if err != nil {
+		return fmt.Errorf("heartbeat marshal failed: %w", err)
+	}
 
 	resp, err := http.Post(endpoint, "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -86,7 +89,10 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("heartbeat rejected: status=%d (failed to read body: %v)", resp.StatusCode, err)
+		}
 		if resp.StatusCode == http.StatusConflict {
 			var payload struct {
 				Status             string `json:"status"`

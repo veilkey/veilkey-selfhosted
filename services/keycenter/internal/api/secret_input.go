@@ -156,10 +156,13 @@ func storeSecretViaAgentEndpoint(endpoint, name, value string) error {
 	if !strings.Contains(target, "/api/agents/") {
 		return fmt.Errorf("secret input requires a keycenter agent endpoint")
 	}
-	payload, _ := json.Marshal(map[string]string{
+	payload, err := json.Marshal(map[string]string{
 		"name":  name,
 		"value": value,
 	})
+	if err != nil {
+		return fmt.Errorf("failed to marshal secret payload: %w", err)
+	}
 	req, err := http.NewRequest(http.MethodPost, target+"/secrets", bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -171,7 +174,10 @@ func storeSecretViaAgentEndpoint(endpoint, name, value string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode/100 != 2 {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("store secret failed: (unreadable body)")
+		}
 		return fmt.Errorf("store secret failed: %s", strings.TrimSpace(string(body)))
 	}
 	return nil

@@ -26,8 +26,8 @@ func (s *Server) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request)
 				Ref   string `json:"ref"`
 				Scope string `json:"scope"`
 			}
-			body, _ := io.ReadAll(metaResp.Body)
-			if json.Unmarshal(body, &meta) == nil && meta.Ref != "" {
+			body, readErr := io.ReadAll(metaResp.Body)
+			if readErr == nil && json.Unmarshal(body, &meta) == nil && meta.Ref != "" {
 				if meta.Scope == "" {
 					meta.Scope = "LOCAL"
 				}
@@ -44,7 +44,11 @@ func (s *Server) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request)
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode == http.StatusOK && trackedRef != "" {
 		_ = s.deleteTrackedRef(trackedRef)
 		if metaRefParts := strings.Split(trackedRef, ":"); len(metaRefParts) == 3 {

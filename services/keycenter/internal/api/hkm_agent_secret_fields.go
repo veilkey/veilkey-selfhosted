@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 
@@ -41,7 +42,10 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 	}
 	defer metaResp.Body.Close()
 	if metaResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(metaResp.Body)
+		body, readErr := io.ReadAll(metaResp.Body)
+		if readErr != nil {
+			body = []byte(`{"error":"(unreadable body)"}`)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(metaResp.StatusCode)
 		w.Write(body)
@@ -91,10 +95,14 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 		responseFields = append(responseFields, map[string]string{"key": field.Key, "type": fieldType})
 	}
 
-	body, _ := json.Marshal(map[string]interface{}{
+	body, err := json.Marshal(map[string]interface{}{
 		"name":   name,
 		"fields": payloadFields,
 	})
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to marshal request body")
+		return
+	}
 	resp, err := http.Post(agent.URL()+"/api/secrets/fields", "application/json", bytes.NewReader(body))
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
@@ -102,7 +110,11 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode != http.StatusOK {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
@@ -112,7 +124,7 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	if err := json.NewEncoder(w).Encode(map[string]interface{}{
 		"name":               name,
 		"ref":                meta.Ref,
 		"token":              "VK:" + meta.Scope + ":" + meta.Ref,
@@ -121,7 +133,9 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 		"saved":              len(responseFields),
 		"vault":              agent.Label,
 		"vault_runtime_hash": agent.AgentHash,
-	})
+	}); err != nil {
+		log.Printf("failed to encode response: %v", err)
+	}
 }
 
 func (s *Server) handleAgentGetSecretField(w http.ResponseWriter, r *http.Request) {
@@ -141,7 +155,10 @@ func (s *Server) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reques
 	}
 	defer metaResp.Body.Close()
 	if metaResp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(metaResp.Body)
+		body, readErr := io.ReadAll(metaResp.Body)
+		if readErr != nil {
+			body = []byte(`{"error":"(unreadable body)"}`)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(metaResp.StatusCode)
 		w.Write(body)
@@ -219,7 +236,11 @@ func (s *Server) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Req
 	}
 	defer resp.Body.Close()
 
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if resp.StatusCode != http.StatusOK {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)

@@ -32,7 +32,10 @@ func (s *Server) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			body = []byte(`{"error":"(unreadable body)"}`)
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(resp.StatusCode)
 		w.Write(body)
@@ -50,7 +53,11 @@ func (s *Server) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 		} `json:"fields"`
 		FieldsCount int `json:"fields_count"`
 	}
-	body, _ := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		s.respondError(w, http.StatusBadGateway, "failed to read agent response body")
+		return
+	}
 	if err := json.Unmarshal(body, &secretData); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "invalid agent response")
 		return

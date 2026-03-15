@@ -29,7 +29,7 @@ func TestHandleBulkApplyExecuteReturnsPostchecks(t *testing.T) {
 		_ = os.Remove(overridePath)
 	})
 
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"name": "mattermost-apply",
 		"steps": []map[string]any{
 			{
@@ -48,6 +48,9 @@ func TestHandleBulkApplyExecuteReturnsPostchecks(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/bulk-apply/execute", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()
@@ -112,7 +115,7 @@ func TestHandleBulkApplyPrecheckAcceptsGitLabConfig(t *testing.T) {
 		_ = os.Remove(gitlabPath)
 	})
 
-	body, _ := json.Marshal(map[string]any{
+	body, err := json.Marshal(map[string]any{
 		"name": "gitlab-phase1-apply",
 		"steps": []map[string]any{
 			{
@@ -124,6 +127,9 @@ func TestHandleBulkApplyPrecheckAcceptsGitLabConfig(t *testing.T) {
 			},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	req := httptest.NewRequest(http.MethodPost, "/api/bulk-apply/precheck", bytes.NewReader(body))
 	req.RemoteAddr = "127.0.0.1:12345"
 	w := httptest.NewRecorder()

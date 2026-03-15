@@ -8,7 +8,10 @@ import (
 )
 
 func putJSON(handler http.Handler, path string, body interface{}) *httptest.ResponseRecorder {
-	b, _ := json.Marshal(body)
+	b, err := json.Marshal(body)
+	if err != nil {
+		panic("putJSON: json.Marshal: " + err.Error())
+	}
 	req := httptest.NewRequest(http.MethodPut, path, bytes.NewReader(b))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
