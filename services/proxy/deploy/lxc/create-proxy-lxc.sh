@@ -85,6 +85,11 @@ while (($#)); do
   esac
 done
 
+if [[ -n "$admin_user" ]] && ! [[ "$admin_user" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+  echo "invalid admin user name: $admin_user" >&2
+  exit 2
+fi
+
 if pct status "$vmid" >/dev/null 2>&1; then
   echo "VMID $vmid already exists" >&2
   exit 1
@@ -144,7 +149,7 @@ passwd -l '$admin_user' >/dev/null 2>&1 || true
 install -d -m 0700 -o '$admin_user' -g '$admin_user' /home/'$admin_user'/.ssh
 EOF
   if [[ "$grant_nopasswd" == "1" ]]; then
-    vibe_lxc_ops "$vmid" "printf '%s\n' '$admin_user ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/90-$admin_user && chmod 0440 /etc/sudoers.d/90-$admin_user"
+    vibe_lxc_ops "$vmid" "printf '%s\n' '$admin_user ALL=(ALL) NOPASSWD:ALL' > '/etc/sudoers.d/90-$admin_user' && chmod 0440 '/etc/sudoers.d/90-$admin_user'"
   fi
   if [[ -n "$admin_pubkey" ]]; then
     pubkey_contents="$(<"$admin_pubkey")"

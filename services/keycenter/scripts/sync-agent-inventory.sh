@@ -62,6 +62,11 @@ for vmid in "${vmids[@]}"; do
   secrets_count="$(jq -r '.secrets_count // 0' < "$status_tmp")"
   configs_count="$(jq -r '.configs_count // 0' < "$status_tmp")"
 
+  # Validate numeric fields to prevent SQL injection
+  [[ "$key_version" =~ ^[0-9]+$ ]] || key_version=0
+  [[ "$secrets_count" =~ ^[0-9]+$ ]] || secrets_count=0
+  [[ "$configs_count" =~ ^[0-9]+$ ]] || configs_count=0
+
   if [[ -z "$vault_node_uuid" || -z "$vault_hash" || -z "$vault_name" ]]; then
     echo "skip ${vmid}: incomplete status payload" >&2
     skipped=$((skipped + 1))

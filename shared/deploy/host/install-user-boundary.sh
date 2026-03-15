@@ -14,6 +14,10 @@ if [[ -z "$user_name" ]]; then
   echo "usage: $(basename "$0") <user> [config-src]" >&2
   exit 2
 fi
+if ! [[ "$user_name" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+  echo "invalid user name: $user_name" >&2
+  exit 2
+fi
 
 if [[ "${VEILKEY_ALLOW_SESSION_BOOTSTRAP:-0}" != "1" ]]; then
   echo "$(basename "$0") is an internal session bootstrap helper; use install-veilroot-boundary.sh for supported host boundary setup" >&2
@@ -88,7 +92,12 @@ if [[ ! -x "$real_bin" ]]; then
   echo "mapped binary is not executable: $real_bin" >&2
   exit 2
 fi
-eval "$(/usr/local/bin/veilkey-session-config tool-shell-exports "$tool")"
+while IFS='=' read -r _vk_key _vk_val; do
+  _vk_key="${_vk_key#export }"
+  [[ "$_vk_key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] || continue
+  _vk_val="${_vk_val%\"}" ; _vk_val="${_vk_val#\"}"
+  export "${_vk_key}=${_vk_val}"
+done < <(/usr/local/bin/veilkey-session-config tool-shell-exports "$tool")
 if [[ "${VEILKEY_ACTIVE:-}" == "1" ]]; then
   exec "$real_bin" "$@"
 fi
@@ -98,7 +107,12 @@ chmod 0755 /usr/local/bin/veilkey-session-launch
 
 cat >/etc/profile.d/${user_name}-veilkey-proxy.sh <<SCRIPT
 [ "\${USER:-}" = "$user_name" ] || return 0
-eval "\$(/usr/local/bin/veilkey-session-config shell-exports)"
+while IFS='=' read -r _vk_key _vk_val; do
+  _vk_key="\${_vk_key#export }"
+  [[ "\$_vk_key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] || continue
+  _vk_val="\${_vk_val%\"}" ; _vk_val="\${_vk_val#\"}"
+  export "\${_vk_key}=\${_vk_val}"
+done < <(/usr/local/bin/veilkey-session-config shell-exports)
 export VEILKEY_PROXY_STATE=active
 SCRIPT
 chmod 0644 /etc/profile.d/${user_name}-veilkey-proxy.sh
@@ -116,7 +130,12 @@ done
 cat >"$home_dir/.bash_profile" <<SCRIPT
 # ${user_name} login boundary
 [ -f ~/.profile ] && . ~/.profile
-eval "\$(/usr/local/bin/veilkey-session-config shell-exports)"
+while IFS='=' read -r _vk_key _vk_val; do
+  _vk_key="\${_vk_key#export }"
+  [[ "\$_vk_key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] || continue
+  _vk_val="\${_vk_val%\"}" ; _vk_val="\${_vk_val#\"}"
+  export "\${_vk_key}=\${_vk_val}"
+done < <(/usr/local/bin/veilkey-session-config shell-exports)
 alias codex="\$HOME/.local/bin/codex"
 alias claude="\$HOME/.local/bin/claude"
 alias opencode="\$HOME/.local/bin/opencode"
