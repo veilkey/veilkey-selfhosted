@@ -1,0 +1,77 @@
+# Root CI configuration for veilkey-selfhosted monorepo.
+# Triggers child pipelines for each sub-project.
+# UPSTREAM_SOURCE is forwarded so child jobs can distinguish push/web/MR.
+
+stages:
+  - triggers
+
+client-cli:
+  stage: triggers
+  variables:
+    UPSTREAM_SOURCE: $CI_PIPELINE_SOURCE
+  trigger:
+    include: client/cli/.gitlab-ci.yml
+    strategy: depend
+    forward:
+      yaml_variables: true
+  rules:
+    - changes:
+        - client/cli/**/*
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+installer:
+  stage: triggers
+  variables:
+    UPSTREAM_SOURCE: $CI_PIPELINE_SOURCE
+  trigger:
+    include: installer/.gitlab-ci.yml
+    strategy: depend
+    forward:
+      yaml_variables: true
+  rules:
+    - changes:
+        - installer/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+services-keycenter:
+  stage: triggers
+  variables:
+    UPSTREAM_SOURCE: $CI_PIPELINE_SOURCE
+  trigger:
+    include: services/keycenter/.gitlab-ci.yml
+    strategy: depend
+    forward:
+      yaml_variables: true
+  rules:
+    - changes:
+        - services/keycenter/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+services-localvault:
+  stage: triggers
+  variables:
+    UPSTREAM_SOURCE: $CI_PIPELINE_SOURCE
+  trigger:
+    include: services/localvault/.gitlab-ci.yml
+    strategy: depend
+    forward:
+      yaml_variables: true
+  rules:
+    - changes:
+        - services/localvault/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+services-proxy:
+  stage: triggers
+  variables:
+    UPSTREAM_SOURCE: $CI_PIPELINE_SOURCE
+  trigger:
+    include: services/proxy/.gitlab-ci.yml
+    strategy: depend
+    forward:
+      yaml_variables: true
+  rules:
+    - changes:
+        - services/proxy/**/*
+    - if: $CI_PIPELINE_SOURCE == "web"
