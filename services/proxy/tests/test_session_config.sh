@@ -9,7 +9,11 @@ TEST_HOSTVAULT_IP="10.0.0.2"
 
 cfg="$(mktemp)"
 trap 'rm -f "$cfg"' EXIT
-sed -e "s/<HUB_IP>/${TEST_HUB_IP}/g" -e "s/<HOSTVAULT_IP>/${TEST_HOSTVAULT_IP}/g" deploy/host/session-tools.toml.example > "$cfg"
+sed -e "s/<HUB_IP>/${TEST_HUB_IP}/g" \
+    -e "s/<HOSTVAULT_IP>/${TEST_HOSTVAULT_IP}/g" \
+    -e "s/<INTERNAL_DOMAIN>/test.internal/g" \
+    -e "s/<VHOST_DOMAIN>/vhost.test/g" \
+    deploy/host/session-tools.toml.example > "$cfg"
 
 export VEILKEY_SESSION_TOOLS_TOML="$cfg"
 
