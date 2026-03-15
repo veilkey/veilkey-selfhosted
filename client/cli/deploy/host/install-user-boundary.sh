@@ -110,7 +110,7 @@ cat >/etc/profile.d/${user_name}-veilkey-proxy.sh <<SCRIPT
 while IFS='=' read -r _vk_key _vk_val; do
   _vk_key="\${_vk_key#export }"
   [[ "\$_vk_key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] || continue
-  _vk_val="\${_vk_val%\\\"}" ; _vk_val="\${_vk_val#\\\"}"
+  _vk_val="\${_vk_val%\"}" ; _vk_val="\${_vk_val#\"}"
   export "\${_vk_key}=\${_vk_val}"
 done < <(/usr/local/bin/veilkey-session-config shell-exports)
 export VEILKEY_PROXY_STATE=active
@@ -133,7 +133,7 @@ cat >"$home_dir/.bash_profile" <<SCRIPT
 while IFS='=' read -r _vk_key _vk_val; do
   _vk_key="\${_vk_key#export }"
   [[ "\$_vk_key" =~ ^[A-Za-z_][A-Za-z_0-9]*$ ]] || continue
-  _vk_val="\${_vk_val%\\\"}" ; _vk_val="\${_vk_val#\\\"}"
+  _vk_val="\${_vk_val%\"}" ; _vk_val="\${_vk_val#\"}"
   export "\${_vk_key}=\${_vk_val}"
 done < <(/usr/local/bin/veilkey-session-config shell-exports)
 alias codex="\$HOME/.local/bin/codex"
