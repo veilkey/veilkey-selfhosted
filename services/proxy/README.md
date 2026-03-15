@@ -42,6 +42,12 @@ Operator-facing boundary scripts belong to `cli`. Outbound enforcement belongs h
   - local secret and config runtime
 - `keycenter`
   - control-plane orchestration
+  - `default` -> `18080`
+  - `codex` -> `18081`
+  - `opencode` -> `18083`
+  - `claude` -> `18084`
+- Default plaintext action: `issue-temp-and-block`
+- Exception hosts are defined per profile in [`policy/proxy-profiles.toml.example.example`](policy/proxy-profiles.toml.example.example)
 
 ## Quick Start
 
@@ -172,11 +178,11 @@ Port mappings per profile:
 - `claude` -> `18084`
 
 - Default plaintext action: `issue-temp-and-block`
-- Exception hosts are defined per profile in [`policy/proxy-profiles.toml`](policy/proxy-profiles.toml)
+- Exception hosts are defined per profile in [`policy/proxy-profiles.toml.example`](policy/proxy-profiles.toml.example)
 
 ### Policy SSOT
 
-- Policy source: [`policy/proxy-profiles.toml`](policy/proxy-profiles.toml)
+- Policy source: [`policy/proxy-profiles.toml.example.example`](policy/proxy-profiles.toml.example.example)
 - Host runtime config is rendered from policy, not treated as SSOT
 - LXC runtime config is rendered from the same source
 - Proxy runtime env source: `/etc/veilkey/proxy.env`

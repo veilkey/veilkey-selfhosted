@@ -27,7 +27,7 @@ resolve_api_header() {
   fi
 
   local gitlab_host token
-  gitlab_host="${CI_SERVER_HOST:-gitlab.ranode.net}"
+  gitlab_host="${CI_SERVER_HOST:?CI_SERVER_HOST must be set}"
   token="$(printf 'protocol=https\nhost=%s\n\n' "$gitlab_host" | git credential fill 2>/dev/null | awk -F= '/^password=/{print $2; exit}')"
   if [[ -n "$token" ]]; then
     printf 'PRIVATE-TOKEN: %s' "$token"
@@ -45,7 +45,7 @@ resolve_api_header() {
 run_live_check() {
   local api_base project_id header json visibility registry
 
-  api_base="${CI_API_V4_URL:-${GITLAB_API_V4_URL:-https://gitlab.ranode.net/api/v4}}"
+  api_base="${CI_API_V4_URL:-${GITLAB_API_V4_URL:?GITLAB_API_V4_URL must be set}}"
   project_id="${CI_PROJECT_ID:-8}"
   header="$(resolve_api_header || true)"
 

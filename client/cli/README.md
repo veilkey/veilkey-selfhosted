@@ -205,7 +205,7 @@ Example:
 ```toml
 name = "gitlab-project-get"
 description = "Call GitLab API with VeilKey-managed token"
-command = """curl -sS -H "PRIVATE-TOKEN: {%{GITLAB_TOKEN}%}" "https://gitlab.ranode.net/api/v4/projects/{%{PROJECT_ID}%}" """
+command = """curl -sS -H "PRIVATE-TOKEN: {%{GITLAB_TOKEN}%}" "https://gitlab.example.com/api/v4/projects/{%{PROJECT_ID}%}" """
 
 [vars]
 GITLAB_TOKEN = "VK:EXTERNAL:abcd1234"

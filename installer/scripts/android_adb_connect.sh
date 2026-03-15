@@ -6,8 +6,8 @@ usage() {
 Usage: ./scripts/android_adb_connect.sh <host> [port]
 
 Examples:
-  ./scripts/android_adb_connect.sh 10.50.250.10
-  ./scripts/android_adb_connect.sh 10.50.250.10 5555
+  ./scripts/android_adb_connect.sh <DEVICE_IP>
+  ./scripts/android_adb_connect.sh <DEVICE_IP> 5555
 EOF
 }
 

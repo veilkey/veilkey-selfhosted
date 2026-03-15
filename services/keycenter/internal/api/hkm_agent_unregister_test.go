@@ -13,7 +13,7 @@ func TestHKM_AgentUnregisterByNode(t *testing.T) {
 		"label":           "host-localvault",
 		"vault_hash":      "abcd1234",
 		"vault_name":      "host-localvault",
-		"ip":              "10.60.0.1",
+		"ip":              "10.0.0.70",
 		"port":            10180,
 		"configs_count":   2,
 		"secrets_count":   0,
