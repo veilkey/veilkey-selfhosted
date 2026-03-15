@@ -22,6 +22,9 @@ func (d *DB) SaveUIConfig(cfg *UIConfig) error {
 	if cfg.Locale == "" {
 		cfg.Locale = "ko"
 	}
+	if cfg.ReleaseChannel == "" {
+		cfg.ReleaseChannel = "stable"
+	}
 	return d.conn.Save(cfg).Error
 }
 
@@ -30,7 +33,7 @@ func (d *DB) GetOrCreateUIConfig() (*UIConfig, error) {
 	if err == nil {
 		return cfg, nil
 	}
-	cfg = &UIConfig{ConfigID: defaultUIConfigID, Locale: "ko"}
+	cfg = &UIConfig{ConfigID: defaultUIConfigID, Locale: "ko", ReleaseChannel: "stable"}
 	if err := d.SaveUIConfig(cfg); err != nil {
 		return nil, err
 	}

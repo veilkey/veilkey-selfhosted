@@ -331,10 +331,12 @@ func (AdminSession) TableName() string { return "admin_sessions" }
 
 // UIConfig — ui_configs 테이블
 type UIConfig struct {
-	ConfigID     string    `gorm:"primaryKey;column:config_id" json:"config_id"`
-	Locale       string    `gorm:"column:locale;not null;default:ko" json:"locale"`
-	DefaultEmail string    `gorm:"column:default_email;not null;default:''" json:"default_email"`
-	UpdatedAt    time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	ConfigID       string    `gorm:"primaryKey;column:config_id" json:"config_id"`
+	Locale         string    `gorm:"column:locale;not null;default:ko" json:"locale"`
+	DefaultEmail   string    `gorm:"column:default_email;not null;default:''" json:"default_email"`
+	TargetVersion  string    `gorm:"column:target_version;not null;default:''" json:"target_version"`
+	ReleaseChannel string    `gorm:"column:release_channel;not null;default:stable" json:"release_channel"`
+	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 func (UIConfig) TableName() string { return "ui_configs" }
@@ -349,6 +351,7 @@ type Config struct {
 }
 
 func (Config) TableName() string { return "configs" }
+
 // Migration — migrations 테이블 (레거시 호환)
 type Migration struct {
 	Version   int       `gorm:"primaryKey;column:version" json:"version"`

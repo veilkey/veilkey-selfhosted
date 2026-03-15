@@ -1,14 +1,16 @@
 package api
 
 import (
-	"net/mail"
 	"net/http"
+	"net/mail"
 	"strings"
 )
 
 type uiConfigPayload struct {
-	Locale       string `json:"locale"`
-	DefaultEmail string `json:"default_email"`
+	Locale         string `json:"locale"`
+	DefaultEmail   string `json:"default_email"`
+	TargetVersion  string `json:"target_version"`
+	ReleaseChannel string `json:"release_channel"`
 }
 
 func (s *Server) handleGetUIConfig(w http.ResponseWriter, r *http.Request) {
@@ -18,8 +20,10 @@ func (s *Server) handleGetUIConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.respondJSON(w, http.StatusOK, uiConfigPayload{
-		Locale:       cfg.Locale,
-		DefaultEmail: cfg.DefaultEmail,
+		Locale:         cfg.Locale,
+		DefaultEmail:   cfg.DefaultEmail,
+		TargetVersion:  cfg.TargetVersion,
+		ReleaseChannel: cfg.ReleaseChannel,
 	})
 }
 
@@ -48,12 +52,26 @@ func (s *Server) handlePatchUIConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	cfg.DefaultEmail = defaultEmail
+	cfg.TargetVersion = strings.TrimSpace(req.TargetVersion)
+	releaseChannel := strings.ToLower(strings.TrimSpace(req.ReleaseChannel))
+	if releaseChannel == "" {
+		releaseChannel = "stable"
+	}
+	switch releaseChannel {
+	case "stable", "candidate", "nightly":
+	default:
+		s.respondError(w, http.StatusBadRequest, "release_channel must be stable, candidate, or nightly")
+		return
+	}
+	cfg.ReleaseChannel = releaseChannel
 	if err := s.db.SaveUIConfig(cfg); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to save ui config")
 		return
 	}
 	s.respondJSON(w, http.StatusOK, uiConfigPayload{
-		Locale:       cfg.Locale,
-		DefaultEmail: cfg.DefaultEmail,
+		Locale:         cfg.Locale,
+		DefaultEmail:   cfg.DefaultEmail,
+		TargetVersion:  cfg.TargetVersion,
+		ReleaseChannel: cfg.ReleaseChannel,
 	})
 }

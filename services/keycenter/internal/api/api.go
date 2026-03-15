@@ -37,17 +37,19 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db              *db.DB
-	kek             []byte
-	kekMu           sync.RWMutex
-	locked          bool
-	salt            []byte
-	trustedIPs      map[string]bool
-	trustedCIDRs    []*net.IPNet
-	identity        *NodeIdentity
-	timeouts        Timeouts
-	unlockLimiter   *UnlockRateLimiter
-	httpClient      *http.Client
+	db            *db.DB
+	kek           []byte
+	kekMu         sync.RWMutex
+	locked        bool
+	salt          []byte
+	trustedIPs    map[string]bool
+	trustedCIDRs  []*net.IPNet
+	identity      *NodeIdentity
+	timeouts      Timeouts
+	unlockLimiter *UnlockRateLimiter
+	httpClient    *http.Client
+	updateMu      sync.RWMutex
+	updateState   systemUpdateState
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
