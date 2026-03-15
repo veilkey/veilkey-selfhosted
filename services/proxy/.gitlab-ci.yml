@@ -8,6 +8,7 @@ go:lint:
   stage: lint
   image: golang:1.24
   script:
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
     - golangci-lint run ./...
 
 go:test:
@@ -27,6 +28,7 @@ gosec:
   stage: security
   image: golang:1.24
   script:
+    - go install github.com/securego/gosec/v2/cmd/gosec@latest
     - gosec ./...
   allow_failure: true
 
@@ -34,6 +36,7 @@ govulncheck:
   stage: security
   image: golang:1.24
   script:
+    - go install golang.org/x/vuln/cmd/govulncheck@latest
     - govulncheck ./...
   allow_failure: true
 

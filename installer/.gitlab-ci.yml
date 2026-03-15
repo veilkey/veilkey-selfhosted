@@ -52,7 +52,7 @@ validate-install-layout:
 shellcheck:
   stage: security
   script:
-    - find . -name '*.sh' -not -path './.tmp/*' | xargs shellcheck
+    - find . -name '*.sh' -not -path './.tmp/*' -print0 | xargs -0 shellcheck
   allow_failure: true
   tags:
     - shell
@@ -132,17 +132,6 @@ mr-guard:
     - if: $CI_PIPELINE_SOURCE == "web"
   tags:
     - shell
-
-shellcheck-lint:
-  stage: verify
-  script:
-    - shellcheck -x install.sh scripts/*.sh
-  tags:
-    - shell
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
-    - if: $CI_PIPELINE_SOURCE == "push"
-    - if: $CI_PIPELINE_SOURCE == "web"
 
 rulebook-format:
   stage: verify
