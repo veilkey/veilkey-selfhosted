@@ -28,6 +28,28 @@ This component owns:
 - orchestration endpoints
 - central UI and control-plane APIs
 
+## Update Control
+
+The admin settings page can expose a controlled update action when the server is configured with a server-side update script.
+
+Required environment variables for the KeyCenter process:
+
+- `VEILKEY_UPDATE_SCRIPT`
+  - absolute path to the update script to execute
+- `VEILKEY_PRODUCT_VERSION`
+  - current deployed version reported in the UI
+
+Optional environment variables:
+
+- `VEILKEY_UPDATE_WORKDIR`
+- `VEILKEY_UPDATE_TIMEOUT`
+
+This repository includes a reference script:
+
+- [`scripts/update-selfhosted.sh`](./scripts/update-selfhosted.sh)
+
+The UI never accepts an arbitrary command from the browser. It only starts the configured server-side script.
+
 KeyCenter is specifically responsible for:
 
 - Tracking the actual `scope` / `status` of each LocalVault secret storage response
