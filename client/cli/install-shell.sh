@@ -2,7 +2,7 @@
 # VeilKey KeyCenter — Shell 올인원 설치 스크립트
 # Usage:
 #   bash install-shell.sh                          # 대화형
-#   VEILKEY_PASSWORD=xxx NONINTERACTIVE=1 bash install-shell.sh  # 자동
+#   VEILKEY_PASSWORD_FILE=/path/to/pw NONINTERACTIVE=1 bash install-shell.sh  # 자동
 set -euo pipefail
 
 BINARY_NAME="veilkey-keycenter"
@@ -84,7 +84,10 @@ get_binary() {
 
 # --- Collect Config ---
 if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
-    [[ -z "${VEILKEY_PASSWORD:-}" ]] && error "NONINTERACTIVE mode: VEILKEY_PASSWORD required"
+    if [[ -n "${VEILKEY_PASSWORD_FILE:-}" && -f "${VEILKEY_PASSWORD_FILE}" ]]; then
+        VEILKEY_PASSWORD="$(cat "${VEILKEY_PASSWORD_FILE}")"
+    fi
+    [[ -z "${VEILKEY_PASSWORD:-}" ]] && error "NONINTERACTIVE mode: VEILKEY_PASSWORD_FILE required"
     VEILKEY_MODE="${VEILKEY_MODE:-root}"
     VEILKEY_PORT="${VEILKEY_PORT:-10180}"
     VEILKEY_TRUSTED_IPS="${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
@@ -152,9 +155,11 @@ else
     info "이미 초기화됨 (salt 파일 존재)"
 fi
 
-# --- Save password for auto-unlock ---
+# --- Save password to restricted file for auto-unlock ---
+printf '%s' "$VEILKEY_PASSWORD" > "$DATA_DIR/password"
+chmod 600 "$DATA_DIR/password"
 cat > "$DATA_DIR/veilkey-env" << ENVFILE
-VEILKEY_PASSWORD=$VEILKEY_PASSWORD
+VEILKEY_PASSWORD_FILE=$DATA_DIR/password
 ENVFILE
 chmod 600 "$DATA_DIR/veilkey-env"
 

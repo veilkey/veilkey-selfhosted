@@ -6,8 +6,9 @@ services:
       - "${VEILKEY_PORT:-10180}:10180"
     volumes:
       - veilkey-data:/data
+      - ${VEILKEY_PASSWORD_DIR:-./secrets}/password:/run/secrets/veilkey_password:ro
     environment:
-      VEILKEY_PASSWORD: ${VEILKEY_PASSWORD}
+      VEILKEY_PASSWORD_FILE: /run/secrets/veilkey_password
       VEILKEY_MODE: ${VEILKEY_MODE:-root}
       VEILKEY_ADDR: ":10180"
       VEILKEY_DB_PATH: /data/veilkey.db
