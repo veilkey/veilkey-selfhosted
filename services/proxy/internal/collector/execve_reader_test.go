@@ -131,7 +131,12 @@ func TestObserveExecCapturesCurrentCgroupPath(t *testing.T) {
 	cfg.TargetCgroup = filepath.Join("/sys/fs/cgroup", currentCgroup)
 
 	marker := "vk-observe-cgroup-ok-" + time.Now().Format("20060102150405.000000000")
-	ev, ok := captureExecEvent(t, cfg, marker)
+	ev, ok := captureExecEventCommand(
+		t,
+		cfg,
+		[]string{"/bin/sh", "-c", "printf '%s' \"$1\" >/dev/null; sleep 0.2", "sh", marker},
+		marker,
+	)
 	if !ok {
 		t.Fatalf("timed out waiting for execve event under matching cgroup filter")
 	}
@@ -189,6 +194,10 @@ func containsArg(argv []string, needle string) bool {
 }
 
 func captureExecEvent(t *testing.T, cfg config.Config, marker string) (events.Event, bool) {
+	return captureExecEventCommand(t, cfg, []string{"/bin/echo", marker}, marker)
+}
+
+func captureExecEventCommand(t *testing.T, cfg config.Config, cmdArgs []string, marker string) (events.Event, bool) {
 	t.Helper()
 
 	rawCollector, err := newLinuxCollector(cfg)
@@ -200,6 +209,12 @@ func captureExecEvent(t *testing.T, cfg config.Config, marker string) (events.Ev
 
 	if err := c.Preflight(); err != nil {
 		t.Fatalf("Preflight() error = %v", err)
+	}
+
+	// Attach the execve tracepoint before we launch the reader goroutine so
+	// the test does not race probe initialization under load.
+	if err := c.initExecveReader(); err != nil {
+		t.Fatalf("initExecveReader() error = %v", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -226,9 +241,9 @@ func captureExecEvent(t *testing.T, cfg config.Config, marker string) (events.Ev
 
 	time.Sleep(300 * time.Millisecond)
 
-	cmd := exec.Command("/bin/echo", marker)
+	cmd := exec.Command(cmdArgs[0], cmdArgs[1:]...)
 	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("echo marker failed: %v, output=%s", err, string(out))
+		t.Fatalf("command %q failed: %v, output=%s", strings.Join(cmdArgs, " "), err, string(out))
 	}
 
 	wait := time.NewTimer(5 * time.Second)

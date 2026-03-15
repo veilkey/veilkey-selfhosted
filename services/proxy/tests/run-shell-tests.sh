@@ -3,6 +3,14 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
+tmp_bin_dir="$(mktemp -d)"
+trap 'rm -rf "$tmp_bin_dir"' EXIT
+
+if [[ -z "${VEILKEY_SESSION_CONFIG_BIN_REAL:-}" ]]; then
+  go build -o "${tmp_bin_dir}/veilkey-session-config" ./cmd/veilkey-session-config
+  export VEILKEY_SESSION_CONFIG_BIN_REAL="${tmp_bin_dir}/veilkey-session-config"
+fi
+
 tests=(
   tests/test_session_config.sh
   tests/test_doctor_veilkey.sh
