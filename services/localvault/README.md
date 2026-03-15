@@ -129,7 +129,7 @@ CGO_ENABLED=1 go build -ldflags="-s -w" -o veilkey-localvault .
 ```bash
 veilkey-keycenter init --child \
   --parent http://KEYCENTER_IP:10180 \
-    --label my-service \
+  --label my-service \
   --install
 ```
 

@@ -134,7 +134,7 @@ VeilKey HKM initialized (root node).
 ```bash
 veilkey-keycenter init --child \
   --parent http://your-keycenter:10180 \
-    --label my-service \
+  --label my-service \
   --install
 ```
 
