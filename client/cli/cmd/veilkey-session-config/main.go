@@ -93,7 +93,7 @@ func (c *config) veilkeyHubURL() string {
 		c.Veilkey.HubURL,
 		os.Getenv("VEILKEY_HUB_URL"),
 		os.Getenv("VEILKEY_KEYCENTER_URL"),
-		"http://10.50.2.6:10180",
+		os.Getenv("VEILKEY_SESSION_HOST"),
 	)
 }
 

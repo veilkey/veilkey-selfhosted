@@ -6,6 +6,8 @@ cd "$(dirname "$0")/.."
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
+TEST_GITLAB_DOMAIN="gitlab.example.net"
+
 hook="$PWD/deploy/host/hook-veilkey-shell.sh"
 snippet="$PWD/deploy/host/snippets/veilroot-veilkey-shell.sh"
 locale_lib="$PWD/deploy/shared/veilkey-locale.sh"
@@ -27,12 +29,12 @@ out="$(run_hook "_vk_veilroot_preexec_impl 'cat .env' ''; printf 'rc=%s\n' \$?")
 printf '%s\n' "$out" | grep -q 'blocked sensitive path access'
 printf '%s\n' "$out" | grep -q 'rc=1'
 
-out="$(run_hook "_vk_veilroot_preexec_impl 'printf protocol=https\\nhost=gitlab.ranode.net\\n\\n | git credential fill' ''; printf 'rc=%s\n' \$?")"
+out="$(run_hook "_vk_veilroot_preexec_impl 'printf protocol=https\\nhost=${TEST_GITLAB_DOMAIN}\\n\\n | git credential fill' ''; printf 'rc=%s\n' \$?")"
 printf '%s\n' "$out" | grep -q 'blocked sensitive path access'
 printf '%s\n' "$out" | grep -q 'credential helper output'
 printf '%s\n' "$out" | grep -q 'rc=1'
 
-out="$(BASH_ENV=/dev/null VEILKEY_LOCALE_LIB="$locale_lib" bash --noprofile --norc -ic "source '$hook'; printf 'protocol=https\\nhost=gitlab.ranode.net\\n\\n' | git credential fill" 2>&1 || true)"
+out="$(BASH_ENV=/dev/null VEILKEY_LOCALE_LIB="$locale_lib" bash --noprofile --norc -ic "source '$hook'; printf 'protocol=https\\nhost=${TEST_GITLAB_DOMAIN}\\n\\n' | git credential fill" 2>&1 || true)"
 printf '%s\n' "$out" | grep -q 'blocked sensitive path access'
 printf '%s\n' "$out" | grep -q 'credential helper output'
 if printf '%s\n' "$out" | grep -q '^password='; then

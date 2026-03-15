@@ -39,10 +39,11 @@ package:
     - install -m 755 scripts/deploy-lxc.sh dist/package/scripts/deploy-lxc.sh
     - tar -C dist/package -czf "dist/${PKG_NAME}.tar.gz" .
     - |
-      PACKAGE_API_URL="${VEILKEY_GITLAB_API_URL:-http://10.50.100.210/api/v4}"
+      PACKAGE_API_URL="${VEILKEY_GITLAB_API_URL:?VEILKEY_GITLAB_API_URL must be set}"
       PACKAGE_TOKEN="${VEILKEY_GITLAB_PACKAGE_PAT:-}"
       if [[ -z "${PACKAGE_TOKEN}" ]]; then
-        PACKAGE_TOKEN="$(printf 'protocol=http\nhost=10.50.100.210\n\n' | git credential fill | awk -F= '/^password=/{print $2}')"
+        GITLAB_HOST="$(echo "$PACKAGE_API_URL" | sed 's|https\?://||;s|/.*||')"
+        PACKAGE_TOKEN="$(printf 'protocol=http\nhost=%s\n\n' "$GITLAB_HOST" | git credential fill | awk -F= '/^password=/{print $2}')"
       fi
       curl --fail --header "PRIVATE-TOKEN: ${PACKAGE_TOKEN}" \
         --upload-file "dist/${PKG_NAME}.tar.gz" \

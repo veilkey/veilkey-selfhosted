@@ -50,7 +50,7 @@ func TestResolveHostVaultConfigRef(t *testing.T) {
 
 	save := postJSON(handler, "/api/host-vault/configs", map[string]string{
 		"key":   "GITLAB_URL",
-		"value": "https://public-gitlab-restore.60.internal.kr",
+		"value": "https://gitlab-restore.test.internal",
 		"scope": "LOCAL",
 	})
 	if save.Code != http.StatusOK {
@@ -76,7 +76,7 @@ func TestResolveHostVaultConfigRef(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &body); err != nil {
 		t.Fatalf("unmarshal resolve body: %v", err)
 	}
-	if body["value"] != "https://public-gitlab-restore.60.internal.kr" {
+	if body["value"] != "https://gitlab-restore.test.internal" {
 		t.Fatalf("expected host config plaintext, got %#v", body["value"])
 	}
 }

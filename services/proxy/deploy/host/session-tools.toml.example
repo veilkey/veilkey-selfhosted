@@ -1,7 +1,7 @@
 [proxy.default]
 listen = "127.0.0.1:18080"
 url = "http://127.0.0.1:18080"
-no_proxy = "127.0.0.1,localhost,.internal.kr,.vhost.kr"
+no_proxy = "127.0.0.1,localhost,.<INTERNAL_DOMAIN>,.<VHOST_DOMAIN>"
 plaintext_action = "issue-temp-and-block"
 allow_hosts_enabled = false
 allow_hosts = []
@@ -55,8 +55,8 @@ unit_prefix = "veilroot"
 
 [veilkey]
 localvault_url = "http://127.0.0.1:10180"
-hub_url = "http://10.50.2.6:10180"
-hostvault_url = "http://10.50.2.7:10181"
+hub_url = "http://<HUB_IP>:10180"
+hostvault_url = "http://<HOSTVAULT_IP>:10181"
 
 # Environment examples:
 #   export VEILKEY_LOCALE=ko

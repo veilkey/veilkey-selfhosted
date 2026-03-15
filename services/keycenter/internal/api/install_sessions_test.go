@@ -88,7 +88,7 @@ func TestInstallSessionRoundTripOnLockedServer(t *testing.T) {
 }
 
 func TestInstallSessionWriteRespectsTrustedIP(t *testing.T) {
-	_, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
+	_, handler := setupTrustedIPServer(t, []string{"10.0.0.100"})
 
 	blocked := postJSONFromIP(handler, "/api/install/session", "192.168.1.50:1234", map[string]interface{}{
 		"language": "ko",
@@ -97,7 +97,7 @@ func TestInstallSessionWriteRespectsTrustedIP(t *testing.T) {
 		t.Fatalf("blocked create: expected 403, got %d: %s", blocked.Code, blocked.Body.String())
 	}
 
-	allowed := postJSONFromIP(handler, "/api/install/session", "10.10.10.10:1234", map[string]interface{}{
+	allowed := postJSONFromIP(handler, "/api/install/session", "10.0.0.100:1234", map[string]interface{}{
 		"language": "ko",
 	})
 	if allowed.Code != http.StatusCreated {
