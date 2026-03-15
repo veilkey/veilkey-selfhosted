@@ -140,6 +140,45 @@ func TestObserveExecCapturesCurrentCgroupPath(t *testing.T) {
 	}
 }
 
+func TestDecodeExecveArgvBoundsOverflow(t *testing.T) {
+	var raw execveEvent
+	// argc exceeds MAX_ARGS — must be clamped
+	raw.Argc = 999
+	copy(raw.Argv[0][:], []byte("/bin/sh"))
+
+	got := decodeExecveArgv(raw)
+	if len(got) > execveMaxArgs {
+		t.Fatalf("decodeExecveArgv() returned %d args, limit is %d", len(got), execveMaxArgs)
+	}
+	if len(got) == 0 || got[0] != "/bin/sh" {
+		t.Fatalf("decodeExecveArgv() first arg = %q, want /bin/sh", got[0])
+	}
+}
+
+func TestDecodeExecveArgvZeroArgc(t *testing.T) {
+	var raw execveEvent
+	raw.Argc = 0
+	// Even with data in argv buffers, zero argc should yield empty result
+	copy(raw.Argv[0][:], []byte("should-not-appear"))
+
+	got := decodeExecveArgv(raw)
+	if len(got) != 0 {
+		t.Fatalf("decodeExecveArgv() with argc=0 returned %d args, want 0", len(got))
+	}
+}
+
+func TestCStringNoNullTerminator(t *testing.T) {
+	// Buffer with no null byte — should return entire buffer as string
+	buf := make([]byte, 8)
+	for i := range buf {
+		buf[i] = 'A'
+	}
+	got := cString(buf)
+	if len(got) != 8 {
+		t.Fatalf("cString() with no NUL returned len %d, want 8", len(got))
+	}
+}
+
 func containsArg(argv []string, needle string) bool {
 	for _, arg := range argv {
 		if strings.Contains(arg, needle) {
