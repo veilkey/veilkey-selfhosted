@@ -1861,7 +1861,6 @@ async function loadVaultItemSyncStatus() {
     const nextStatus = {};
     const vaults = state.vaults || [];
     const currentVaultHash = state.selectedVault.vault_runtime_hash;
-    const vaultStatusByHash = new Map();
     const normalizedConfigsByVault = new Map();
     const normalizedKeysByVault = new Map();
 
@@ -1869,15 +1868,8 @@ async function loadVaultItemSyncStatus() {
         const vaultHash = vault.vault_runtime_hash;
 
         try {
-            const status = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/status');
-            vaultStatusByHash.set(vaultHash, status || {});
-        } catch (_) {
-            vaultStatusByHash.set(vaultHash, {});
-        }
-
-        try {
-            const status = vaultStatusByHash.get(vaultHash) || {};
-            if (vaultHash !== currentVaultHash && !(Array.isArray(status.supported_features) && status.supported_features.includes('configs'))) {
+            const supportsConfigs = vaultHash === currentVaultHash || (vault.local_enabled !== false && (vault.configs_count || 0) > 0);
+            if (!supportsConfigs) {
                 normalizedConfigsByVault.set(vaultHash, null);
             } else {
                 const data = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/configs');
