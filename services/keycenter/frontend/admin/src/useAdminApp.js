@@ -236,7 +236,7 @@ function matchesQuery(text) {
 function navCount(page) {
     if (page === 'vaults') return state.vaults.length;
     if (page === 'functions') return state.functions.length;
-    if (page === 'audit') return state.auditRows.length;
+    if (page === 'audit') return auditTotalCount();
     if (page === 'settings') return state.uiConfig ? 2 : 0;
     return 0;
 }
