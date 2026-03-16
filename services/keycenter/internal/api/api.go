@@ -519,8 +519,12 @@ summary::-webkit-details-marker{display:none}
 <li id="summary-session">설치 단계: language → bootstrap → final_smoke</li>
 </ul>
 </div>
+<div class="field full">
+<label><input type="checkbox" id="confirm-dangerous-root"> <span id="confirm-dangerous-root-label">이 서버의 루트(/)에 직접 설치하는 위험을 이해했고, 필요한 경우에만 실행합니다.</span></label>
+</div>
 <div class="actions">
 <button class="btn btn-primary" id="save-quick">빠른 설치 저장</button>
+<button class="btn btn-soft" id="validate-install">검증만 실행</button>
 <button class="btn btn-primary" id="apply-install">설치 실행</button>
 <button class="btn btn-soft" id="reload-state">상태 새로고침</button>
 </div>
@@ -610,6 +614,12 @@ summary::-webkit-details-marker{display:none}
 <li id="step-4">4. 완료 후 /ready 가 열리면 운영 콘솔로 진입합니다.</li>
 </ul>
 </div>
+<div class="summary">
+<strong id="runs-title">최근 검증/설치 기록</strong>
+<ul id="install-runs-list">
+<li>아직 기록이 없습니다.</li>
+</ul>
+</div>
 <div class="status-box"><pre id="wizard-preview"></pre></div>
 </div>
 </div>
@@ -633,7 +643,9 @@ const copy = {
     summaryProfile: '설치 프로파일: host 계열 기본 프로파일 자동 선택',
     summaryScript: '설치 스크립트: 서버 허용 목록에서 자동 사용',
     summarySession: '설치 단계: language -> bootstrap -> final_smoke',
+    confirmDangerousRoot: '이 서버의 루트(/)에 직접 설치하는 위험을 이해했고, 필요한 경우에만 실행합니다.',
     saveQuick: '빠른 설치 저장',
+    validateInstall: '검증만 실행',
     applyInstall: '설치 실행',
     reload: '상태 새로고침',
     saveSession: '세션만 저장',
@@ -661,7 +673,11 @@ const copy = {
     sessionFail: '세션 저장 실패: ',
     runtimeFail: '런타임 설정 저장 실패: ',
     applyFail: '설치 실행 실패: ',
-    applyStarted: '설치 실행을 시작했습니다.'
+    applyStarted: '설치 실행을 시작했습니다.',
+    validateStarted: '설치 검증을 실행했습니다.',
+    validateFail: '설치 검증 실패: ',
+    runsTitle: '최근 검증/설치 기록',
+    noRuns: '아직 기록이 없습니다.'
   },
   en: {
     title: 'Install VeilKey on this Linux server',
@@ -679,7 +695,9 @@ const copy = {
     summaryProfile: 'Install profile: auto-select the default host profile',
     summaryScript: 'Install script: auto-use server allowlisted runner',
     summarySession: 'Install stages: language -> bootstrap -> final_smoke',
+    confirmDangerousRoot: 'I understand the risk of installing directly into the live root (/) and will only use it when intended.',
     saveQuick: 'Save Quick Setup',
+    validateInstall: 'Validate Only',
     applyInstall: 'Apply Install',
     reload: 'Reload State',
     saveSession: 'Save Session Only',
@@ -707,11 +725,16 @@ const copy = {
     sessionFail: 'Failed to save install session: ',
     runtimeFail: 'Failed to save runtime config: ',
     applyFail: 'Failed to start install apply: ',
-    applyStarted: 'Install apply started.'
+    applyStarted: 'Install apply started.',
+    validateStarted: 'Install validation completed.',
+    validateFail: 'Install validation failed: ',
+    runsTitle: 'Recent validation/install runs',
+    noRuns: 'No runs yet.'
   }
 };
 const statusEl = document.getElementById('wizard-status');
 const previewEl = document.getElementById('wizard-preview');
+const runsEl = document.getElementById('install-runs-list');
 const quickFields = {
   public_host: document.getElementById('public_host'),
   tls_mode: document.getElementById('tls_mode')
@@ -733,6 +756,7 @@ const fields = {
   tls_key_path: document.getElementById('tls_key_path'),
   tls_ca_path: document.getElementById('tls_ca_path')
 };
+const confirmDangerousRootEl = document.getElementById('confirm-dangerous-root');
 let currentLang = 'ko';
 
 function guessCurrentHost() {
@@ -818,9 +842,28 @@ function renderPreview() {
       tls_key_path: fields.tls_key_path.value,
       tls_ca_path: fields.tls_ca_path.value
     },
-    apply: window.installApplyState || null
+    apply: window.installApplyState || null,
+    validation: window.installValidationState || null
   };
   previewEl.textContent = JSON.stringify(preview, null, 2);
+}
+
+function renderRuns(runs) {
+  const items = Array.isArray(runs) ? runs : [];
+  if (!items.length) {
+    runsEl.innerHTML = '<li>' + copy[currentLang].noRuns + '</li>';
+    return;
+  }
+  runsEl.innerHTML = items.slice(0, 5).map((run) => {
+    const summary = [
+      run.run_kind,
+      run.status,
+      run.install_profile,
+      run.install_root
+    ].filter(Boolean).join(' | ');
+    const extra = run.last_error ? ' - ' + run.last_error : '';
+    return '<li><strong>' + summary + '</strong>' + extra + '</li>';
+  }).join('');
 }
 
 function setLanguage(lang) {
@@ -843,7 +886,9 @@ function setLanguage(lang) {
   document.getElementById('summary-profile').textContent = t.summaryProfile;
   document.getElementById('summary-script').textContent = t.summaryScript;
   document.getElementById('summary-session').textContent = t.summarySession;
+  document.getElementById('confirm-dangerous-root-label').textContent = t.confirmDangerousRoot;
   document.getElementById('save-quick').textContent = t.saveQuick;
+  document.getElementById('validate-install').textContent = t.validateInstall;
   document.getElementById('apply-install').textContent = t.applyInstall;
   document.getElementById('reload-state').textContent = t.reload;
   document.getElementById('save-session').textContent = t.saveSession;
@@ -858,8 +903,10 @@ function setLanguage(lang) {
   document.getElementById('step-2').textContent = t.step2;
   document.getElementById('step-3').textContent = t.step3;
   document.getElementById('step-4').textContent = t.step4;
+  document.getElementById('runs-title').textContent = t.runsTitle;
   document.getElementById('bootstrap-link').textContent = t.bootstrap;
   document.getElementById('custody-link').textContent = t.custody;
+  renderRuns(window.installRuns || []);
 }
 
 function applySessionState(data) {
@@ -900,14 +947,17 @@ async function request(path, options) {
 
 async function reloadState() {
   try {
-    const [sessionResp, runtimeResp, applyResp] = await Promise.all([
+    const [sessionResp, runtimeResp, applyResp, runsResp] = await Promise.all([
       request('/api/install/state'),
       request('/api/install/runtime-config'),
-      request('/api/install/apply')
+      request('/api/install/apply'),
+      request('/api/install/runs')
     ]);
     applySessionState(sessionResp);
     applyRuntimeConfig(runtimeResp);
     window.installApplyState = applyResp;
+    window.installRuns = runsResp.runs || [];
+    renderRuns(window.installRuns);
     renderPreview();
     setStatus(applyResp.install_running ? copy[currentLang].running : copy[currentLang].loaded);
   } catch (error) {
@@ -973,11 +1023,40 @@ async function saveQuickSetup() {
   }
 }
 
+async function validateInstall() {
+  try {
+    syncDerivedFields();
+    await saveSession();
+    await saveRuntimeConfig();
+    const response = await fetch('/api/install/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        confirm_dangerous_root: !!confirmDangerousRootEl.checked
+      })
+    });
+    const body = await response.json().catch(() => ({}));
+    window.installValidationState = body.validation || null;
+    await reloadState();
+    if (!response.ok) {
+      throw new Error((body.validation && body.validation.errors && body.validation.errors.join(', ')) || body.error || ('HTTP ' + response.status));
+    }
+    setStatus(copy[currentLang].validateStarted);
+  } catch (error) {
+    setStatus(copy[currentLang].validateFail + error.message);
+  }
+}
+
 async function applyInstall() {
   try {
     syncDerivedFields();
     setStatus(copy[currentLang].start);
-    const resp = await request('/api/install/apply', { method: 'POST', body: JSON.stringify({}) });
+    const resp = await request('/api/install/apply', {
+      method: 'POST',
+      body: JSON.stringify({
+        confirm_dangerous_root: !!confirmDangerousRootEl.checked
+      })
+    });
     window.installApplyState = resp;
     renderPreview();
     setStatus(copy[currentLang].applyStarted);
@@ -990,6 +1069,7 @@ async function applyInstall() {
 document.getElementById('lang-ko').addEventListener('click', () => { setLanguage('ko'); renderPreview(); });
 document.getElementById('lang-en').addEventListener('click', () => { setLanguage('en'); renderPreview(); });
 document.getElementById('save-quick').addEventListener('click', saveQuickSetup);
+document.getElementById('validate-install').addEventListener('click', validateInstall);
 document.getElementById('save-session').addEventListener('click', saveSession);
 document.getElementById('save-runtime').addEventListener('click', saveRuntimeConfig);
 document.getElementById('apply-install').addEventListener('click', applyInstall);
