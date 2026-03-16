@@ -154,6 +154,22 @@ func (s *Server) respondError(w http.ResponseWriter, status int, message string)
 func (s *Server) SetupRoutes() http.Handler {
 	mux := http.NewServeMux()
 
+	// Serve install wizard UI at / (settings page in normal mode)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		RenderInstallWizard(w)
+	})
+	if assets := InstallUIAssets(); assets != nil {
+		mux.Handle("/assets/", http.FileServer(http.FS(assets)))
+	}
+
+	// Install status/settings APIs (available in normal mode too)
+	mux.HandleFunc("GET /api/install/status", s.HandleInstallStatus)
+	mux.HandleFunc("PATCH /api/install/keycenter-url", s.requireTrustedIP(s.HandlePatchKeycenterURL))
+
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
