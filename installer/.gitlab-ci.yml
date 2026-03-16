@@ -67,8 +67,10 @@ shellcheck:
   tags:
     - shell
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $UPSTREAM_SOURCE == "push"
+    - if: $UPSTREAM_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 govulncheck:
   stage: security
@@ -78,8 +80,10 @@ govulncheck:
   tags:
     - shell
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $UPSTREAM_SOURCE == "push"
+    - if: $UPSTREAM_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 export-component-manifest:
   stage: manifest
@@ -97,8 +101,10 @@ export-component-manifest:
   tags:
     - shell
   rules:
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_PIPELINE_SOURCE == "parent_pipeline"
+    - if: $UPSTREAM_SOURCE == "push"
+    - if: $UPSTREAM_SOURCE == "web"
+    - if: $CI_PIPELINE_SOURCE == "push"
+    - if: $CI_PIPELINE_SOURCE == "web"
 
 e2e-proxmox-single-node:
   stage: e2e
