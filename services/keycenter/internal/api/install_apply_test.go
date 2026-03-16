@@ -86,6 +86,136 @@ func TestInstallValidateRejectsDangerousRootWithoutConfirmation(t *testing.T) {
 	}
 }
 
+func TestInstallValidateAllowsLXCAllInOneRootWithoutDangerousConfirmation(t *testing.T) {
+	srv, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
+
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "install.sh")
+	keycenterPassword := filepath.Join(tmpDir, "keycenter.password")
+	localvaultPassword := filepath.Join(tmpDir, "localvault.password")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("WriteFile(script): %v", err)
+	}
+	if err := os.WriteFile(keycenterPassword, []byte("test-keycenter\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(keycenterPassword): %v", err)
+	}
+	if err := os.WriteFile(localvaultPassword, []byte("test-localvault\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(localvaultPassword): %v", err)
+	}
+	t.Setenv("VEILKEY_INSTALL_SCRIPT_ALLOWLIST", script)
+	t.Setenv("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", keycenterPassword)
+	t.Setenv("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", localvaultPassword)
+	t.Setenv("VEILKEY_PROXMOX_LXC_TEMPLATE_VMID", "9000")
+	t.Setenv("VEILKEY_PROXMOX_LXC_NET0_TEMPLATE", "name=eth0,bridge=vmbr0,ip=192.0.2.%VMID%/24,gw=192.0.2.1")
+
+	cfg, err := srv.db.GetOrCreateUIConfig()
+	if err != nil {
+		t.Fatalf("GetOrCreateUIConfig: %v", err)
+	}
+	cfg.TargetType = "lxc-allinone"
+	cfg.TargetMode = "new"
+	cfg.TargetNode = "proxmox-node-a"
+	cfg.TargetVMID = "220"
+	cfg.InstallProfile = "proxmox-lxc-allinone"
+	cfg.InstallRoot = "/"
+	cfg.InstallScript = script
+	cfg.InstallWorkdir = tmpDir
+	if err := srv.db.SaveUIConfig(cfg); err != nil {
+		t.Fatalf("SaveUIConfig: %v", err)
+	}
+
+	post := postJSONFromIP(handler, "/api/install/validate", "10.10.10.10:1234", map[string]any{})
+	if post.Code != http.StatusOK {
+		t.Fatalf("validate install: expected 200, got %d: %s", post.Code, post.Body.String())
+	}
+	var resp struct {
+		Validation installValidationResult `json:"validation"`
+	}
+	if err := json.Unmarshal(post.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode validate response: %v", err)
+	}
+	if !resp.Validation.Valid {
+		t.Fatalf("validation valid = false, errors=%v", resp.Validation.Errors)
+	}
+	if resp.Validation.DangerousRoot {
+		t.Fatalf("dangerous_root = true, want false")
+	}
+	if resp.Validation.NeedsConfirmation {
+		t.Fatalf("needs_confirmation = true, want false")
+	}
+	if resp.Validation.ResolvedProfile != "proxmox-lxc-allinone" {
+		t.Fatalf("resolved_profile = %q, want proxmox-lxc-allinone", resp.Validation.ResolvedProfile)
+	}
+}
+
+func TestInstallValidateRejectsLXCAllInOneWithoutProvisioningInputs(t *testing.T) {
+	srv, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
+
+	tmpDir := t.TempDir()
+	script := filepath.Join(tmpDir, "install.sh")
+	keycenterPassword := filepath.Join(tmpDir, "keycenter.password")
+	localvaultPassword := filepath.Join(tmpDir, "localvault.password")
+	if err := os.WriteFile(script, []byte("#!/usr/bin/env bash\nexit 0\n"), 0755); err != nil {
+		t.Fatalf("WriteFile(script): %v", err)
+	}
+	if err := os.WriteFile(keycenterPassword, []byte("test-keycenter\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(keycenterPassword): %v", err)
+	}
+	if err := os.WriteFile(localvaultPassword, []byte("test-localvault\n"), 0600); err != nil {
+		t.Fatalf("WriteFile(localvaultPassword): %v", err)
+	}
+	t.Setenv("VEILKEY_INSTALL_SCRIPT_ALLOWLIST", script)
+	t.Setenv("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", keycenterPassword)
+	t.Setenv("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", localvaultPassword)
+
+	cfg, err := srv.db.GetOrCreateUIConfig()
+	if err != nil {
+		t.Fatalf("GetOrCreateUIConfig: %v", err)
+	}
+	cfg.TargetType = "lxc-allinone"
+	cfg.TargetMode = "new"
+	cfg.TargetNode = "proxmox-node-a"
+	cfg.TargetVMID = ""
+	cfg.InstallProfile = "proxmox-lxc-allinone"
+	cfg.InstallRoot = "/"
+	cfg.InstallScript = script
+	cfg.InstallWorkdir = tmpDir
+	if err := srv.db.SaveUIConfig(cfg); err != nil {
+		t.Fatalf("SaveUIConfig: %v", err)
+	}
+
+	post := postJSONFromIP(handler, "/api/install/validate", "10.10.10.10:1234", map[string]any{})
+	if post.Code != http.StatusBadRequest {
+		t.Fatalf("validate install: expected 400, got %d: %s", post.Code, post.Body.String())
+	}
+	var resp struct {
+		Validation installValidationResult `json:"validation"`
+	}
+	if err := json.Unmarshal(post.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode validate response: %v", err)
+	}
+	if resp.Validation.Valid {
+		t.Fatalf("validation valid = true, want false")
+	}
+	want := []string{
+		"lxc-allinone requires target_vmid",
+		"new lxc provisioning requires VEILKEY_PROXMOX_LXC_TEMPLATE_VMID",
+		"new lxc provisioning requires VEILKEY_PROXMOX_LXC_NET0_TEMPLATE",
+	}
+	for _, needle := range want {
+		found := false
+		for _, errMsg := range resp.Validation.Errors {
+			if errMsg == needle {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("validation errors = %v, missing %q", resp.Validation.Errors, needle)
+		}
+	}
+}
+
 func TestRunInstallApplyExecutesConfiguredScript(t *testing.T) {
 	srv, handler := setupTrustedIPServer(t, []string{"10.10.10.10"})
 	t.Setenv("VEILKEY_INSTALL_TIMEOUT", "5s")

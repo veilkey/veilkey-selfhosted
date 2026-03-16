@@ -104,7 +104,9 @@ Validated runtime ports:
 Important behavior:
 
 - the installer writes password files under `/etc/veilkey/*.password` and runtime env files use `VEILKEY_PASSWORD_FILE`
-- proxy assets are installed, but proxy units are not enabled unless you set `VEILKEY_ENABLE_PROXY=1`
+- proxy and veilroot assets are staged for host companion setup
+- proxy runtime is not supported inside `proxmox-lxc-allinone`; use `./scripts/proxmox-host-cli-install.sh` on the Proxmox host if you need boundary/proxy runtime
+- if you want both in one operator step, use `./scripts/proxmox-allinone-stack-install.sh`
 - a fresh live LXC install needs `curl`, `openssl`, and `ssh-keygen`; the all-in-one wrapper installs them with `apt-get` when missing
 
 ## 4. Verify IP Access for All-in-One

@@ -14,13 +14,27 @@ tmp_runtime_bundle="$(mktemp -d)"
 tmp_runtime_root="$(mktemp -d)"
 tmp_lxc_bundle="$(mktemp -d)"
 tmp_lxc_root="$(mktemp -d)"
-trap 'rm -f "$tmp_manifest"; rm -rf "$tmp_host_bundle" "$tmp_host_root" "$tmp_host_localvault_bundle" "$tmp_host_localvault_root" "$tmp_host_localvault_bootstrap_bundle" "$tmp_host_localvault_bootstrap_root" "$tmp_runtime_bundle" "$tmp_runtime_root" "$tmp_lxc_bundle" "$tmp_lxc_root"' EXIT
+tmp_stack_lxc_bundle="$(mktemp -d)"
+tmp_stack_lxc_root="$(mktemp -d)"
+tmp_stack_host_bundle="$(mktemp -d)"
+tmp_stack_host_root="$(mktemp -d)"
+tmp_proxy_err="$(mktemp)"
+trap 'rm -f "$tmp_manifest" "$tmp_proxy_err"; rm -rf "$tmp_host_bundle" "$tmp_host_root" "$tmp_host_localvault_bundle" "$tmp_host_localvault_root" "$tmp_host_localvault_bootstrap_bundle" "$tmp_host_localvault_bootstrap_root" "$tmp_runtime_bundle" "$tmp_runtime_root" "$tmp_lxc_bundle" "$tmp_lxc_root" "$tmp_stack_lxc_bundle" "$tmp_stack_lxc_root" "$tmp_stack_host_bundle" "$tmp_stack_host_root"' EXIT
 
 export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./scripts/proxmox-host-install.sh "$tmp_host_root" "$tmp_host_bundle" >/dev/null
 test -x "$tmp_host_root/usr/local/bin/veilroot-shell"
 grep -F 'VEILKEY_INSTALLER_PROFILE=proxmox-host' "$tmp_host_root/opt/veilkey/installer/install.env" >/dev/null
+
+VEILKEY_KEYCENTER_PASSWORD='stack-keycenter' \
+VEILKEY_LOCALVAULT_PASSWORD='stack-localvault' \
+VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./scripts/proxmox-allinone-stack-install.sh "$tmp_stack_lxc_root" "$tmp_stack_host_root" "$tmp_stack_lxc_bundle" "$tmp_stack_host_bundle" >/dev/null
+test -x "$tmp_stack_lxc_root/usr/local/bin/veilkey-keycenter"
+test -x "$tmp_stack_lxc_root/usr/local/bin/veilkey-localvault"
+test -x "$tmp_stack_host_root/usr/local/bin/veilroot-shell"
+grep -F 'VEILKEY_INSTALLER_PROFILE=proxmox-lxc-allinone' "$tmp_stack_lxc_root/opt/veilkey/installer/install.env" >/dev/null
+grep -F 'VEILKEY_INSTALLER_PROFILE=proxmox-host-cli' "$tmp_stack_host_root/opt/veilkey/installer/install.env" >/dev/null
 
 VEILKEY_KEYCENTER_PASSWORD='test-keycenter' \
 VEILKEY_LOCALVAULT_PASSWORD='test-localvault' \
@@ -36,6 +50,15 @@ grep -F 'VEILKEY_ADDR=:10181' "$tmp_lxc_root/etc/veilkey/keycenter.env" >/dev/nu
 grep -F 'VEILKEY_ADDR=:10180' "$tmp_lxc_root/etc/veilkey/localvault.env" >/dev/null
 grep -F 'VEILKEY_KEYCENTER_URL=http://127.0.0.1:10181' "$tmp_lxc_root/etc/veilkey/localvault.env" >/dev/null
 ./scripts/proxmox-lxc-allinone-health.sh "$tmp_lxc_root" >/dev/null
+
+if VEILKEY_ENABLE_PROXY=1 \
+  VEILKEY_KEYCENTER_PASSWORD='blocked-keycenter' \
+  VEILKEY_LOCALVAULT_PASSWORD='blocked-localvault' \
+  VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./scripts/proxmox-lxc-allinone-install.sh "$tmp_lxc_root" "$tmp_lxc_bundle" >"$tmp_proxy_err" 2>&1; then
+  echo "expected proxmox-lxc-allinone proxy enable to be rejected" >&2
+  exit 1
+fi
+grep -F 'proxmox-host-cli' "$tmp_proxy_err" >/dev/null
 
 rm -f ./components.toml
 VEILKEY_KEYCENTER_PASSWORD='e2e-keycenter' \

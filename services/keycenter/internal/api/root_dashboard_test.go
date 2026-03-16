@@ -87,6 +87,9 @@ func TestRootServesInstallGateWhenInstallIncomplete(t *testing.T) {
 	if !strings.Contains(body, "LXC VMID") {
 		t.Fatalf("expected lxc target metadata inputs in install gate")
 	}
+	if !strings.Contains(body, "proxmox-host-cli") {
+		t.Fatalf("expected host companion guidance in install gate")
+	}
 	if strings.Contains(body, "VeilKey KeyCenter") {
 		t.Fatalf("expected install gate instead of dashboard")
 	}

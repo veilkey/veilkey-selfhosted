@@ -429,6 +429,8 @@ func renderInstallGate(s *Server, w http.ResponseWriter, session *db.InstallSess
 	}
 	sessionJSON, _ := json.Marshal(sessionPayload)
 	runtimeJSON, _ := json.Marshal(runtimePayload)
+	targetNodePlaceholder := installGateTargetNodePlaceholder()
+	targetVMIDPlaceholder := installGateTargetVMIDPlaceholder()
 	html := fmt.Sprintf(`<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>VeilKey Install Gate</title>
 <style>
@@ -448,6 +450,9 @@ p{color:#cbd5e1;line-height:1.6}
 .hero-panel{background:linear-gradient(180deg,rgba(56,189,248,.13),rgba(15,23,42,.08));border:1px solid rgba(56,189,248,.18);border-radius:20px;padding:16px}
 .hero-panel strong{display:block;font-size:14px}
 .hero-panel span{display:block;margin-top:6px;color:#cbd5e1;font-size:13px;line-height:1.5}
+.companion-note{margin-top:14px;padding:12px 14px;border-radius:14px;background:rgba(15,23,42,.72);border:1px solid rgba(148,163,184,.18)}
+.companion-note strong{display:block;font-size:13px}
+.companion-note span{display:block;margin-top:6px;color:#cbd5e1;font-size:12px;line-height:1.5}
 .section-title{font-size:15px;font-weight:700;margin-top:22px;margin-bottom:10px}
 .field-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .field{display:flex;flex-direction:column;gap:6px}
@@ -512,11 +517,11 @@ summary::-webkit-details-marker{display:none}
 </div>
 <div class="field">
 <label for="target_node" id="target-node-label">Proxmox node</label>
-<input id="target_node" placeholder="ranode-3960x">
+<input id="target_node" placeholder="%s">
 </div>
 <div class="field">
 <label for="target_vmid" id="target-vmid-label">LXC VMID</label>
-<input id="target_vmid" placeholder="105">
+<input id="target_vmid" placeholder="%s">
 </div>
 <div class="field">
 <label for="public_host" id="public-host-label">접속 주소 또는 도메인</label>
@@ -530,6 +535,10 @@ summary::-webkit-details-marker{display:none}
 <option value="existing">기존 인증서 사용</option>
 </select>
 <small id="tls-mode-help">빠른 검증은 HTTP로 시작하고, 운영 전 TLS를 붙일 수 있습니다.</small>
+</div>
+<div class="field full">
+<label><input type="checkbox" id="host_companion"> <span id="host-companion-label">Proxmox host companion CLI도 함께 설치</span></label>
+<small id="host-companion-help">선택하면 LXC 설치 후 Proxmox host에 proxmox-host-cli를 이어서 설치합니다.</small>
 </div>
 <div class="field full">
 <label for="install_root" id="install-root-label">설치 대상 루트</label>
@@ -549,6 +558,10 @@ summary::-webkit-details-marker{display:none}
 <li id="summary-script">설치 스크립트: 서버 허용 목록에서 자동 사용</li>
 <li id="summary-session">설치 단계: language → bootstrap → final_smoke</li>
 </ul>
+</div>
+<div class="companion-note">
+<strong id="companion-title">Proxmox host companion</strong>
+<span id="companion-copy">all-in-one LXC는 KeyCenter와 LocalVault 런타임만 담당합니다. Proxmox host의 boundary/CLI는 별도 proxmox-host-cli 단계로 설치합니다.</span>
 </div>
 <div class="field full">
 <label><input type="checkbox" id="confirm-dangerous-root"> <span id="confirm-dangerous-root-label">이 서버의 루트(/)에 직접 설치하는 위험을 이해했고, 필요한 경우에만 실행합니다.</span></label>
@@ -676,6 +689,8 @@ const copy = {
     publicHostHelp: '설치 후 사용자가 접속할 예상 공개 주소 preview입니다. wizard 자기 주소를 자동 저장하지 않습니다.',
     tlsModeLabel: 'TLS 방식',
     tlsModeHelp: '빠른 검증은 HTTP로 시작하고, 운영 전 TLS를 붙일 수 있습니다.',
+    hostCompanionLabel: 'Proxmox host companion CLI도 함께 설치',
+    hostCompanionHelp: '선택하면 LXC 설치 후 Proxmox host에 proxmox-host-cli를 이어서 설치합니다.',
     installRootLabel: '설치 대상 루트',
     installRootHelp: '일반 host일 때만 사용합니다. all-in-one LXC는 내부적으로 / 를 사용하며 여기선 직접 입력하지 않습니다.',
     localvaultLabel: '기존 LocalVault URL (선택)',
@@ -684,6 +699,8 @@ const copy = {
     summaryProfile: '설치 프로파일: 기본은 proxmox-lxc-allinone, host는 고급 경로로 유지',
     summaryScript: '설치 스크립트: 서버 허용 목록에서 자동 사용',
     summarySession: '설치 단계: language -> bootstrap -> final_smoke',
+    companionTitle: 'Proxmox host companion',
+    companionCopy: 'all-in-one LXC는 KeyCenter와 LocalVault 런타임만 담당합니다. Proxmox host의 boundary/CLI는 별도 proxmox-host-cli 단계로 설치합니다.',
     confirmDangerousRoot: '이 서버의 루트(/)에 직접 설치하는 위험을 이해했고, 필요한 경우에만 실행합니다.',
     saveQuick: '빠른 설치 저장',
     validateInstall: '검증만 실행',
@@ -735,6 +752,8 @@ const copy = {
     publicHostHelp: 'This is only the expected public URL preview after install. The wizard self URL is not auto-saved.',
     tlsModeLabel: 'TLS mode',
     tlsModeHelp: 'Start with HTTP for validation, then attach TLS before production exposure.',
+    hostCompanionLabel: 'Install Proxmox host companion CLI too',
+    hostCompanionHelp: 'When enabled, the runner installs proxmox-host-cli on the Proxmox host after the LXC runtime finishes.',
     installRootLabel: 'Install root',
     installRootHelp: 'Use this only for a direct Linux host install. The all-in-one LXC path derives / internally and keeps it out of the quick flow.',
     localvaultLabel: 'Existing LocalVault URL (optional)',
@@ -743,6 +762,8 @@ const copy = {
     summaryProfile: 'Install profile: default to proxmox-lxc-allinone, keep host mode as an advanced path',
     summaryScript: 'Install script: auto-use server allowlisted runner',
     summarySession: 'Install stages: language -> bootstrap -> final_smoke',
+    companionTitle: 'Proxmox host companion',
+    companionCopy: 'The all-in-one LXC only owns KeyCenter and LocalVault runtime. Install the Proxmox host boundary/CLI separately with proxmox-host-cli.',
     confirmDangerousRoot: 'I understand the risk of installing directly into the live root (/) and will only use it when intended.',
     saveQuick: 'Save Quick Setup',
     validateInstall: 'Validate Only',
@@ -792,7 +813,8 @@ const quickFields = {
   target_node: document.getElementById('target_node'),
   target_vmid: document.getElementById('target_vmid'),
   public_host: document.getElementById('public_host'),
-  tls_mode: document.getElementById('tls_mode')
+  tls_mode: document.getElementById('tls_mode'),
+  host_companion: document.getElementById('host_companion')
 };
 const fields = {
   flow: document.getElementById('flow'),
@@ -899,6 +921,10 @@ function updateTargetSpecificUI() {
   document.getElementById('install_root').disabled = isLXC;
   confirmDangerousRootEl.checked = isLXC ? false : confirmDangerousRootEl.checked;
   confirmDangerousRootEl.disabled = isLXC;
+  quickFields.host_companion.disabled = !isLXC;
+  if (!isLXC) {
+    quickFields.host_companion.checked = false;
+  }
 }
 
 function setStatus(message) {
@@ -924,6 +950,7 @@ function renderPreview() {
       lxc_mode: quickFields.lxc_mode.value,
       target_node: quickFields.target_node.value,
       target_vmid: quickFields.target_vmid.value,
+      host_companion: quickFields.host_companion.checked,
       public_host: quickFields.public_host.value,
       tls_mode: quickFields.tls_mode.value,
       install_root: fields.install_root.value,
@@ -934,6 +961,7 @@ function renderPreview() {
       target_mode: quickFields.lxc_mode.value,
       target_node: quickFields.target_node.value,
       target_vmid: quickFields.target_vmid.value,
+      host_companion: quickFields.host_companion.checked,
       public_base_url: quickFields.public_host.value,
       install_profile: fields.install_profile.value,
       install_root: fields.install_root.value,
@@ -988,6 +1016,8 @@ function setLanguage(lang) {
   document.getElementById('public-host-help').textContent = t.publicHostHelp;
   document.getElementById('tls-mode-label').textContent = t.tlsModeLabel;
   document.getElementById('tls-mode-help').textContent = t.tlsModeHelp;
+  document.getElementById('host-companion-label').textContent = t.hostCompanionLabel;
+  document.getElementById('host-companion-help').textContent = t.hostCompanionHelp;
   document.getElementById('install-root-label').textContent = t.installRootLabel;
   document.getElementById('install-root-help').textContent = t.installRootHelp;
   document.getElementById('localvault-label').textContent = t.localvaultLabel;
@@ -996,6 +1026,8 @@ function setLanguage(lang) {
   document.getElementById('summary-profile').textContent = t.summaryProfile;
   document.getElementById('summary-script').textContent = t.summaryScript;
   document.getElementById('summary-session').textContent = t.summarySession;
+  document.getElementById('companion-title').textContent = t.companionTitle;
+  document.getElementById('companion-copy').textContent = t.companionCopy;
   document.getElementById('confirm-dangerous-root-label').textContent = t.confirmDangerousRoot;
   document.getElementById('save-quick').textContent = t.saveQuick;
   document.getElementById('validate-install').textContent = t.validateInstall;
@@ -1037,6 +1069,7 @@ function applyRuntimeConfig(data) {
   quickFields.lxc_mode.value = data.target_mode || 'new';
   quickFields.target_node.value = data.target_node || '';
   quickFields.target_vmid.value = data.target_vmid || '';
+  quickFields.host_companion.checked = !!data.host_companion;
   fields.install_root.value = data.install_root || '/';
   fields.install_script.value = data.install_script || '';
   fields.install_workdir.value = data.install_workdir || '';
@@ -1118,6 +1151,7 @@ async function saveRuntimeConfig() {
       target_mode: quickFields.lxc_mode.value,
       target_node: quickFields.target_node.value,
       target_vmid: quickFields.target_vmid.value,
+      host_companion: quickFields.host_companion.checked,
       public_base_url: quickFields.public_host.value ? ((quickFields.public_host.value.startsWith('http://') || quickFields.public_host.value.startsWith('https://')) ? quickFields.public_host.value : ((quickFields.tls_mode.value === 'later' ? 'http://' : 'https://') + quickFields.public_host.value)) : '',
       install_profile: fields.install_profile.value,
       install_root: fields.install_root.value,
@@ -1206,6 +1240,26 @@ applySessionState(initialSessionState);
 applyRuntimeConfig(initialRuntimeConfig);
 renderPreview();
 reloadState();
-</script></body></html>`, flow, lastStage, string(sessionJSON), string(runtimeJSON))
+</script></body></html>`, flow, lastStage, targetNodePlaceholder, targetVMIDPlaceholder, string(sessionJSON), string(runtimeJSON))
 	_, _ = w.Write([]byte(html))
+}
+
+func installGateTargetNodePlaceholder() string {
+	if value := strings.TrimSpace(os.Getenv("VEILKEY_PROXMOX_DEFAULT_NODE")); value != "" {
+		return value
+	}
+	if host, err := os.Hostname(); err == nil {
+		host = strings.TrimSpace(host)
+		if host != "" {
+			return host
+		}
+	}
+	return "proxmox-node"
+}
+
+func installGateTargetVMIDPlaceholder() string {
+	if value := strings.TrimSpace(os.Getenv("VEILKEY_PROXMOX_DEFAULT_VMID")); value != "" {
+		return value
+	}
+	return "next available VMID"
 }

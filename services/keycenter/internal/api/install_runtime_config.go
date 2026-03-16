@@ -14,6 +14,7 @@ type installRuntimeConfigPayload struct {
 	TargetMode     string `json:"target_mode"`
 	TargetNode     string `json:"target_node"`
 	TargetVMID     string `json:"target_vmid"`
+	HostCompanion  bool   `json:"host_companion"`
 	PublicBaseURL  string `json:"public_base_url"`
 	RuntimeWarning string `json:"runtime_warning,omitempty"`
 	InstallProfile string `json:"install_profile"`
@@ -32,6 +33,7 @@ type installRuntimeConfigPatchRequest struct {
 	TargetMode     *string `json:"target_mode"`
 	TargetNode     *string `json:"target_node"`
 	TargetVMID     *string `json:"target_vmid"`
+	HostCompanion  *bool   `json:"host_companion"`
 	PublicBaseURL  *string `json:"public_base_url"`
 	InstallProfile *string `json:"install_profile"`
 	InstallRoot    *string `json:"install_root"`
@@ -50,6 +52,7 @@ func installRuntimeConfigFromUI(cfg *db.UIConfig) installRuntimeConfigPayload {
 		TargetMode:     cfg.TargetMode,
 		TargetNode:     cfg.TargetNode,
 		TargetVMID:     cfg.TargetVMID,
+		HostCompanion:  cfg.HostCompanion,
 		PublicBaseURL:  cfg.PublicBaseURL,
 		InstallProfile: cfg.InstallProfile,
 		InstallRoot:    cfg.InstallRoot,
@@ -114,6 +117,9 @@ func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.
 	}
 	if req.TargetVMID != nil {
 		cfg.TargetVMID = strings.TrimSpace(*req.TargetVMID)
+	}
+	if req.HostCompanion != nil {
+		cfg.HostCompanion = *req.HostCompanion
 	}
 	if req.PublicBaseURL != nil {
 		cfg.PublicBaseURL = strings.TrimSpace(*req.PublicBaseURL)

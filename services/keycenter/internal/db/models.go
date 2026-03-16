@@ -340,6 +340,7 @@ type UIConfig struct {
 	TargetMode     string    `gorm:"column:target_mode;not null;default:''" json:"target_mode"`
 	TargetNode     string    `gorm:"column:target_node;not null;default:''" json:"target_node"`
 	TargetVMID     string    `gorm:"column:target_vmid;not null;default:''" json:"target_vmid"`
+	HostCompanion  bool      `gorm:"column:host_companion;not null;default:false" json:"host_companion"`
 	PublicBaseURL  string    `gorm:"column:public_base_url;not null;default:''" json:"public_base_url"`
 	InstallProfile string    `gorm:"column:install_profile;not null;default:''" json:"install_profile"`
 	InstallRoot    string    `gorm:"column:install_root;not null;default:''" json:"install_root"`
