@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -35,6 +36,23 @@ func main() {
 }
 
 func runServer() {
+	dbPath := os.Getenv("VEILKEY_DB_PATH")
+	if dbPath == "" {
+		log.Fatal("VEILKEY_DB_PATH is required")
+	}
+	dataDir := filepath.Dir(dbPath)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
+		log.Fatalf("Failed to create data directory: %v", err)
+	}
+	saltFile := filepath.Join(dataDir, "salt")
+
+	if _, err := os.Stat(saltFile); os.IsNotExist(err) {
+		// Setup mode: salt doesn't exist, serve wizard only
+		runSetupServer(dbPath, dataDir)
+		return
+	}
+
+	// Normal mode: salt exists, load full server
 	server, addr, listenPort := mustLoadServer()
 
 	// Heartbeat to keycenter using the same effective target as tracked-ref sync.
@@ -57,6 +75,163 @@ func runServer() {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}
+}
+
+func runSetupServer(dbPath, dataDir string) {
+	addr := os.Getenv("VEILKEY_ADDR")
+	if addr == "" {
+		addr = ":10180"
+	}
+
+	// Create minimal DB for config storage during setup
+	database, err := db.New(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.Close()
+
+	// Create a minimal server (no KEK, locked state)
+	server := api.NewServer(database, nil, []string{})
+
+	mux := http.NewServeMux()
+
+	// Wizard UI
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		api.RenderInstallWizard(w)
+	})
+	mux.Handle("/assets/", http.FileServer(http.FS(api.InstallUIAssets())))
+
+	// Health (always available)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"status":"setup"}`))
+	})
+
+	// Install APIs
+	mux.HandleFunc("GET /api/install/status", server.HandleInstallStatus)
+	mux.HandleFunc("PATCH /api/install/keycenter-url", server.HandlePatchKeycenterURL)
+	mux.HandleFunc("POST /api/install/init", func(w http.ResponseWriter, r *http.Request) {
+		handleInstallInit(w, r, database, dataDir, server)
+	})
+
+	log.Printf("veilkey-localvault setup mode on %s (waiting for initialization)", addr)
+
+	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
+	tlsKey := os.Getenv("VEILKEY_TLS_KEY")
+	if tlsCert != "" && tlsKey != "" {
+		if err := http.ListenAndServeTLS(addr, tlsCert, tlsKey, api.LogMiddleware(mux)); err != nil {
+			log.Fatalf("Setup server failed: %v", err)
+		}
+	} else {
+		if err := http.ListenAndServe(addr, api.LogMiddleware(mux)); err != nil {
+			log.Fatalf("Setup server failed: %v", err)
+		}
+	}
+}
+
+func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string, server *api.Server) {
+	var req struct {
+		Password     string `json:"password"`
+		KeycenterURL string `json:"keycenter_url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Password = strings.TrimSpace(req.Password)
+	req.KeycenterURL = strings.TrimSpace(req.KeycenterURL)
+
+	if len(req.Password) < 8 {
+		http.Error(w, "password must be at least 8 characters", http.StatusBadRequest)
+		return
+	}
+
+	saltFile := filepath.Join(dataDir, "salt")
+	if _, err := os.Stat(saltFile); err == nil {
+		http.Error(w, "already initialized", http.StatusConflict)
+		return
+	}
+
+	// Generate salt
+	salt, err := crypto.GenerateSalt()
+	if err != nil {
+		log.Printf("install: failed to generate salt: %v", err)
+		http.Error(w, "failed to generate salt", http.StatusInternalServerError)
+		return
+	}
+
+	// Derive KEK from password + salt
+	kek := crypto.DeriveKEK(req.Password, salt)
+
+	// Generate DEK
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		log.Printf("install: failed to generate DEK: %v", err)
+		http.Error(w, "failed to generate DEK", http.StatusInternalServerError)
+		return
+	}
+
+	// Encrypt DEK with KEK
+	encDEK, encNonce, err := crypto.Encrypt(kek, dek)
+	if err != nil {
+		log.Printf("install: failed to encrypt DEK: %v", err)
+		http.Error(w, "failed to encrypt DEK", http.StatusInternalServerError)
+		return
+	}
+
+	// Generate node ID
+	nodeID := crypto.GenerateUUID()
+
+	// Save node info to DB
+	info := &db.NodeInfo{
+		NodeID:   nodeID,
+		DEK:      encDEK,
+		DEKNonce: encNonce,
+		Version:  1,
+	}
+	if err := database.SaveNodeInfo(info); err != nil {
+		log.Printf("install: failed to save node info: %v", err)
+		http.Error(w, "failed to save node info", http.StatusInternalServerError)
+		return
+	}
+
+	// Save keycenter URL to DB config if provided
+	if req.KeycenterURL != "" {
+		normalized := strings.TrimRight(req.KeycenterURL, "/")
+		if err := database.SaveConfig("VEILKEY_KEYCENTER_URL", normalized); err != nil {
+			log.Printf("install: failed to save keycenter URL: %v", err)
+			http.Error(w, "failed to save keycenter URL", http.StatusInternalServerError)
+			return
+		}
+		log.Printf("install: keycenter URL saved: %s", normalized)
+	}
+
+	// Write salt file (this is the trigger that switches from setup to normal mode)
+	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
+		log.Printf("install: failed to write salt file: %v", err)
+		http.Error(w, "failed to write salt file", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("install: initialization complete, node_id=%s", nodeID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status":  "initialized",
+		"node_id": nodeID,
+		"message": "Initialization complete. The server will restart in normal mode.",
+	})
+
+	// Exit so systemd (or supervisor) restarts the process in normal mode
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		log.Println("install: exiting for restart in normal mode")
+		os.Exit(0)
+	}()
 }
 
 func mustLoadServer() (*api.Server, string, int) {
