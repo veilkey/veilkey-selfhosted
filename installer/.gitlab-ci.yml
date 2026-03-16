@@ -22,6 +22,7 @@ validate-components:
     - export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
     - export VEILKEY_GITLAB_PACKAGE_PAT="$VEILKEY_GITLAB_PACKAGE_PAT"
     - bash tests/test_download_checksum.sh
+    - bash tests/test_doctor_placeholder_warning.sh
     - bash tests/test_proxy_component.sh
     - bash tests/test_placeholder_artifact_guard.sh
     - bash tests/test_install_profile_command.sh

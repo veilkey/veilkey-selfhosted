@@ -141,6 +141,8 @@ Top-level commands:
 ./install.sh post-install-health <root>
 ```
 
+`doctor` warns when the active manifest still contains placeholder artifact URLs and `VEILKEY_INSTALLER_GITLAB_API_BASE` is unset.
+
 Operator-facing wrappers:
 
 ```bash

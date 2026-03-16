@@ -357,9 +357,19 @@ init_manifest() {
   echo "Wrote ${MANIFEST_FILE}"
 }
 
+manifest_has_placeholder_urls() {
+  if grep -Eq 'https?://(your-gitlab-host|your-keycenter-host|example.com|localhost)(/|:|$)' "${MANIFEST_FILE}"; then
+    return 0
+  fi
+  return 1
+}
+
 cmd_doctor() {
   manifest_cmd validate >/dev/null
   manifest_cmd lint-legacy-layout
+  if manifest_has_placeholder_urls && [[ -z "${VEILKEY_INSTALLER_GITLAB_API_BASE:-}" ]]; then
+    echo "WARNING: manifest contains placeholder artifact URLs; set VEILKEY_INSTALLER_GITLAB_API_BASE or rewrite the manifest before bundle/download/install-profile" >&2
+  fi
 }
 
 verify_sha256() {
