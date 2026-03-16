@@ -23,6 +23,7 @@ validate-components:
     - bash tests/test_download_checksum.sh
     - bash tests/test_proxy_component.sh
     - bash tests/test_install_profile_command.sh
+    - bash tests/test_proxmox_live_session.sh
     - bash tests/test_proxmox_wrapper_commands.sh
   tags:
     - shell

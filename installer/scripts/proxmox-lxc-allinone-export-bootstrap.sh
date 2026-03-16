@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SESSION_GUARD="${ROOT_DIR}/scripts/proxmox-live-session.sh"
+
 usage() {
   cat <<'EOF'
 Usage: ./scripts/proxmox-lxc-allinone-export-bootstrap.sh <vmid> [dest_root]
@@ -22,6 +25,8 @@ vmid="$1"
 dest_root="${2:-/opt/veilkey/bootstrap-exports}"
 bootstrap_dir="${VEILKEY_BOOTSTRAP_SSH_DIR:-/etc/veilkey/bootstrap/ssh}"
 key_name="${VEILKEY_BOOTSTRAP_SSH_KEY_NAME:-veilkey-admin}"
+
+"${SESSION_GUARD}" assert "proxmox-lxc-allinone-export-bootstrap"
 
 stage() {
   printf '[lxc-allinone/export] %s\n' "$*"

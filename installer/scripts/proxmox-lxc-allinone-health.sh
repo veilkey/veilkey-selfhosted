@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SESSION_GUARD="${ROOT_DIR}/scripts/proxmox-live-session.sh"
 root="${1:-/}"
 
 stage() {
@@ -77,6 +78,8 @@ if [[ "${root}" != "/" ]]; then
   stage "staged root verification complete"
   exit 0
 fi
+
+"${SESSION_GUARD}" assert "proxmox-lxc-allinone-health"
 
 require_cmd curl
 

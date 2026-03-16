@@ -58,6 +58,12 @@ This repository is not the source of truth for:
 - LocalVault runtime code
 - long-term mirrors of component repositories
 
+GitHub organization sync note:
+
+- the canonical self-hosted install flow lives in `installer/README.md` and `installer/INSTALL.md`
+- the canonical self-hosted update control flow lives in `services/keycenter/README.md`
+- GitHub mirrors for the `veilkey` organization should preserve those flows verbatim or link back here
+
 ## Canonical Profiles
 
 Only the following profiles are active:
@@ -103,6 +109,21 @@ Validated flow:
 - bootstrap export
 - health
 - purge
+
+### `proxmox-lxc-runtime`
+
+Purpose:
+
+- install a LocalVault-only runtime in a separate Proxmox LXC
+- bind it to an existing all-in-one or external KeyCenter
+- verify LocalVault health plus upstream KeyCenter reachability
+
+Validated flow:
+
+- fresh runtime-only install
+- explicit `VEILKEY_KEYCENTER_URL` configuration
+- LocalVault activation
+- runtime health
 
 ## Architecture Summary
 
@@ -174,6 +195,9 @@ Important behavior:
 - `post-install-health` validates the installed scaffold
 - wrapper commands add target-specific runtime checks on top
 - `proxmox-lxc-allinone` stages proxy assets by default but does not auto-enable proxy units unless `VEILKEY_ENABLE_PROXY=1` is set explicitly
+- `proxmox-host` and `proxmox-host-cli` enable proxy units by default because they are proxy-boundary profiles
+- live Proxmox install, health, and bootstrap-export commands require an explicit claimed validation session via `./scripts/proxmox-live-session.sh claim <label>`
+- `./scripts/proxmox-live-session.sh status` shows both the current shell session and the claimed work session
 
 ## Bootstrap SSH Export
 
@@ -235,6 +259,9 @@ export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
 Create a fresh Debian LXC, copy the installer tree and bundle into the container, then run:
 
 ```bash
+./scripts/proxmox-live-session.sh status
+./scripts/proxmox-live-session.sh claim allinone-validate
+
 VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password' \
 VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
 ./scripts/proxmox-lxc-allinone-install.sh --activate / /root/all-bundle
@@ -242,15 +269,32 @@ VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
 ./scripts/proxmox-lxc-allinone-health.sh /
 ```
 
+Completion checklist for the all-in-one node:
+
+- `curl http://<allinone-ip>:10181/health`
+- `curl http://<allinone-ip>:10180/health`
+- unlock KeyCenter once via `POST /api/unlock`
+- verify LocalVault inventory via `GET /api/agents`
+- export bootstrap artifacts if operator access is required on the host
+
 For a second LocalVault-only runtime LXC that registers into the all-in-one KeyCenter:
 
 ```bash
+./scripts/proxmox-live-session.sh status
+./scripts/proxmox-live-session.sh claim runtime-validate
+
 VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
 VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181' \
 ./scripts/proxmox-lxc-runtime-install.sh --activate / /root/runtime-bundle
 
 ./scripts/proxmox-lxc-runtime-health.sh /
 ```
+
+Runtime-only prerequisites:
+
+- the target KeyCenter must already exist
+- `VEILKEY_KEYCENTER_URL` must be set explicitly for runtime-only install
+- if you want to verify registration through KeyCenter APIs immediately, unlock the target KeyCenter first
 
 ## Status
 

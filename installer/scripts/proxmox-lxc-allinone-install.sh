@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SESSION_GUARD="${ROOT_DIR}/scripts/proxmox-live-session.sh"
 
 stage() {
   printf '[lxc-allinone/install] %s\n' "$*"
@@ -161,6 +162,9 @@ root="${1:-/}"
 bundle_root="${2:-}"
 
 stage "target root: ${root}"
+if [[ "${root}" == "/" ]]; then
+  "${SESSION_GUARD}" assert "proxmox-lxc-allinone-install"
+fi
 ensure_manifest
 ensure_bootstrap_tools
 resolve_passwords
