@@ -19,6 +19,7 @@ else
   npm install
 fi
 
+npm run test:contracts
 npm run build
 
 rm -rf "$OUTPUT_DIR"
