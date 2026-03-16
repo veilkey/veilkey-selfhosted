@@ -311,6 +311,15 @@ normalize_download_url() {
   local project rest project_json project_id suffix
   local -a auth_args=() tls_args=()
 
+  case "${url}" in
+    *://your-gitlab-host/*|*://your-keycenter-host/*|*://example.com/*|*://localhost/*)
+      if [[ -z "${api_base}" ]]; then
+        echo "Error: placeholder artifact_url requires VEILKEY_INSTALLER_GITLAB_API_BASE or a rewritten manifest URL" >&2
+        exit 1
+      fi
+      ;;
+  esac
+
   if [[ "${url}" =~ /api/v4/projects/([^/]+)/packages/generic/(.+)$ ]]; then
     project="${BASH_REMATCH[1]}"
     rest="${BASH_REMATCH[2]}"

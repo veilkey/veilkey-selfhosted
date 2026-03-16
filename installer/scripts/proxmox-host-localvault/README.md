@@ -44,7 +44,8 @@
 - `VEILKEY_KEYCENTER_URL`
   - env가 없으면 `VEILKEY_KEYCENTER_HOST` 환경변수를 이용해 자동 감지한다.
 - `VEILKEY_LOCALVAULT_PASSWORD`
-  - env가 없으면 `/opt/veilkey/data/password`에서 `VEILKEY_PASSWORD`를 읽어 사용한다.
+  - 권장 경로는 `/etc/veilkey/localvault.password` 같은 password file이다.
+  - wrapper input env가 없으면 `/opt/veilkey/data/password`에서 `VEILKEY_PASSWORD`를 읽어 사용한다.
 
 ## Destructive behavior
 

@@ -35,21 +35,22 @@ Use this when you want a host-side LocalVault that reports to an existing KeyCen
 
 Required input:
 
-- `VEILKEY_LOCALVAULT_PASSWORD`
+- password file at `/etc/veilkey/localvault.password`
 - `VEILKEY_KEYCENTER_URL`
 
 Example:
 
 ```bash
-# Write password to a file (never use env vars for passwords)
+# Write password to a file (runtime uses VEILKEY_PASSWORD_FILE; avoid password env vars)
 echo -n 'replace-me' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
-export VEILKEY_LOCALVAULT_PASSWORD='replace-me'  # installer input only; store the source secret in a file
 export VEILKEY_KEYCENTER_URL='https://<YOUR_KEYCENTER_HOST>'
 
 ./scripts/proxmox-host-localvault/install.sh --activate /
 ./scripts/proxmox-host-localvault/health.sh /
 ```
+
+For CI or other non-interactive wrapper usage, the installer still accepts `VEILKEY_LOCALVAULT_PASSWORD` as input, but the recommended operator path is a password file.
 
 What this does:
 
@@ -80,18 +81,16 @@ Use this when you want a single LXC with:
 
 Required input:
 
-- `VEILKEY_KEYCENTER_PASSWORD`
-- `VEILKEY_LOCALVAULT_PASSWORD`
+- password file at `/etc/veilkey/keycenter.password`
+- password file at `/etc/veilkey/localvault.password`
 
 Example:
 
 ```bash
 echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
 chmod 600 /etc/veilkey/keycenter.password
-export VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password'
 echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
-export VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password'
 
 ./scripts/proxmox-lxc-allinone-install.sh --activate /
 ./scripts/proxmox-lxc-allinone-health.sh /
@@ -137,7 +136,7 @@ Use this when you want a second LXC with LocalVault only, bound to an existing K
 
 Required input:
 
-- `VEILKEY_LOCALVAULT_PASSWORD`
+- password file at `/etc/veilkey/localvault.password`
 - `VEILKEY_KEYCENTER_URL`
 
 Example:
@@ -145,7 +144,6 @@ Example:
 ```bash
 echo -n 'replace-runtime-localvault-password' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
-export VEILKEY_LOCALVAULT_PASSWORD='replace-runtime-localvault-password'
 export VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181'
 
 ./scripts/proxmox-lxc-runtime-install.sh --activate /
