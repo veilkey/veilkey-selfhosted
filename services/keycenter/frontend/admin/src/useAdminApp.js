@@ -198,27 +198,57 @@ function vaultItemSyncKey(kind, name) {
     return `${kind}:${name}`;
 }
 
+function vaultItemSyncEntry(kind, name) {
+    return state.vaultItemSyncStatus[vaultItemSyncKey(kind, name)];
+}
+
 function renderSyncStatus(kind, name) {
-    const item = state.vaultItemSyncStatus[vaultItemSyncKey(kind, name)];
+    const item = vaultItemSyncEntry(kind, name);
     if (!item) return '<span class="muted">확인중</span>';
-    if (item.total === 1 && item.matched === 1) {
-        return renderStatusPill('유일키', 'active');
-    }
-    const klass = item.matched === item.total ? 'active' : 'pending';
-    return renderStatusPill(`${item.matched}/${item.total} ${item.matched === item.total ? '동기화중' : '동기화안됨'}`, klass);
+    const distribution = vaultDistributionStatus(kind, name);
+    return renderStatusPill(distribution.label, distribution.className);
 }
 
 function vaultSyncStatus(kind, name) {
-    const item = state.vaultItemSyncStatus[vaultItemSyncKey(kind, name)];
+    const item = vaultItemSyncEntry(kind, name);
     if (!item) {
         return { loading: true, label: '확인중', className: '' };
     }
-    if (item.total === 1 && item.matched === 1) {
-        return { loading: false, label: '유일키', className: 'active' };
+    if (item.matched === item.total) {
+        return { loading: false, label: '동기화됨', className: 'active' };
     }
-    const className = item.matched === item.total ? 'active' : 'pending';
-    const label = `${item.matched}/${item.total} ${item.matched === item.total ? '동기화중' : '동기화안됨'}`;
-    return { loading: false, label, className };
+    if (item.matched === 1) {
+        return { loading: false, label: '미동기화', className: 'pending' };
+    }
+    return { loading: false, label: '부분동기화', className: 'error' };
+}
+
+function vaultKeyClassStatus(kind, name) {
+    const item = vaultItemSyncEntry(kind, name);
+    if (!item) {
+        return { loading: true, label: '확인중', className: '' };
+    }
+    if (item.matched === 1) {
+        return { loading: false, label: '유일키', className: 'pending' };
+    }
+    if (item.matched === item.total) {
+        return { loading: false, label: '글로벌키', className: 'active' };
+    }
+    return { loading: false, label: '파편화 키', className: 'error' };
+}
+
+function vaultDistributionStatus(kind, name) {
+    const item = vaultItemSyncEntry(kind, name);
+    if (!item) {
+        return { loading: true, label: '확인중', className: '' };
+    }
+    if (item.matched === item.total) {
+        return { loading: false, label: `${item.matched}/${item.total}`, className: 'active' };
+    }
+    if (item.matched === 1) {
+        return { loading: false, label: `${item.matched}/${item.total}`, className: 'pending' };
+    }
+    return { loading: false, label: `${item.matched}/${item.total}`, className: 'error' };
 }
 
 function vaultTargetOptions(includeHost = true) {
@@ -803,7 +833,9 @@ function renderVaultKeys() {
             { label: '종류', render: (row) => `<span class="pill ${row.item_kind === 'VE' ? 'kind-ve' : 'kind-vk'}">${escapeHTML(vaultKindLabel(row.item_kind))}</span>` },
             { label: '키명', render: (row) => `<span>${escapeHTML(row.name)}</span>` },
             { label: '키값', render: (row) => `<span class="code">${escapeHTML(itemIdentifier(row))}</span>` },
-            { label: '동기화', render: (row) => renderSyncStatus(row.item_kind, row.name) }
+            { label: '동기화여부', render: (row) => renderStatusPill(vaultSyncStatus(row.item_kind, row.name).label, vaultSyncStatus(row.item_kind, row.name).className) },
+            { label: '키 분류', render: (row) => renderStatusPill(vaultKeyClassStatus(row.item_kind, row.name).label, vaultKeyClassStatus(row.item_kind, row.name).className) },
+            { label: '분포', render: (row) => renderSyncStatus(row.item_kind, row.name) }
         ], itemRows, (row) => {
             const classes = [];
             if (row.name === selectedItemName && row.item_kind === selectedItemKind) classes.push('is-selected');
@@ -1760,6 +1792,8 @@ async function loadVaultItemSyncStatus() {
 
     const nextStatus = {};
     const vaults = state.vaults || [];
+    const currentVaultHash = state.selectedVault.vault_runtime_hash;
+    const vaultStatusByHash = new Map();
     const normalizedConfigsByVault = new Map();
     const normalizedKeysByVault = new Map();
 
@@ -1767,76 +1801,67 @@ async function loadVaultItemSyncStatus() {
         const vaultHash = vault.vault_runtime_hash;
 
         try {
-            const data = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/configs');
-            const configs = new Map();
-            (data.configs || []).forEach((item) => {
-                configs.set(item.key, {
-                    exists: true,
-                    value: item.value ?? null,
-                    scope: item.scope || 'LOCAL',
-                    status: item.status || 'active'
-                });
-            });
-            normalizedConfigsByVault.set(vaultHash, configs);
+            const status = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/status');
+            vaultStatusByHash.set(vaultHash, status || {});
         } catch (_) {
-            normalizedConfigsByVault.set(vaultHash, new Map());
+            vaultStatusByHash.set(vaultHash, {});
+        }
+
+        try {
+            const status = vaultStatusByHash.get(vaultHash) || {};
+            if (vaultHash !== currentVaultHash && !(Array.isArray(status.supported_features) && status.supported_features.includes('configs'))) {
+                normalizedConfigsByVault.set(vaultHash, null);
+            } else {
+                const data = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/configs');
+                const configs = new Map();
+                (data.configs || []).forEach((item) => {
+                    configs.set(item.key, true);
+                });
+                normalizedConfigsByVault.set(vaultHash, configs);
+            }
+        } catch (_) {
+            normalizedConfigsByVault.set(vaultHash, vaultHash === currentVaultHash ? new Map() : null);
         }
 
         try {
             const data = await request('/api/vaults/' + encodeURIComponent(vaultHash) + '/keys');
             const keys = new Map();
-            (data.secrets || []).forEach((item) => {
-                keys.set(item.name, {
-                    exists: true,
-                    token: item.token || null,
-                    ref: item.ref || null,
-                    scope: item.scope || 'LOCAL',
-                    status: item.status || 'active'
-                });
+            (data.keys || data.secrets || []).forEach((item) => {
+                keys.set(item.name, true);
             });
             normalizedKeysByVault.set(vaultHash, keys);
         } catch (_) {
-            normalizedKeysByVault.set(vaultHash, new Map());
+            normalizedKeysByVault.set(vaultHash, null);
         }
     }));
 
     state.configVaultItems.forEach((item) => {
+        const configKey = item.key || item.name;
         let matched = 0;
-        let present = 0;
-        const baseline = {
-            value: item.value ?? null,
-            scope: item.scope || 'LOCAL',
-            status: item.status || 'active'
-        };
+        let total = 0;
         vaults.forEach((vault) => {
-            const entry = normalizedConfigsByVault.get(vault.vault_runtime_hash)?.get(item.key);
-            if (!entry) return;
-            present += 1;
-            if (entry.value === baseline.value && entry.scope === baseline.scope && entry.status === baseline.status) {
+            const entry = normalizedConfigsByVault.get(vault.vault_runtime_hash);
+            if (!(entry instanceof Map)) return;
+            total += 1;
+            if (entry.has(configKey)) {
                 matched += 1;
             }
         });
-        nextStatus[vaultItemSyncKey('VE', item.key)] = { matched, total: Math.max(present, 1) };
+        nextStatus[vaultItemSyncKey('VE', configKey)] = { matched: Math.max(matched, 1), total: Math.max(total, 1) };
     });
 
     state.vaultKeys.forEach((item) => {
         let matched = 0;
-        let present = 0;
-        const baseline = {
-            token: item.token || null,
-            ref: item.ref || null,
-            scope: item.scope || 'LOCAL',
-            status: item.status || 'active'
-        };
+        let total = 0;
         vaults.forEach((vault) => {
-            const entry = normalizedKeysByVault.get(vault.vault_runtime_hash)?.get(item.name);
-            if (!entry) return;
-            present += 1;
-            if (entry.token === baseline.token && entry.ref === baseline.ref && entry.scope === baseline.scope && entry.status === baseline.status) {
+            const entry = normalizedKeysByVault.get(vault.vault_runtime_hash);
+            if (!(entry instanceof Map)) return;
+            total += 1;
+            if (entry.has(item.name)) {
                 matched += 1;
             }
         });
-        nextStatus[vaultItemSyncKey('VK', item.name)] = { matched, total: Math.max(present, 1) };
+        nextStatus[vaultItemSyncKey('VK', item.name)] = { matched: Math.max(matched, 1), total: Math.max(total, 1) };
     });
 
     state.vaultItemSyncStatus = nextStatus;
@@ -2688,6 +2713,8 @@ return {
   scopeClass,
   renderSyncStatus,
   vaultSyncStatus,
+  vaultDistributionStatus,
+  vaultKeyClassStatus,
                 renderConfigRelations,
                 configRelationsByScope,
                 encodeURIComponent

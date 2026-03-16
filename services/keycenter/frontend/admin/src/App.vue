@@ -200,7 +200,12 @@
                                             <th>종류</th>
                                             <th>키명</th>
                                             <th>키값</th>
-                                            <th>{{ activeTab() === 'Host Vault' ? '범위' : '동기화' }}</th>
+                                            <th v-if="activeTab() === 'Host Vault'">범위</th>
+                                            <template v-else>
+                                                <th>동기화여부</th>
+                                                <th>키 분류</th>
+                                                <th>분포</th>
+                                            </template>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -217,20 +222,44 @@
                                             <td>{{ row.name }}</td>
                                             <td><span class="code">{{ vaultItemIdentifier(row) }}</span></td>
                                             <td v-if="activeTab() === 'Host Vault'"><span class="status-pill" :class="scopeClass(row.scope || (row.item_kind === 'VE' ? 'LOCAL' : 'TEMP'))">{{ row.scope || (row.item_kind === 'VE' ? 'LOCAL' : 'TEMP') }}</span></td>
-                                            <td v-else>
-                                                <span
-                                                    v-if="vaultSyncStatus(row.item_kind, row.name).loading"
-                                                    class="muted"
-                                                >확인중</span>
-                                                <span
-                                                    v-else
-                                                    class="status-pill"
-                                                    :class="vaultSyncStatus(row.item_kind, row.name).className"
-                                                >{{ vaultSyncStatus(row.item_kind, row.name).label }}</span>
-                                            </td>
+                                            <template v-else>
+                                                <td>
+                                                    <span
+                                                        v-if="vaultSyncStatus(row.item_kind, row.name).loading"
+                                                        class="muted"
+                                                    >확인중</span>
+                                                    <span
+                                                        v-else
+                                                        class="status-pill"
+                                                        :class="vaultSyncStatus(row.item_kind, row.name).className"
+                                                    >{{ vaultSyncStatus(row.item_kind, row.name).label }}</span>
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        v-if="vaultKeyClassStatus(row.item_kind, row.name).loading"
+                                                        class="muted"
+                                                    >확인중</span>
+                                                    <span
+                                                        v-else
+                                                        class="status-pill"
+                                                        :class="vaultKeyClassStatus(row.item_kind, row.name).className"
+                                                    >{{ vaultKeyClassStatus(row.item_kind, row.name).label }}</span>
+                                                </td>
+                                                <td>
+                                                    <span
+                                                        v-if="vaultDistributionStatus(row.item_kind, row.name).loading"
+                                                        class="muted"
+                                                    >확인중</span>
+                                                    <span
+                                                        v-else
+                                                        class="status-pill"
+                                                        :class="vaultDistributionStatus(row.item_kind, row.name).className"
+                                                    >{{ vaultDistributionStatus(row.item_kind, row.name).label }}</span>
+                                                </td>
+                                            </template>
                                         </tr>
                                         <tr v-if="!vaultVisibleRows().length">
-                                            <td colspan="4"><div class="empty">표시할 행이 없습니다.</div></td>
+                                            <td :colspan="activeTab() === 'Host Vault' ? 4 : 6"><div class="empty">표시할 행이 없습니다.</div></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -765,8 +794,9 @@ const {
   settingsRightPaneTitle,
   t,
   scopeClass,
-  renderSyncStatus,
   vaultSyncStatus,
+  vaultDistributionStatus,
+  vaultKeyClassStatus,
   renderConfigRelations,
   configRelationsByScope,
   encodeURIComponent
