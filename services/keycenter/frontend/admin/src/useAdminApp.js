@@ -132,6 +132,11 @@ function activeTab() {
     return state.activeTabByPage[state.activePage];
 }
 
+function onGlobalSearchInput(event) {
+    state.globalQuery = event?.target?.value || '';
+    render();
+}
+
 function routePath(page, tab) {
     if (page === 'vaults' && tab === '키 / 환경값') {
         const vaultHash = state.selectedVault?.vault_runtime_hash || state.routeSelectedVaultHash;
@@ -1710,42 +1715,85 @@ async function loadVaultItemSyncStatus() {
 
     const nextStatus = {};
     const vaults = state.vaults || [];
-    const total = vaults.length || 1;
-    const currentVaultHash = state.selectedVault.vault_runtime_hash;
+    const normalizedConfigsByVault = new Map();
+    const normalizedKeysByVault = new Map();
 
-    const configTasks = state.configVaultItems.map(async (item) => {
-        const currentValue = item.value;
-        let matched = currentValue === undefined ? 0 : 1;
-        await Promise.all(vaults.filter((vault) => vault.vault_runtime_hash !== currentVaultHash).map(async (vault) => {
-            try {
-                const detail = await request('/api/agents/' + encodeURIComponent(vault.vault_runtime_hash) + '/configs/' + encodeURIComponent(item.key));
-                if (detail && detail.value === currentValue) matched += 1;
-            } catch (_) {
-            }
-        }));
-        nextStatus[vaultItemSyncKey('VE', item.key)] = { matched, total };
-    });
+    await Promise.all(vaults.map(async (vault) => {
+        const vaultHash = vault.vault_runtime_hash;
 
-    const keyTasks = state.vaultKeys.map(async (item) => {
-        let currentValue = null;
         try {
-            const detail = await request('/api/vaults/' + encodeURIComponent(currentVaultHash) + '/keys/' + encodeURIComponent(item.name));
-            currentValue = detail && detail.value !== undefined ? detail.value : null;
+            const data = await request('/api/agents/' + encodeURIComponent(vaultHash) + '/configs');
+            const configs = new Map();
+            (data.configs || []).forEach((item) => {
+                configs.set(item.key, {
+                    exists: true,
+                    value: item.value ?? null,
+                    scope: item.scope || 'LOCAL',
+                    status: item.status || 'active'
+                });
+            });
+            normalizedConfigsByVault.set(vaultHash, configs);
         } catch (_) {
-            currentValue = null;
+            normalizedConfigsByVault.set(vaultHash, new Map());
         }
-        let matched = currentValue === null ? 0 : 1;
-        await Promise.all(vaults.filter((vault) => vault.vault_runtime_hash !== currentVaultHash).map(async (vault) => {
-            try {
-                const detail = await request('/api/vaults/' + encodeURIComponent(vault.vault_runtime_hash) + '/keys/' + encodeURIComponent(item.name));
-                if (detail && detail.value === currentValue) matched += 1;
-            } catch (_) {
+
+        try {
+            const data = await request('/api/vaults/' + encodeURIComponent(vaultHash) + '/keys');
+            const keys = new Map();
+            (data.secrets || []).forEach((item) => {
+                keys.set(item.name, {
+                    exists: true,
+                    token: item.token || null,
+                    ref: item.ref || null,
+                    scope: item.scope || 'LOCAL',
+                    status: item.status || 'active'
+                });
+            });
+            normalizedKeysByVault.set(vaultHash, keys);
+        } catch (_) {
+            normalizedKeysByVault.set(vaultHash, new Map());
+        }
+    }));
+
+    state.configVaultItems.forEach((item) => {
+        let matched = 0;
+        let present = 0;
+        const baseline = {
+            value: item.value ?? null,
+            scope: item.scope || 'LOCAL',
+            status: item.status || 'active'
+        };
+        vaults.forEach((vault) => {
+            const entry = normalizedConfigsByVault.get(vault.vault_runtime_hash)?.get(item.key);
+            if (!entry) return;
+            present += 1;
+            if (entry.value === baseline.value && entry.scope === baseline.scope && entry.status === baseline.status) {
+                matched += 1;
             }
-        }));
-        nextStatus[vaultItemSyncKey('VK', item.name)] = { matched, total };
+        });
+        nextStatus[vaultItemSyncKey('VE', item.key)] = { matched, total: Math.max(present, 1) };
     });
 
-    await Promise.all([...configTasks, ...keyTasks]);
+    state.vaultKeys.forEach((item) => {
+        let matched = 0;
+        let present = 0;
+        const baseline = {
+            token: item.token || null,
+            ref: item.ref || null,
+            scope: item.scope || 'LOCAL',
+            status: item.status || 'active'
+        };
+        vaults.forEach((vault) => {
+            const entry = normalizedKeysByVault.get(vault.vault_runtime_hash)?.get(item.name);
+            if (!entry) return;
+            present += 1;
+            if (entry.token === baseline.token && entry.ref === baseline.ref && entry.scope === baseline.scope && entry.status === baseline.status) {
+                matched += 1;
+            }
+        });
+        nextStatus[vaultItemSyncKey('VK', item.name)] = { matched, total: Math.max(present, 1) };
+    });
+
     state.vaultItemSyncStatus = nextStatus;
 }
 
@@ -2339,7 +2387,7 @@ async function handleAction(action, dataset) {
                 body: JSON.stringify({})
             });
             await loadSystemUpdate();
-            setMessage('ok', 'Update started.');
+            setMessage('ok', t('update_started'));
             return syncPageData();
         }
         if (action === 'new-key') {
