@@ -336,6 +336,15 @@ type UIConfig struct {
 	DefaultEmail   string    `gorm:"column:default_email;not null;default:''" json:"default_email"`
 	TargetVersion  string    `gorm:"column:target_version;not null;default:''" json:"target_version"`
 	ReleaseChannel string    `gorm:"column:release_channel;not null;default:stable" json:"release_channel"`
+	InstallProfile string    `gorm:"column:install_profile;not null;default:''" json:"install_profile"`
+	InstallRoot    string    `gorm:"column:install_root;not null;default:''" json:"install_root"`
+	InstallScript  string    `gorm:"column:install_script;not null;default:''" json:"install_script"`
+	InstallWorkdir string    `gorm:"column:install_workdir;not null;default:''" json:"install_workdir"`
+	KeycenterURL   string    `gorm:"column:keycenter_url;not null;default:''" json:"keycenter_url"`
+	LocalvaultURL  string    `gorm:"column:localvault_url;not null;default:''" json:"localvault_url"`
+	TLSCertPath    string    `gorm:"column:tls_cert_path;not null;default:''" json:"tls_cert_path"`
+	TLSKeyPath     string    `gorm:"column:tls_key_path;not null;default:''" json:"tls_key_path"`
+	TLSCAPath      string    `gorm:"column:tls_ca_path;not null;default:''" json:"tls_ca_path"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 

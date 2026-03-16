@@ -12,7 +12,7 @@ func (s *Server) handleOperatorShellEntry(w http.ResponseWriter, r *http.Request
 	}
 	if complete, session := s.installGateState(); !complete {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		renderInstallGate(w, session)
+		renderInstallGate(s, w, session)
 		return
 	}
 	s.handleDashboard(w, r)
