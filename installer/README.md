@@ -96,6 +96,13 @@ Purpose:
 - expose both services by IP
 - generate bootstrap SSH material during first install
 - export bootstrap public and encrypted artifacts to the host
+- stage boundary assets needed for a host companion install
+
+Important contract:
+
+- `proxmox-lxc-allinone` is the LXC runtime/control-plane profile
+- proxy runtime is not supported inside the all-in-one LXC
+- if you need the Proxmox host boundary, install `proxmox-host-cli` separately on the host
 
 Validated flow:
 
@@ -177,7 +184,8 @@ Important behavior:
 - when using the example manifest, set `VEILKEY_INSTALLER_GITLAB_API_BASE=https://gitlab.60.internal.kr/api/v4` so placeholder package URLs normalize to the active GitLab API
 - `post-install-health` validates the installed scaffold
 - wrapper commands add target-specific runtime checks on top
-- `proxmox-lxc-allinone` stages proxy assets by default but does not auto-enable proxy units unless `VEILKEY_ENABLE_PROXY=1` is set explicitly
+- `proxmox-lxc-allinone` stages boundary assets for host export and follow-up setup
+- `proxmox-lxc-allinone` does not support `VEILKEY_ENABLE_PROXY=1` inside the LXC; use `proxmox-host-cli` on the Proxmox host for companion boundary/proxy runtime
 
 ## Bootstrap SSH Export
 
@@ -239,11 +247,13 @@ export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
 Create a fresh Debian LXC, copy the installer tree and bundle into the container, then run:
 
 ```bash
+export VEILKEY_ALLINONE_BUNDLE_ROOT=/root/veilkey-allinone-bundle
+
 echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
 chmod 600 /etc/veilkey/keycenter.password
 echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
-./scripts/proxmox-lxc-allinone-install.sh --activate / /root/all-bundle
+./scripts/proxmox-lxc-allinone-install.sh --activate / "${VEILKEY_ALLINONE_BUNDLE_ROOT}"
 
 ./scripts/proxmox-lxc-allinone-health.sh /
 ```
@@ -251,13 +261,34 @@ chmod 600 /etc/veilkey/localvault.password
 For a second LocalVault-only runtime LXC that registers into the all-in-one KeyCenter:
 
 ```bash
+export VEILKEY_RUNTIME_BUNDLE_ROOT=/root/veilkey-runtime-bundle
+
 echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
 VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181' \
-./scripts/proxmox-lxc-runtime-install.sh --activate / /root/runtime-bundle
+./scripts/proxmox-lxc-runtime-install.sh --activate / "${VEILKEY_RUNTIME_BUNDLE_ROOT}"
 
 ./scripts/proxmox-lxc-runtime-health.sh /
 ```
+
+If you also want the Proxmox host companion boundary on the same operator path, bundle `proxmox-host-cli` and run the stack wrapper:
+
+```bash
+./install.sh bundle proxmox-host-cli /tmp/veilkey-host-cli-bundle
+export VEILKEY_ALLINONE_BUNDLE_ROOT=/root/veilkey-allinone-bundle
+export VEILKEY_HOST_CLI_BUNDLE_ROOT=/root/veilkey-host-cli-bundle
+
+echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
+chmod 600 /etc/veilkey/keycenter.password
+echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
+./scripts/proxmox-allinone-stack-install.sh / / "${VEILKEY_ALLINONE_BUNDLE_ROOT}" "${VEILKEY_HOST_CLI_BUNDLE_ROOT}"
+```
+
+This keeps the runtime split explicit:
+
+- LXC runtime/control plane: `proxmox-lxc-allinone`
+- Proxmox host companion boundary: `proxmox-host-cli`
 
 ## Status
 

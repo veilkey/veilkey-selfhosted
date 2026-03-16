@@ -705,6 +705,11 @@ render_profile_envs() {
   enable_keycenter="${VEILKEY_ENABLE_KEYCENTER:-${default_enable_keycenter}}"
   enable_localvault="${VEILKEY_ENABLE_LOCALVAULT:-${default_enable_localvault}}"
   enable_proxy="${VEILKEY_ENABLE_PROXY:-${default_enable_proxy}}"
+  if [[ "${profile}" = "proxmox-lxc-allinone" && "${enable_proxy}" = "1" ]]; then
+    echo "Error: proxmox-lxc-allinone does not support enabling proxy runtime inside the LXC." >&2
+    echo "Install the host companion boundary separately with proxmox-host-cli." >&2
+    exit 1
+  fi
   default_keycenter_addr=":10180"
   default_localvault_addr=":10180"
   default_keycenter_url="http://127.0.0.1:10180"

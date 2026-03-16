@@ -1,0 +1,15 @@
+status=pending
+date=2026-03-16
+object=proxmox-allinone-proxy-cli-runtime
+repo=/opt/veilkey-selfhosted-repo
+scope=installer proxmox-lxc-allinone profile and proxmox host companion boundary contract
+target=proxmox-lxc-allinone with VEILKEY_ENABLE_PROXY=1
+expected=all-in-one proxy runtime either works inside the LXC or the installer/UI explicitly requires a separate host companion boundary install
+observed=operator report from real CT 110 install says keycenter/localvault/bootstrap completed and proxy assets were staged, but runtime failed because /usr/local/bin/veilkey-proxy-launch execs /usr/local/bin/veilkey-cli and the all-in-one install did not provide veilkey-cli
+evidence=services/proxy/deploy/lxc/veilkey-proxy-launch directly execs /usr/local/bin/veilkey-cli; installer/components.toml declares proxmox-lxc-allinone includes proxy and stages proxy assets, while proxmox-host-cli already exists as a separate host boundary profile
+impact=proxy-enabled all-in-one installs produce a broken runtime story and leave operator UX unclear about whether boundary CLI belongs inside the LXC, on the Proxmox host, or both
+pending_items=decide runtime contract for all-in-one proxy, either include veilkey-cli in the all-in-one proxy path or disable/forbid in-container proxy runtime and require host companion install; make wizard and README distinguish LXC runtime from host companion boundary; consider adding a top-level proxmox all-in-one stack wrapper that installs both LXC runtime and host companion CLI when requested
+next_owner=installer plus boundary(cli/proxy) owners
+blocker=profile semantics and runtime dependency ownership are inconsistent
+target_repo=veilkey-selfhosted-repo
+next_action=open follow-up work to align installer manifest, proxmox wrappers, and wizard copy with the chosen contract

@@ -24,6 +24,9 @@ This repository contains only the `self-hosted` domain.
 
 - `installer/`
   - packaging, install profiles, Proxmox wrappers, health checks
+  - proxmox-lxc-allinone: LXC runtime (KeyCenter + LocalVault)
+  - proxmox-host-cli: Proxmox host companion boundary
+  - proxmox-allinone-stack-install.sh: combines both in one operator step
 - `services/`
   - runtime services
   - `keycenter/`

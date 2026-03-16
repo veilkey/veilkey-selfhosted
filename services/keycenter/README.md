@@ -100,6 +100,11 @@ Even though each LocalVault holds its own secrets, KeyCenter decides "who is who
 - `proxy`
   - outbound enforcement for self-hosted workloads
 
+## Install Architecture
+
+- [`docs/web-install-architecture.md`](./docs/web-install-architecture.md)
+  - target architecture for web-first install and centralized runtime management
+
 ## Architecture
 
 ```

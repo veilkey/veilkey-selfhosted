@@ -26,7 +26,7 @@ It assembles component versions, stages artifacts, installs runtime files, rende
 - `proxmox-lxc-runtime`
   - LocalVault runtime in a Proxmox LXC
 - `proxmox-lxc-allinone`
-  - KeyCenter + LocalVault + proxy in one Proxmox LXC
+  - KeyCenter + LocalVault in one Proxmox LXC, with staged boundary assets for host companion setup
 
 ## Install Model
 
@@ -55,6 +55,7 @@ Typical install destinations:
 Active operator wrappers:
 
 - `scripts/proxmox-host-install.sh`
+- `scripts/proxmox-allinone-stack-install.sh`
 - `scripts/proxmox-host-cli-install.sh`
 - `scripts/proxmox-host-localvault/install.sh`
 - `scripts/proxmox-host-localvault/health.sh`

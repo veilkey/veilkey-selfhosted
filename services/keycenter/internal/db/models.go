@@ -336,10 +336,44 @@ type UIConfig struct {
 	DefaultEmail   string    `gorm:"column:default_email;not null;default:''" json:"default_email"`
 	TargetVersion  string    `gorm:"column:target_version;not null;default:''" json:"target_version"`
 	ReleaseChannel string    `gorm:"column:release_channel;not null;default:stable" json:"release_channel"`
+	TargetType     string    `gorm:"column:target_type;not null;default:''" json:"target_type"`
+	TargetMode     string    `gorm:"column:target_mode;not null;default:''" json:"target_mode"`
+	TargetNode     string    `gorm:"column:target_node;not null;default:''" json:"target_node"`
+	TargetVMID     string    `gorm:"column:target_vmid;not null;default:''" json:"target_vmid"`
+	HostCompanion  bool      `gorm:"column:host_companion;not null;default:false" json:"host_companion"`
+	PublicBaseURL  string    `gorm:"column:public_base_url;not null;default:''" json:"public_base_url"`
+	InstallProfile string    `gorm:"column:install_profile;not null;default:''" json:"install_profile"`
+	InstallRoot    string    `gorm:"column:install_root;not null;default:''" json:"install_root"`
+	InstallScript  string    `gorm:"column:install_script;not null;default:''" json:"install_script"`
+	InstallWorkdir string    `gorm:"column:install_workdir;not null;default:''" json:"install_workdir"`
+	KeycenterURL   string    `gorm:"column:keycenter_url;not null;default:''" json:"keycenter_url"`
+	LocalvaultURL  string    `gorm:"column:localvault_url;not null;default:''" json:"localvault_url"`
+	TLSCertPath    string    `gorm:"column:tls_cert_path;not null;default:''" json:"tls_cert_path"`
+	TLSKeyPath     string    `gorm:"column:tls_key_path;not null;default:''" json:"tls_key_path"`
+	TLSCAPath      string    `gorm:"column:tls_ca_path;not null;default:''" json:"tls_ca_path"`
 	UpdatedAt      time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 
 func (UIConfig) TableName() string { return "ui_configs" }
+
+type InstallRun struct {
+	RunID          string     `gorm:"primaryKey;column:run_id" json:"run_id"`
+	RunKind        string     `gorm:"column:run_kind;not null;index" json:"run_kind"`
+	Status         string     `gorm:"column:status;not null;index" json:"status"`
+	InstallProfile string     `gorm:"column:install_profile;not null;default:''" json:"install_profile"`
+	InstallRoot    string     `gorm:"column:install_root;not null;default:''" json:"install_root"`
+	ScriptPath     string     `gorm:"column:script_path;not null;default:''" json:"script_path"`
+	Workdir        string     `gorm:"column:workdir;not null;default:''" json:"workdir"`
+	CommandJSON    string     `gorm:"column:command_json;type:text;not null;default:'[]'" json:"command_json"`
+	ValidationJSON string     `gorm:"column:validation_json;type:text;not null;default:'{}'" json:"validation_json"`
+	OutputTail     string     `gorm:"column:output_tail;type:text;not null;default:''" json:"output_tail"`
+	LastError      string     `gorm:"column:last_error;type:text;not null;default:''" json:"last_error"`
+	StartedAt      time.Time  `gorm:"column:started_at;not null;index" json:"started_at"`
+	FinishedAt     *time.Time `gorm:"column:finished_at" json:"finished_at"`
+	CreatedAt      time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+}
+
+func (InstallRun) TableName() string { return "install_runs" }
 
 // Config — configs 테이블
 type Config struct {

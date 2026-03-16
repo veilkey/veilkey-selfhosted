@@ -69,8 +69,26 @@ func TestRootServesInstallGateWhenInstallIncomplete(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Finish KeyCenter install before operator access") {
+	if !strings.Contains(body, "VeilKey 첫 설치 시작") {
 		t.Fatalf("expected install gate HTML, got %q", body)
+	}
+	if !strings.Contains(body, "Guided First Install") {
+		t.Fatalf("expected first-install wizard copy, got %q", body)
+	}
+	if !strings.Contains(body, "/api/install/runtime-config") {
+		t.Fatalf("expected runtime config wiring in install gate")
+	}
+	if !strings.Contains(body, "빠른 설치 저장") {
+		t.Fatalf("expected quick install actions in install gate")
+	}
+	if !strings.Contains(body, "새 all-in-one LXC (권장)") {
+		t.Fatalf("expected all-in-one quick target in install gate")
+	}
+	if !strings.Contains(body, "LXC VMID") {
+		t.Fatalf("expected lxc target metadata inputs in install gate")
+	}
+	if !strings.Contains(body, "proxmox-host-cli") {
+		t.Fatalf("expected host companion guidance in install gate")
 	}
 	if strings.Contains(body, "VeilKey KeyCenter") {
 		t.Fatalf("expected install gate instead of dashboard")
@@ -204,7 +222,7 @@ func TestAdminMockupPreviewRoutesServeHTML(t *testing.T) {
 	_, handler := setupTestServer(t)
 
 	tests := []struct {
-		path   string
+		path string
 	}{
 		{path: "/preview/mockups/dark"},
 		{path: "/preview/mockups/amber"},

@@ -52,6 +52,8 @@ type Server struct {
 	bulkApplyDir  string
 	updateMu      sync.RWMutex
 	updateState   systemUpdateState
+	installMu     sync.RWMutex
+	installState  installApplyState
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
@@ -373,68 +375,4 @@ func logMiddleware(next http.Handler) http.Handler {
 		log.Printf("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
-}
-
-const lockedLandingHTML = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"><title>VeilKey</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,system-ui,sans-serif;background:#0f172a;color:#e2e8f0;min-height:100vh;display:flex;align-items:center;justify-content:center}
-.card{background:#1e293b;border-radius:12px;padding:48px;max-width:600px;width:100%%;box-shadow:0 4px 24px rgba(0,0,0,.3)}
-h1{font-size:28px;margin-bottom:8px;color:#38bdf8}
-.sub{color:#94a3b8;margin-bottom:32px}
-.links a{display:inline-block;margin-right:16px;color:#38bdf8;text-decoration:none;font-size:14px}
-.links a:hover{text-decoration:underline}
-.badge.locked{background:#7c2d12;color:#fdba74}
-</style></head><body>
-<div class="card">
-<h1>VeilKey<span class="badge locked">locked</span></h1>
-<p class="sub">KeyCenter is locked. Unlock first to enter the operator console.</p>
-<div class="links">
-<a href="/health">Health</a>
-<a href="/api/status">Status</a>
-</div>
-</div></body></html>` + "\n"
-
-func renderInstallGate(w http.ResponseWriter, session *db.InstallSession) {
-	lastStage := "pending"
-	flow := "wizard"
-	if session != nil {
-		if session.LastStage != "" {
-			lastStage = session.LastStage
-		}
-		if session.Flow != "" {
-			flow = session.Flow
-		}
-	}
-	html := fmt.Sprintf(`<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>VeilKey Install Gate</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:-apple-system,system-ui,sans-serif;background:#111827;color:#f9fafb;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{max-width:720px;width:100%%;background:#1f2937;border:1px solid #374151;border-radius:20px;padding:32px;box-shadow:0 18px 50px rgba(0,0,0,.32)}
-.eyebrow{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af}
-h1{font-size:32px;margin-top:8px;margin-bottom:10px}
-p{color:#cbd5e1;line-height:1.6}
-.row{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
-.chip{display:inline-block;padding:7px 10px;border-radius:999px;background:#111827;border:1px solid #4b5563;color:#e5e7eb;font-size:13px}
-.links{margin-top:22px;display:flex;flex-wrap:wrap;gap:12px}
-.links a{color:#93c5fd;text-decoration:none}
-</style></head><body>
-<div class="card">
-<div class="eyebrow">Install Gate</div>
-<h1>Finish KeyCenter install before operator access</h1>
-<p>This instance is unlocked but the canonical install flow is not complete yet. Operator console routes stay gated until the install session finishes through the web-first bootstrap path.</p>
-<div class="row">
-<span class="chip">flow: %s</span>
-<span class="chip">last_stage: %s</span>
-</div>
-<div class="links">
-<a href="/health">Health</a>
-<a href="/ready">Ready</a>
-<a href="/approve/install/bootstrap">Bootstrap Input</a>
-<a href="/approve/install/custody">Custody Input</a>
-</div>
-</div></body></html>`, flow, lastStage)
-	_, _ = w.Write([]byte(html))
 }

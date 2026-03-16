@@ -12,7 +12,8 @@ usage() {
 Usage: ./scripts/proxmox-lxc-allinone-install.sh [--activate] [--health] [root] [bundle_root]
 
 Install the Proxmox LXC all-in-one profile:
-  proxmox-lxc-allinone = keycenter + localvault + proxy
+  proxmox-lxc-allinone = keycenter + localvault + staged boundary assets
+  proxy runtime stays on the Proxmox host via proxmox-host-cli
 EOF
 }
 
@@ -79,6 +80,11 @@ set_default_env() {
   export VEILKEY_KEYCENTER_URL="${VEILKEY_KEYCENTER_URL:-http://127.0.0.1:10181}"
   export VEILKEY_LOCALVAULT_DB_PATH="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
   export VEILKEY_KEYCENTER_DB_PATH="${VEILKEY_KEYCENTER_DB_PATH:-/opt/veilkey/keycenter/data/veilkey.db}"
+  if [[ "${VEILKEY_ENABLE_PROXY:-0}" = "1" ]]; then
+    echo "Error: proxmox-lxc-allinone cannot enable proxy runtime inside the LXC." >&2
+    echo "Use ./scripts/proxmox-host-cli-install.sh on the Proxmox host for the companion boundary." >&2
+    exit 1
+  fi
 }
 
 init_keycenter_if_needed() {
