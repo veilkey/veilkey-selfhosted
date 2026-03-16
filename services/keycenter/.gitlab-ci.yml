@@ -97,6 +97,8 @@ govulncheck:
 build:
   stage: build
   script:
+    - bash scripts/build-admin-ui.sh
+    - test -f internal/api/install_ui_dist/install.html || { echo "FATAL: install_ui_dist/install.html missing after build"; exit 1; }
     - CGO_ENABLED=1 go build -o veilkey-keycenter ./cmd/
   artifacts:
     paths:
