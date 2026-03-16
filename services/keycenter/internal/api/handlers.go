@@ -41,8 +41,10 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	} {
 		mux.HandleFunc("GET "+path, s.handleOperatorShellEntry)
 	}
+	mux.HandleFunc("GET /vaults", s.handleOperatorShellEntry)
 	mux.HandleFunc("GET /vaults/{vault}", s.handleLegacyVaultRoute)
 	mux.HandleFunc("GET /vaults/local/{vault}", s.handleOperatorShellEntry)
+	mux.HandleFunc("GET /audit/{vault}", s.handleOperatorShellEntry)
 
 	mux.HandleFunc("GET /api/status", s.requireUnlocked(s.handleStatus))
 	mux.HandleFunc("GET /api/configs", s.requireUnlocked(s.handleListConfigs))
