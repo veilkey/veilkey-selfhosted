@@ -578,3 +578,61 @@
     margin-top: 8px;
   }
 }
+
+/* Locked page */
+
+.locked-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
+}
+
+.locked-card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 48px;
+  max-width: 500px;
+  width: 100%;
+  text-align: center;
+}
+
+.locked-card h1 {
+  font-size: 28px;
+  margin-bottom: 8px;
+  color: #38bdf8;
+}
+
+.locked-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  margin-left: 8px;
+  background: #7c2d12;
+  color: #fdba74;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.locked-message {
+  color: #94a3b8;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.locked-links {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.locked-links a {
+  color: #38bdf8;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.locked-links a:hover {
+  text-decoration: underline;
+}

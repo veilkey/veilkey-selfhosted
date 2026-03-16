@@ -66,7 +66,8 @@ func setupInstallIncompleteServer(t *testing.T) (*Server, http.Handler) {
 }
 
 // ---------------------------------------------------------------------------
-// TestRootRoute_Locked: locked server → GET / returns lockedLandingHTML.
+// TestRootRoute_Locked: locked server → GET / serves Vue wizard (locked page
+// is now handled client-side via /#/locked).
 // ---------------------------------------------------------------------------
 func TestRootRoute_Locked(t *testing.T) {
 	_, handler := setupLockedServer(t)
@@ -81,19 +82,12 @@ func TestRootRoute_Locked(t *testing.T) {
 
 	body := w.Body.String()
 
-	// lockedLandingHTML contains this unique phrase.
-	if !strings.Contains(body, "Unlock first to enter the operator console.") {
-		t.Fatalf("expected locked landing HTML with unlock prompt, got %q", body)
+	// Locked state now serves the Vue install wizard shell.
+	if !strings.Contains(body, `id="install-app"`) {
+		t.Fatalf("locked state should serve Vue wizard with id=\"install-app\", got %q", body)
 	}
-	// It also contains the locked badge.
-	if !strings.Contains(body, `class="badge locked"`) {
-		t.Fatalf("expected locked badge in locked landing HTML")
-	}
-	// Must NOT contain the install wizard or admin app mount points.
-	if strings.Contains(body, `id="install-app"`) {
-		t.Fatalf("locked state must not serve install wizard")
-	}
-	if strings.Contains(body, `id="app"`) {
+	// Must NOT contain the admin dashboard.
+	if strings.Contains(body, `<div id="app"></div>`) {
 		t.Fatalf("locked state must not serve admin dashboard")
 	}
 }
