@@ -81,8 +81,11 @@ func TestRootServesInstallGateWhenInstallIncomplete(t *testing.T) {
 	if !strings.Contains(body, "빠른 설치 저장") {
 		t.Fatalf("expected quick install actions in install gate")
 	}
-	if !strings.Contains(body, "새 all-in-one LXC (권장)") {
-		t.Fatalf("expected all-in-one quick target in install gate")
+	if !strings.Contains(body, "일반 Linux 서버") {
+		t.Fatalf("expected linux host path selection in install gate")
+	}
+	if !strings.Contains(body, "Proxmox LXC 올인원") {
+		t.Fatalf("expected proxmox lxc path selection in install gate")
 	}
 	if !strings.Contains(body, "LXC VMID") {
 		t.Fatalf("expected lxc target metadata inputs in install gate")
