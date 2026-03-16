@@ -411,6 +411,31 @@ func runCommand(ctx context.Context, output *strings.Builder, name string, args 
 	return err
 }
 
+func appendHostCompanionFailureGuidance(output *strings.Builder, workdir, bundleRoot string, err error) error {
+	guidance := "LXC install succeeded but host companion failed — run proxmox-host-cli-install.sh manually"
+	if output != nil {
+		output.WriteString(guidance)
+		if bundleRoot != "" {
+			output.WriteString(" with bundle ")
+			output.WriteString(bundleRoot)
+		}
+		output.WriteString("\n")
+		output.WriteString("Suggested command: ")
+		output.WriteString(filepath.Join(workdir, "scripts", "proxmox-host-cli-install.sh"))
+		output.WriteString(" ")
+		output.WriteString(proxmoxHostRoot())
+		if bundleRoot != "" {
+			output.WriteString(" ")
+			output.WriteString(bundleRoot)
+		}
+		output.WriteString("\n")
+	}
+	if err == nil {
+		return errors.New(guidance)
+	}
+	return fmt.Errorf("%s: %w", guidance, err)
+}
+
 func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation installValidationResult, runID string) (string, error) {
 	vmid := strings.TrimSpace(cfg.TargetVMID)
 	if vmid == "" {
@@ -523,12 +548,12 @@ func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation inst
 		logOutput.WriteString("$ " + filepath.Join(workdir, "install.sh") + " bundle proxmox-host-cli " + hostBundleRoot + "\n")
 		logOutput.Write(hostBundleOut)
 		if bundleErr != nil {
-			return logOutput.String(), bundleErr
+			return logOutput.String(), appendHostCompanionFailureGuidance(&logOutput, workdir, hostBundleRoot, bundleErr)
 		}
 		hostCompanionScript := filepath.Join(workdir, "scripts", "proxmox-host-cli-install.sh")
 		hostArgs := []string{hostCompanionScript, proxmoxHostRoot(), hostBundleRoot}
 		if err := runCommand(ctx, &logOutput, hostArgs[0], hostArgs[1:]...); err != nil {
-			return logOutput.String(), err
+			return logOutput.String(), appendHostCompanionFailureGuidance(&logOutput, workdir, hostBundleRoot, err)
 		}
 	}
 	return logOutput.String(), nil

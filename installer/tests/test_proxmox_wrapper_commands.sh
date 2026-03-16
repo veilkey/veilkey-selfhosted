@@ -3,23 +3,32 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-tmp_manifest="$(mktemp)"
-tmp_host_bundle="$(mktemp -d)"
-tmp_host_root="$(mktemp -d)"
-tmp_host_localvault_bundle="$(mktemp -d)"
-tmp_host_localvault_root="$(mktemp -d)"
-tmp_host_localvault_bootstrap_bundle="$(mktemp -d)"
-tmp_host_localvault_bootstrap_root="$(mktemp -d)"
-tmp_runtime_bundle="$(mktemp -d)"
-tmp_runtime_root="$(mktemp -d)"
-tmp_lxc_bundle="$(mktemp -d)"
-tmp_lxc_root="$(mktemp -d)"
-tmp_stack_lxc_bundle="$(mktemp -d)"
-tmp_stack_lxc_root="$(mktemp -d)"
-tmp_stack_host_bundle="$(mktemp -d)"
-tmp_stack_host_root="$(mktemp -d)"
-tmp_proxy_err="$(mktemp)"
-trap 'rm -f "$tmp_manifest" "$tmp_proxy_err"; rm -rf "$tmp_host_bundle" "$tmp_host_root" "$tmp_host_localvault_bundle" "$tmp_host_localvault_root" "$tmp_host_localvault_bootstrap_bundle" "$tmp_host_localvault_bootstrap_root" "$tmp_runtime_bundle" "$tmp_runtime_root" "$tmp_lxc_bundle" "$tmp_lxc_root" "$tmp_stack_lxc_bundle" "$tmp_stack_lxc_root" "$tmp_stack_host_bundle" "$tmp_stack_host_root"' EXIT
+tmp_root="$(mktemp -d)"
+tmp_manifest="$tmp_root/manifest.toml"
+tmp_proxy_err="$tmp_root/proxy.err"
+tmp_host_bundle="$tmp_root/host.bundle"
+tmp_host_root="$tmp_root/host.root"
+tmp_host_localvault_bundle="$tmp_root/host-localvault.bundle"
+tmp_host_localvault_root="$tmp_root/host-localvault.root"
+tmp_host_localvault_bootstrap_bundle="$tmp_root/host-localvault-bootstrap.bundle"
+tmp_host_localvault_bootstrap_root="$tmp_root/host-localvault-bootstrap.root"
+tmp_runtime_bundle="$tmp_root/runtime.bundle"
+tmp_runtime_root="$tmp_root/runtime.root"
+tmp_lxc_bundle="$tmp_root/lxc.bundle"
+tmp_lxc_root="$tmp_root/lxc.root"
+tmp_stack_lxc_bundle="$tmp_root/stack-lxc.bundle"
+tmp_stack_lxc_root="$tmp_root/stack-lxc.root"
+tmp_stack_host_bundle="$tmp_root/stack-host.bundle"
+tmp_stack_host_root="$tmp_root/stack-host.root"
+mkdir -p \
+  "$tmp_host_bundle" "$tmp_host_root" \
+  "$tmp_host_localvault_bundle" "$tmp_host_localvault_root" \
+  "$tmp_host_localvault_bootstrap_bundle" "$tmp_host_localvault_bootstrap_root" \
+  "$tmp_runtime_bundle" "$tmp_runtime_root" \
+  "$tmp_lxc_bundle" "$tmp_lxc_root" \
+  "$tmp_stack_lxc_bundle" "$tmp_stack_lxc_root" \
+  "$tmp_stack_host_bundle" "$tmp_stack_host_root"
+trap 'rm -rf "$tmp_root"' EXIT
 
 export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
