@@ -419,6 +419,13 @@ func renderInstallGate(s *Server, w http.ResponseWriter, session *db.InstallSess
 	}
 	if cfg, err := s.db.GetOrCreateUIConfig(); err == nil && cfg != nil {
 		runtimePayload = installRuntimeConfigFromUI(cfg)
+		if _, err := os.Stat("/usr/local/bin/veilkey-keycenter"); err == nil {
+			if _, err := os.Stat("/usr/local/bin/veilkey-localvault"); err == nil {
+				if _, err := os.Stat("/usr/local/bin/veilroot-shell"); err != nil {
+					runtimePayload.RuntimeWarning = "partial runtime detected: keycenter/localvault binaries exist on this host, but all-in-one boundary assets are incomplete"
+				}
+			}
+		}
 	}
 	sessionJSON, _ := json.Marshal(sessionPayload)
 	runtimeJSON, _ := json.Marshal(runtimePayload)
@@ -496,9 +503,25 @@ summary::-webkit-details-marker{display:none}
 <small id="target-mode-help">현재 실제 설치 검증이 끝난 경로는 all-in-one LXC입니다.</small>
 </div>
 <div class="field">
+<label for="lxc_mode" id="lxc-mode-label">LXC 방식</label>
+<select id="lxc_mode">
+<option value="new">새 LXC 생성</option>
+<option value="existing">기존 LXC 사용</option>
+</select>
+<small id="lxc-mode-help">all-in-one LXC를 고르면 Proxmox 대상 정보를 같이 입력해야 합니다.</small>
+</div>
+<div class="field">
+<label for="target_node" id="target-node-label">Proxmox node</label>
+<input id="target_node" placeholder="ranode-3960x">
+</div>
+<div class="field">
+<label for="target_vmid" id="target-vmid-label">LXC VMID</label>
+<input id="target_vmid" placeholder="105">
+</div>
+<div class="field">
 <label for="public_host" id="public-host-label">접속 주소 또는 도메인</label>
 <input id="public_host" placeholder="wizard.example.internal">
-<small id="public-host-help">나중에 사용자가 접속할 KeyCenter 주소입니다. 비워두면 현재 호스트를 기준으로 추정합니다.</small>
+<small id="public-host-help">설치 후 사용자가 접속할 예상 공개 주소 preview입니다. wizard 자기 주소를 자동 저장하지 않습니다.</small>
 </div>
 <div class="field">
 <label for="tls_mode" id="tls-mode-label">TLS 방식</label>
@@ -511,7 +534,7 @@ summary::-webkit-details-marker{display:none}
 <div class="field full">
 <label for="install_root" id="install-root-label">설치 대상 루트</label>
 <input id="install_root" placeholder="/">
-<small id="install-root-help">일반 리눅스 서버면 /, chroot나 별도 rootfs면 해당 경로를 입력합니다.</small>
+<small id="install-root-help">일반 host일 때만 사용합니다. all-in-one LXC는 내부적으로 / 를 사용하며 여기선 직접 입력하지 않습니다.</small>
 </div>
 <div class="field full">
 <label for="localvault_url" id="localvault-label">기존 LocalVault URL (선택)</label>
@@ -537,6 +560,10 @@ summary::-webkit-details-marker{display:none}
 <button class="btn btn-soft" id="reload-state">상태 새로고침</button>
 </div>
 <div class="note" id="note-text">기본값은 all-in-one LXC 기준입니다. 일반 host 경로는 검증 후 적용하는 편이 안전합니다.</div>
+<div class="summary" id="runtime-warning-box" style="display:none">
+<strong id="runtime-warning-title">현재 호스트 경고</strong>
+<ul id="runtime-warning-list"></ul>
+</div>
 <div class="status-box"><pre id="wizard-status">Loading install wizard state…</pre></div>
 <div class="links">
 <a href="/health">Health</a>
@@ -641,12 +668,16 @@ const copy = {
     quickTitle: '빠른 설치 정보',
     targetModeLabel: '설치 대상',
     targetModeHelp: '현재 실제 설치 검증이 끝난 경로는 all-in-one LXC입니다.',
+    lxcModeLabel: 'LXC 방식',
+    lxcModeHelp: 'all-in-one LXC를 고르면 Proxmox 대상 정보를 같이 입력해야 합니다.',
+    targetNodeLabel: 'Proxmox node',
+    targetVMIDLabel: 'LXC VMID',
     publicHostLabel: '접속 주소 또는 도메인',
-    publicHostHelp: '나중에 사용자가 접속할 KeyCenter 주소입니다. 비워두면 현재 호스트를 기준으로 추정합니다.',
+    publicHostHelp: '설치 후 사용자가 접속할 예상 공개 주소 preview입니다. wizard 자기 주소를 자동 저장하지 않습니다.',
     tlsModeLabel: 'TLS 방식',
     tlsModeHelp: '빠른 검증은 HTTP로 시작하고, 운영 전 TLS를 붙일 수 있습니다.',
     installRootLabel: '설치 대상 루트',
-    installRootHelp: '일반 리눅스 서버면 /, chroot나 별도 rootfs면 해당 경로를 입력합니다.',
+    installRootHelp: '일반 host일 때만 사용합니다. all-in-one LXC는 내부적으로 / 를 사용하며 여기선 직접 입력하지 않습니다.',
     localvaultLabel: '기존 LocalVault URL (선택)',
     localvaultHelp: '올인원 설치가 아니고 기존 LocalVault를 연결할 때만 입력합니다.',
     summaryTitle: '자동으로 결정되는 내부 설정',
@@ -687,7 +718,8 @@ const copy = {
     validateStarted: '설치 검증을 실행했습니다.',
     validateFail: '설치 검증 실패: ',
     runsTitle: '최근 검증/설치 기록',
-    noRuns: '아직 기록이 없습니다.'
+    noRuns: '아직 기록이 없습니다.',
+    runtimeWarningTitle: '현재 호스트 경고'
   },
   en: {
     title: 'Start the first VeilKey install',
@@ -695,12 +727,16 @@ const copy = {
     quickTitle: 'Quick Install',
     targetModeLabel: 'Install target',
     targetModeHelp: 'The all-in-one LXC path is the one verified with a real install right now.',
+    lxcModeLabel: 'LXC mode',
+    lxcModeHelp: 'When you select all-in-one LXC, provide the Proxmox target metadata as well.',
+    targetNodeLabel: 'Proxmox node',
+    targetVMIDLabel: 'LXC VMID',
     publicHostLabel: 'Access host or domain',
-    publicHostHelp: 'This becomes the KeyCenter address operators will open later. Leave blank to derive from the current host.',
+    publicHostHelp: 'This is only the expected public URL preview after install. The wizard self URL is not auto-saved.',
     tlsModeLabel: 'TLS mode',
     tlsModeHelp: 'Start with HTTP for validation, then attach TLS before production exposure.',
     installRootLabel: 'Install root',
-    installRootHelp: 'Use / for a normal Linux host, or another root path for chroot/rootfs installs.',
+    installRootHelp: 'Use this only for a direct Linux host install. The all-in-one LXC path derives / internally and keeps it out of the quick flow.',
     localvaultLabel: 'Existing LocalVault URL (optional)',
     localvaultHelp: 'Fill this only when you are connecting an existing LocalVault instead of all-in-one install.',
     summaryTitle: 'Derived internal settings',
@@ -741,14 +777,20 @@ const copy = {
     validateStarted: 'Install validation completed.',
     validateFail: 'Install validation failed: ',
     runsTitle: 'Recent validation/install runs',
-    noRuns: 'No runs yet.'
+    noRuns: 'No runs yet.',
+    runtimeWarningTitle: 'Current host warning'
   }
 };
 const statusEl = document.getElementById('wizard-status');
 const previewEl = document.getElementById('wizard-preview');
 const runsEl = document.getElementById('install-runs-list');
+const runtimeWarningBoxEl = document.getElementById('runtime-warning-box');
+const runtimeWarningListEl = document.getElementById('runtime-warning-list');
 const quickFields = {
   target_mode: document.getElementById('target_mode'),
+  lxc_mode: document.getElementById('lxc_mode'),
+  target_node: document.getElementById('target_node'),
+  target_vmid: document.getElementById('target_vmid'),
   public_host: document.getElementById('public_host'),
   tls_mode: document.getElementById('tls_mode')
 };
@@ -763,6 +805,7 @@ const fields = {
   install_root: document.getElementById('install_root'),
   install_script: document.getElementById('install_script'),
   install_workdir: document.getElementById('install_workdir'),
+  public_base_url: null,
   keycenter_url: document.getElementById('keycenter_url'),
   localvault_url: document.getElementById('localvault_url'),
   tls_cert_path: document.getElementById('tls_cert_path'),
@@ -817,12 +860,17 @@ function syncDerivedFields() {
     baseURL = (tlsLater ? 'http://' : 'https://') + baseURL;
   }
   if (!baseURL) {
-    baseURL = guessed;
+    baseURL = quickFields.target_mode.value === 'linux-host' ? guessed : '';
   }
   fields.install_profile.value = deriveInstallProfile();
   fields.install_script.value = deriveInstallScript(fields.install_script.value.trim());
   fields.install_workdir.value = deriveInstallWorkdir(fields.install_workdir.value.trim());
-  fields.keycenter_url.value = baseURL;
+  if (quickFields.target_mode.value === 'lxc-allinone') {
+    fields.install_root.value = '/';
+    fields.keycenter_url.value = '';
+  } else {
+    fields.keycenter_url.value = baseURL;
+  }
   fields.deployment_mode.value = quickFields.target_mode.value === 'lxc-allinone' ? 'lxc-allinone' : 'host-service';
   fields.install_scope.value = quickFields.target_mode.value === 'lxc-allinone' ? 'all-in-one' : (fields.localvault_url.value.trim() ? 'host+existing-localvault' : 'host-only');
   fields.bootstrap_mode.value = 'email';
@@ -834,6 +882,23 @@ function syncDerivedFields() {
     fields.tls_key_path.value = '';
     fields.tls_ca_path.value = '';
   }
+}
+
+function renderRuntimeWarning(message) {
+  if (!message) {
+    runtimeWarningBoxEl.style.display = 'none';
+    runtimeWarningListEl.innerHTML = '';
+    return;
+  }
+  runtimeWarningBoxEl.style.display = '';
+  runtimeWarningListEl.innerHTML = '<li>' + message + '</li>';
+}
+
+function updateTargetSpecificUI() {
+  const isLXC = quickFields.target_mode.value === 'lxc-allinone';
+  document.getElementById('install_root').disabled = isLXC;
+  confirmDangerousRootEl.checked = isLXC ? false : confirmDangerousRootEl.checked;
+  confirmDangerousRootEl.disabled = isLXC;
 }
 
 function setStatus(message) {
@@ -856,12 +921,20 @@ function renderPreview() {
     },
     quick_setup: {
       target_mode: quickFields.target_mode.value,
+      lxc_mode: quickFields.lxc_mode.value,
+      target_node: quickFields.target_node.value,
+      target_vmid: quickFields.target_vmid.value,
       public_host: quickFields.public_host.value,
       tls_mode: quickFields.tls_mode.value,
       install_root: fields.install_root.value,
       localvault_url: fields.localvault_url.value
     },
     runtime_config: {
+      target_type: quickFields.target_mode.value,
+      target_mode: quickFields.lxc_mode.value,
+      target_node: quickFields.target_node.value,
+      target_vmid: quickFields.target_vmid.value,
+      public_base_url: quickFields.public_host.value,
       install_profile: fields.install_profile.value,
       install_root: fields.install_root.value,
       install_script: fields.install_script.value,
@@ -876,6 +949,7 @@ function renderPreview() {
     validation: window.installValidationState || null
   };
   previewEl.textContent = JSON.stringify(preview, null, 2);
+  updateTargetSpecificUI();
 }
 
 function renderRuns(runs) {
@@ -906,6 +980,10 @@ function setLanguage(lang) {
   document.getElementById('quick-title').textContent = t.quickTitle;
   document.getElementById('target-mode-label').textContent = t.targetModeLabel;
   document.getElementById('target-mode-help').textContent = t.targetModeHelp;
+  document.getElementById('lxc-mode-label').textContent = t.lxcModeLabel;
+  document.getElementById('lxc-mode-help').textContent = t.lxcModeHelp;
+  document.getElementById('target-node-label').textContent = t.targetNodeLabel;
+  document.getElementById('target-vmid-label').textContent = t.targetVMIDLabel;
   document.getElementById('public-host-label').textContent = t.publicHostLabel;
   document.getElementById('public-host-help').textContent = t.publicHostHelp;
   document.getElementById('tls-mode-label').textContent = t.tlsModeLabel;
@@ -936,9 +1014,11 @@ function setLanguage(lang) {
   document.getElementById('step-3').textContent = t.step3;
   document.getElementById('step-4').textContent = t.step4;
   document.getElementById('runs-title').textContent = t.runsTitle;
+  document.getElementById('runtime-warning-title').textContent = t.runtimeWarningTitle;
   document.getElementById('bootstrap-link').textContent = t.bootstrap;
   document.getElementById('custody-link').textContent = t.custody;
   renderRuns(window.installRuns || []);
+  updateTargetSpecificUI();
 }
 
 function applySessionState(data) {
@@ -953,18 +1033,23 @@ function applySessionState(data) {
 
 function applyRuntimeConfig(data) {
   fields.install_profile.value = data.install_profile || 'proxmox-lxc-allinone';
-  quickFields.target_mode.value = deriveTargetModeFromProfile(fields.install_profile.value);
+  quickFields.target_mode.value = data.target_type || deriveTargetModeFromProfile(fields.install_profile.value);
+  quickFields.lxc_mode.value = data.target_mode || 'new';
+  quickFields.target_node.value = data.target_node || '';
+  quickFields.target_vmid.value = data.target_vmid || '';
   fields.install_root.value = data.install_root || '/';
   fields.install_script.value = data.install_script || '';
   fields.install_workdir.value = data.install_workdir || '';
   fields.keycenter_url.value = data.keycenter_url || '';
-  quickFields.public_host.value = (data.keycenter_url || '').replace(/^https?:\/\//, '');
+  quickFields.public_host.value = (data.public_base_url || '').replace(/^https?:\/\//, '');
   fields.localvault_url.value = data.localvault_url || '';
   fields.tls_cert_path.value = data.tls_cert_path || '';
   fields.tls_key_path.value = data.tls_key_path || '';
   fields.tls_ca_path.value = data.tls_ca_path || '';
   quickFields.tls_mode.value = (data.tls_cert_path || data.tls_key_path) ? 'existing' : 'later';
   document.getElementById('target-chip').textContent = 'target: ' + quickFields.target_mode.value;
+  renderRuntimeWarning(data.runtime_warning || '');
+  updateTargetSpecificUI();
 }
 
 async function request(path, options) {
@@ -1029,6 +1114,11 @@ async function saveRuntimeConfig() {
   try {
     syncDerivedFields();
     const payload = {
+      target_type: quickFields.target_mode.value,
+      target_mode: quickFields.lxc_mode.value,
+      target_node: quickFields.target_node.value,
+      target_vmid: quickFields.target_vmid.value,
+      public_base_url: quickFields.public_host.value ? ((quickFields.public_host.value.startsWith('http://') || quickFields.public_host.value.startsWith('https://')) ? quickFields.public_host.value : ((quickFields.tls_mode.value === 'later' ? 'http://' : 'https://') + quickFields.public_host.value)) : '',
       install_profile: fields.install_profile.value,
       install_root: fields.install_root.value,
       install_script: fields.install_script.value,

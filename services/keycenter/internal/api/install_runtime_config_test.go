@@ -12,6 +12,11 @@ func TestInstallRuntimeConfigRoundTrip(t *testing.T) {
 	_, handler := setupTestServer(t)
 
 	patch := httptest.NewRequest(http.MethodPatch, "/api/install/runtime-config", strings.NewReader(`{
+		"target_type":"lxc-allinone",
+		"target_mode":"new",
+		"target_node":"ranode-3960x",
+		"target_vmid":"105",
+		"public_base_url":"https://keycenter.example.internal",
 		"install_profile":"proxmox-lxc-allinone",
 		"install_root":"/",
 		"install_script":"/opt/veilkey-selfhosted-repo/installer/install.sh",
@@ -42,7 +47,7 @@ func TestInstallRuntimeConfigRoundTrip(t *testing.T) {
 	if err := json.Unmarshal(getW.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("decode runtime config: %v", err)
 	}
-	if payload.InstallProfile != "proxmox-lxc-allinone" || payload.KeycenterURL != "https://keycenter.example.internal" {
+	if payload.TargetType != "lxc-allinone" || payload.TargetVMID != "105" || payload.InstallProfile != "proxmox-lxc-allinone" || payload.PublicBaseURL != "https://keycenter.example.internal" {
 		t.Fatalf("unexpected runtime config payload: %+v", payload)
 	}
 }

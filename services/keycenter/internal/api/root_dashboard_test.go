@@ -84,6 +84,9 @@ func TestRootServesInstallGateWhenInstallIncomplete(t *testing.T) {
 	if !strings.Contains(body, "새 all-in-one LXC (권장)") {
 		t.Fatalf("expected all-in-one quick target in install gate")
 	}
+	if !strings.Contains(body, "LXC VMID") {
+		t.Fatalf("expected lxc target metadata inputs in install gate")
+	}
 	if strings.Contains(body, "VeilKey KeyCenter") {
 		t.Fatalf("expected install gate instead of dashboard")
 	}

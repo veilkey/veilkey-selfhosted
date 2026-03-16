@@ -136,7 +136,11 @@ func isAllowlistedInstallScript(path string) bool {
 }
 
 func resolveInstallProfile(cfg *db.UIConfig) string {
+	targetType := strings.TrimSpace(cfg.TargetType)
 	profile := strings.TrimSpace(cfg.InstallProfile)
+	if targetType == "lxc-allinone" && profile == "" {
+		return "proxmox-lxc-allinone"
+	}
 	switch profile {
 	case "", "linux-host":
 		if strings.TrimSpace(cfg.LocalvaultURL) != "" {
@@ -151,6 +155,9 @@ func resolveInstallProfile(cfg *db.UIConfig) string {
 }
 
 func installTargetLabel(cfg *db.UIConfig) string {
+	if strings.TrimSpace(cfg.TargetType) != "" {
+		return strings.TrimSpace(cfg.TargetType)
+	}
 	switch resolveInstallProfile(cfg) {
 	case "proxmox-lxc-allinone":
 		return "lxc-allinone"
@@ -180,8 +187,27 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	}
 
 	target := installTargetLabel(cfg)
+	if target == "lxc-allinone" {
+		result.ResolvedRoot = "/"
+	}
 	if target == "linux-host" {
 		result.Warnings = append(result.Warnings, "linux-host quick path is not yet a validated production install target; prefer lxc-allinone or host-localvault")
+	}
+	if target == "lxc-allinone" {
+		if strings.TrimSpace(cfg.TargetMode) == "" {
+			result.Valid = false
+			result.Errors = append(result.Errors, "lxc-allinone requires target_mode=new or existing")
+		}
+		if strings.TrimSpace(cfg.TargetVMID) == "" {
+			result.Valid = false
+			result.Errors = append(result.Errors, "lxc-allinone requires target_vmid")
+		}
+		if strings.TrimSpace(cfg.TargetNode) == "" {
+			result.Warnings = append(result.Warnings, "target_node is empty; proxmox node selection should be explicit")
+		}
+		if strings.TrimSpace(cfg.KeycenterURL) != "" {
+			result.Warnings = append(result.Warnings, "keycenter_url is set before provisioning; prefer public_base_url preview until the target LXC exists")
+		}
 	}
 	if target == "host-localvault" && strings.TrimSpace(cfg.KeycenterURL) == "" {
 		result.Warnings = append(result.Warnings, "host-localvault install usually expects keycenter_url to be set before activation")
@@ -217,6 +243,10 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	}
 
 	result.DangerousRoot = isDangerousInstallRoot(result.ResolvedRoot)
+	if target == "lxc-allinone" {
+		result.DangerousRoot = false
+		result.NeedsConfirmation = false
+	}
 	if result.DangerousRoot {
 		result.Warnings = append(result.Warnings, "install_root targets the live filesystem root")
 		if !req.ConfirmDangerousRoot {

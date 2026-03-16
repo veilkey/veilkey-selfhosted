@@ -10,6 +10,12 @@ import (
 )
 
 type installRuntimeConfigPayload struct {
+	TargetType     string `json:"target_type"`
+	TargetMode     string `json:"target_mode"`
+	TargetNode     string `json:"target_node"`
+	TargetVMID     string `json:"target_vmid"`
+	PublicBaseURL  string `json:"public_base_url"`
+	RuntimeWarning string `json:"runtime_warning,omitempty"`
 	InstallProfile string `json:"install_profile"`
 	InstallRoot    string `json:"install_root"`
 	InstallScript  string `json:"install_script"`
@@ -22,6 +28,11 @@ type installRuntimeConfigPayload struct {
 }
 
 type installRuntimeConfigPatchRequest struct {
+	TargetType     *string `json:"target_type"`
+	TargetMode     *string `json:"target_mode"`
+	TargetNode     *string `json:"target_node"`
+	TargetVMID     *string `json:"target_vmid"`
+	PublicBaseURL  *string `json:"public_base_url"`
 	InstallProfile *string `json:"install_profile"`
 	InstallRoot    *string `json:"install_root"`
 	InstallScript  *string `json:"install_script"`
@@ -35,6 +46,11 @@ type installRuntimeConfigPatchRequest struct {
 
 func installRuntimeConfigFromUI(cfg *db.UIConfig) installRuntimeConfigPayload {
 	return installRuntimeConfigPayload{
+		TargetType:     cfg.TargetType,
+		TargetMode:     cfg.TargetMode,
+		TargetNode:     cfg.TargetNode,
+		TargetVMID:     cfg.TargetVMID,
+		PublicBaseURL:  cfg.PublicBaseURL,
 		InstallProfile: cfg.InstallProfile,
 		InstallRoot:    cfg.InstallRoot,
 		InstallScript:  cfg.InstallScript,
@@ -87,6 +103,21 @@ func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.
 	if req.InstallProfile != nil {
 		cfg.InstallProfile = strings.TrimSpace(*req.InstallProfile)
 	}
+	if req.TargetType != nil {
+		cfg.TargetType = strings.TrimSpace(*req.TargetType)
+	}
+	if req.TargetMode != nil {
+		cfg.TargetMode = strings.TrimSpace(*req.TargetMode)
+	}
+	if req.TargetNode != nil {
+		cfg.TargetNode = strings.TrimSpace(*req.TargetNode)
+	}
+	if req.TargetVMID != nil {
+		cfg.TargetVMID = strings.TrimSpace(*req.TargetVMID)
+	}
+	if req.PublicBaseURL != nil {
+		cfg.PublicBaseURL = strings.TrimSpace(*req.PublicBaseURL)
+	}
 	if req.InstallRoot != nil {
 		cfg.InstallRoot = normalizeOptionalPath(*req.InstallRoot)
 	}
@@ -112,6 +143,10 @@ func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.
 		cfg.TLSCAPath = normalizeOptionalPath(*req.TLSCAPath)
 	}
 
+	if !validateOptionalURL(cfg.PublicBaseURL) {
+		s.respondError(w, http.StatusBadRequest, "public_base_url must be an absolute URL")
+		return
+	}
 	if !validateOptionalURL(cfg.KeycenterURL) {
 		s.respondError(w, http.StatusBadRequest, "keycenter_url must be an absolute URL")
 		return
