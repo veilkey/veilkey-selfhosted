@@ -14,6 +14,7 @@ The currently validated install targets are:
 
 - `proxmox-host-localvault`
 - `proxmox-lxc-allinone`
+- `proxmox-lxc-runtime`
 
 ## 1. Prepare the Installer Repository
 
@@ -41,7 +42,7 @@ Required input:
 Example:
 
 ```bash
-# Write password to a file (never use env vars for passwords)
+# Write password to a file first. The export below is installer input only.
 echo -n 'replace-me' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
 export VEILKEY_LOCALVAULT_PASSWORD='replace-me'  # installer input only; store the source secret in a file
@@ -86,6 +87,9 @@ Required input:
 Example:
 
 ```bash
+./scripts/proxmox-live-session.sh status
+./scripts/proxmox-live-session.sh claim allinone-validate
+
 echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
 chmod 600 /etc/veilkey/keycenter.password
 export VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password'
@@ -107,6 +111,17 @@ Important behavior:
 - the installer writes password files under `/etc/veilkey/*.password` and runtime env files use `VEILKEY_PASSWORD_FILE`
 - proxy assets are installed, but proxy units are not enabled unless you set `VEILKEY_ENABLE_PROXY=1`
 - a fresh live LXC install needs `curl`, `openssl`, and `ssh-keygen`; the all-in-one wrapper installs them with `apt-get` when missing
+- live Proxmox install, health, and bootstrap-export commands require an explicit claimed validation session:
+  `./scripts/proxmox-live-session.sh claim <label>`
+- `./scripts/proxmox-live-session.sh status` shows the current shell session and the claimed work session together
+
+Completion checklist:
+
+- `curl http://<lxc-ip>:10181/health`
+- `curl http://<lxc-ip>:10180/health`
+- unlock KeyCenter once with the install password
+- verify `GET /api/agents` shows the LocalVault entry
+- export bootstrap artifacts if host-side operator access is needed
 
 ## 4. Verify IP Access for All-in-One
 
@@ -135,6 +150,12 @@ curl http://127.0.0.1:10181/api/agents
 
 Use this when you want a second LXC with LocalVault only, bound to an existing KeyCenter.
 
+Prerequisites:
+
+- an all-in-one or external KeyCenter must already be installed
+- `VEILKEY_KEYCENTER_URL` is mandatory for runtime-only install
+- unlock KeyCenter first if you need immediate agent registration verification through KeyCenter APIs
+
 Required input:
 
 - `VEILKEY_LOCALVAULT_PASSWORD`
@@ -143,6 +164,9 @@ Required input:
 Example:
 
 ```bash
+./scripts/proxmox-live-session.sh status
+./scripts/proxmox-live-session.sh claim runtime-validate
+
 echo -n 'replace-runtime-localvault-password' > /etc/veilkey/localvault.password
 chmod 600 /etc/veilkey/localvault.password
 export VEILKEY_LOCALVAULT_PASSWORD='replace-runtime-localvault-password'
@@ -151,6 +175,13 @@ export VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181'
 ./scripts/proxmox-lxc-runtime-install.sh --activate /
 ./scripts/proxmox-lxc-runtime-health.sh /
 ```
+
+Runtime-only completion checklist:
+
+- `systemctl status veilkey-localvault.service`
+- `curl http://127.0.0.1:10180/health`
+- verify the configured `VEILKEY_KEYCENTER_URL` points to the real parent KeyCenter
+- if KeyCenter is unlocked, verify the new runtime via `GET /api/agents`
 
 ## 6. Export Bootstrap SSH Artifacts
 

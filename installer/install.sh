@@ -668,7 +668,14 @@ render_profile_envs() {
     # Proxy runtime still depends on a veilkey-cli binary that is not yet
     # packaged as part of the default installer surface. Keep proxy assets
     # staged, but require an explicit opt-in before enabling proxy units.
-    default_enable_proxy=0
+    case "${profile}" in
+      proxmox-host|proxmox-host-cli)
+        default_enable_proxy=1
+        ;;
+      *)
+        default_enable_proxy=0
+        ;;
+    esac
   else
     default_enable_proxy=0
   fi
@@ -678,7 +685,7 @@ render_profile_envs() {
   enable_proxy="${VEILKEY_ENABLE_PROXY:-${default_enable_proxy}}"
   default_keycenter_addr=":10180"
   default_localvault_addr=":10180"
-  default_keycenter_url="http://127.0.0.1:10180"
+  default_keycenter_url=""
   if [[ "${default_enable_keycenter}" = "1" && "${default_enable_localvault}" = "1" ]]; then
     default_keycenter_addr=":10181"
     default_localvault_addr=":10180"
@@ -853,6 +860,12 @@ if [[ "${VEILKEY_ENABLE_LOCALVAULT:-0}" = "1" ]]; then
 fi
 check_file /etc/veilkey/keycenter.env.example
 check_file /etc/veilkey/localvault.env.example
+if [[ "${VEILKEY_ENABLE_LOCALVAULT:-0}" = "1" && "${VEILKEY_ENABLE_KEYCENTER:-0}" = "0" ]]; then
+  grep -Eq '^VEILKEY_KEYCENTER_URL=.+' "${ROOT%/}/etc/veilkey/localvault.env" || {
+    echo "missing keycenter url in /etc/veilkey/localvault.env" >&2
+    exit 1
+  }
+fi
 if [[ "${VEILKEY_ENABLE_PROXY:-0}" = "1" ]]; then
   check_cmd /usr/local/bin/veilkey-session-config
   check_cmd /usr/local/bin/veilkey-proxy-launch

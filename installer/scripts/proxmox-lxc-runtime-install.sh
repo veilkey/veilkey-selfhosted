@@ -2,10 +2,20 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SESSION_GUARD="${ROOT_DIR}/scripts/proxmox-live-session.sh"
 activate_after_install=0
 
 stage() {
   printf '[lxc-runtime/install] %s\n' "$*"
+}
+
+ensure_manifest() {
+  if [[ -f "${ROOT_DIR}/components.toml" ]]; then
+    stage "using existing manifest ${ROOT_DIR}/components.toml"
+    return 0
+  fi
+  stage "bootstrapping ${ROOT_DIR}/components.toml from canonical example"
+  "${ROOT_DIR}/install.sh" init >/dev/null
 }
 
 ensure_runtime_tools() {
@@ -48,6 +58,22 @@ resolve_localvault_password() {
   }
 }
 
+resolve_keycenter_url() {
+  if [[ -n "${VEILKEY_KEYCENTER_URL:-}" ]]; then
+    stage "using VEILKEY_KEYCENTER_URL from environment: ${VEILKEY_KEYCENTER_URL}"
+    return 0
+  fi
+  if [[ -n "${VEILKEY_KEYCENTER_HOST:-}" ]]; then
+    if curl -kfsS "https://${VEILKEY_KEYCENTER_HOST}/health" >/dev/null 2>&1; then
+      export VEILKEY_KEYCENTER_URL="https://${VEILKEY_KEYCENTER_HOST}"
+      stage "auto-detected KeyCenter at ${VEILKEY_KEYCENTER_URL}"
+      return 0
+    fi
+  fi
+  echo "Error: VEILKEY_KEYCENTER_URL is required (or set VEILKEY_KEYCENTER_HOST for auto-detection)" >&2
+  exit 1
+}
+
 init_localvault_if_needed() {
   local root="$1"
   local db_path="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
@@ -87,8 +113,20 @@ done
 root="${1:-/}"
 bundle_root="${2:-}"
 
+export VEILKEY_LOCALVAULT_ADDR="${VEILKEY_LOCALVAULT_ADDR:-0.0.0.0:10180}"
+export VEILKEY_LOCALVAULT_DB_PATH="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
+export VEILKEY_LOCALVAULT_TRUSTED_IPS="${VEILKEY_LOCALVAULT_TRUSTED_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1}"
+
+stage "target root: ${root}"
+stage "listen addr: ${VEILKEY_LOCALVAULT_ADDR}"
+stage "db path: ${VEILKEY_LOCALVAULT_DB_PATH}"
+if [[ "${root}" == "/" ]]; then
+  "${SESSION_GUARD}" assert "proxmox-lxc-runtime-install"
+fi
+ensure_manifest
 ensure_runtime_tools
 resolve_localvault_password
+resolve_keycenter_url
 
 if [[ -n "${bundle_root}" ]]; then
   "${ROOT_DIR}/install.sh" install-profile "${args[@]}" proxmox-lxc-runtime "${root}" "${bundle_root}"
