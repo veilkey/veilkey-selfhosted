@@ -105,7 +105,6 @@
                         >
                             <span class="nav-item-main">
                                 <span>{{ vault.display_name || vault.vault_name || vault.vault_runtime_hash }}</span>
-                                <span class="muted" style="font-size:11px">{{ vault.ip || '' }} · {{ vault.agent_role || 'agent' }}</span>
                             </span>
                             <span class="status-pill count-pill">{{ auditVaultCount(vault) }}</span>
                         </a>
@@ -739,7 +738,7 @@
                                                 </tr>
                                             </thead>
                                             <tbody>
-                                                <tr v-for="row in state.auditRows" :key="(row.created_at || row.timestamp || '-') + ':' + (row.entity_id || '-') + ':' + (row.action || '-')">
+                                                <tr v-for="(row, idx) in state.auditRows" class="is-clickable" :class="{ 'is-selected': state.selectedAuditRow && state.selectedAuditRow.event_id === row.event_id }" data-action="select-audit-row" :data-index="idx" :key="(row.created_at || row.timestamp || '-') + ':' + (row.entity_id || '-') + ':' + (row.action || '-')">
                                                     <td>{{ row.created_at || row.timestamp || '-' }}</td>
                                                     <td>{{ row.action || '-' }}</td>
                                                     <td>{{ row.actor_type || row.actor_id || '-' }}</td>
@@ -759,8 +758,8 @@
                                 </div>
                                 <div class="pane-content">
                                     <div v-if="state.auditRows.length" class="card">
-                                        <div class="card-title">{{ t('latest_event') }}</div>
-                                        <pre class="code">{{ prettyJSON(state.auditRows[0]) }}</pre>
+                                        <div class="card-title">{{ (state.selectedAuditRow || state.auditRows[0]).action || 'event' }} · {{ (state.selectedAuditRow || state.auditRows[0]).entity_type || '-' }}</div>
+                                        <pre class="code">{{ prettyJSON(state.selectedAuditRow || state.auditRows[0]) }}</pre>
                                     </div>
                                     <div v-else class="empty">{{ t('select_vault_for_detail') }}</div>
                                 </div>
@@ -920,6 +919,7 @@ const {
   configRelationsByScope,
   auditVaultCount,
   auditTotalCount,
+  auditSelectedVault,
   encodeURIComponent
 } = useAdminApp();
 </script>
