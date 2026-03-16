@@ -57,6 +57,8 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/install/runtime-config", s.requireTrustedIP(s.requireUnlocked(s.handleGetInstallRuntimeConfig)))
 	mux.HandleFunc("PATCH /api/install/runtime-config", s.requireTrustedIP(s.requireUnlocked(s.handlePatchInstallRuntimeConfig)))
 	mux.HandleFunc("GET /api/install/apply", s.requireTrustedIP(s.requireUnlocked(s.handleGetInstallApply)))
+	mux.HandleFunc("GET /api/install/runs", s.requireTrustedIP(s.requireUnlocked(s.handleGetInstallRuns)))
+	mux.HandleFunc("POST /api/install/validate", s.requireTrustedIP(s.requireUnlocked(s.handleValidateInstallApply)))
 	mux.HandleFunc("POST /api/install/apply", s.requireTrustedIP(s.requireUnlocked(s.handleRunInstallApply)))
 	mux.HandleFunc("GET /api/system/update", s.requireUnlocked(s.handleGetSystemUpdate))
 	mux.HandleFunc("POST /api/system/update", s.requireTrustedIP(s.requireUnlocked(s.handleRunSystemUpdate)))

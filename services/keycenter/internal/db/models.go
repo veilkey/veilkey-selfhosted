@@ -350,6 +350,25 @@ type UIConfig struct {
 
 func (UIConfig) TableName() string { return "ui_configs" }
 
+type InstallRun struct {
+	RunID          string     `gorm:"primaryKey;column:run_id" json:"run_id"`
+	RunKind        string     `gorm:"column:run_kind;not null;index" json:"run_kind"`
+	Status         string     `gorm:"column:status;not null;index" json:"status"`
+	InstallProfile string     `gorm:"column:install_profile;not null;default:''" json:"install_profile"`
+	InstallRoot    string     `gorm:"column:install_root;not null;default:''" json:"install_root"`
+	ScriptPath     string     `gorm:"column:script_path;not null;default:''" json:"script_path"`
+	Workdir        string     `gorm:"column:workdir;not null;default:''" json:"workdir"`
+	CommandJSON    string     `gorm:"column:command_json;type:text;not null;default:'[]'" json:"command_json"`
+	ValidationJSON string     `gorm:"column:validation_json;type:text;not null;default:'{}'" json:"validation_json"`
+	OutputTail     string     `gorm:"column:output_tail;type:text;not null;default:''" json:"output_tail"`
+	LastError      string     `gorm:"column:last_error;type:text;not null;default:''" json:"last_error"`
+	StartedAt      time.Time  `gorm:"column:started_at;not null;index" json:"started_at"`
+	FinishedAt     *time.Time `gorm:"column:finished_at" json:"finished_at"`
+	CreatedAt      time.Time  `gorm:"column:created_at;autoCreateTime;index" json:"created_at"`
+}
+
+func (InstallRun) TableName() string { return "install_runs" }
+
 // Config — configs 테이블
 type Config struct {
 	Key       string    `gorm:"primaryKey;column:key" json:"key"`

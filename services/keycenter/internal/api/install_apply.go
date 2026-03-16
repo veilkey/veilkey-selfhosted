@@ -2,7 +2,9 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"os/exec"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"veilkey-keycenter/internal/crypto"
 	"veilkey-keycenter/internal/db"
 )
 
@@ -23,6 +26,7 @@ type installApplyState struct {
 	LastScript     string     `json:"last_script,omitempty"`
 	LastCommand    []string   `json:"last_command,omitempty"`
 	LastOutput     string     `json:"last_output,omitempty"`
+	LastRunID      string     `json:"last_run_id,omitempty"`
 }
 
 type installApplyPayload struct {
@@ -33,6 +37,39 @@ type installApplyPayload struct {
 	Profile        string            `json:"profile,omitempty"`
 	InstallRoot    string            `json:"install_root,omitempty"`
 	State          installApplyState `json:"state"`
+}
+
+type installValidateRequest struct {
+	ConfirmDangerousRoot bool `json:"confirm_dangerous_root"`
+}
+
+type installValidationResult struct {
+	Valid             bool     `json:"valid"`
+	ResolvedProfile   string   `json:"resolved_profile,omitempty"`
+	ResolvedRoot      string   `json:"resolved_root,omitempty"`
+	ResolvedScript    string   `json:"resolved_script,omitempty"`
+	ResolvedWorkdir   string   `json:"resolved_workdir,omitempty"`
+	DangerousRoot     bool     `json:"dangerous_root"`
+	NeedsConfirmation bool     `json:"needs_confirmation"`
+	Warnings          []string `json:"warnings,omitempty"`
+	Errors            []string `json:"errors,omitempty"`
+	CommandPreview    []string `json:"command_preview,omitempty"`
+}
+
+type installRunPayload struct {
+	RunID          string                  `json:"run_id"`
+	RunKind        string                  `json:"run_kind"`
+	Status         string                  `json:"status"`
+	InstallProfile string                  `json:"install_profile"`
+	InstallRoot    string                  `json:"install_root"`
+	ScriptPath     string                  `json:"script_path"`
+	Workdir        string                  `json:"workdir"`
+	Command        []string                `json:"command"`
+	Validation     installValidationResult `json:"validation"`
+	OutputTail     string                  `json:"output_tail,omitempty"`
+	LastError      string                  `json:"last_error,omitempty"`
+	StartedAt      time.Time               `json:"started_at"`
+	FinishedAt     *time.Time              `json:"finished_at,omitempty"`
 }
 
 func installScriptPath(cfg *db.UIConfig) string {
@@ -98,8 +135,24 @@ func isAllowlistedInstallScript(path string) bool {
 	return false
 }
 
-func installCommand(script string, cfg *db.UIConfig) []string {
+func resolveInstallProfile(cfg *db.UIConfig) string {
 	profile := strings.TrimSpace(cfg.InstallProfile)
+	if profile != "" && profile != "linux-host" {
+		return profile
+	}
+	if strings.TrimSpace(cfg.LocalvaultURL) != "" {
+		return "proxmox-host-localvault"
+	}
+	return "proxmox-host"
+}
+
+func isDangerousInstallRoot(root string) bool {
+	root = filepath.Clean(strings.TrimSpace(root))
+	return root == "/" || root == ""
+}
+
+func installCommand(script string, cfg *db.UIConfig) []string {
+	profile := resolveInstallProfile(cfg)
 	root := strings.TrimSpace(cfg.InstallRoot)
 	if root == "" {
 		root = "/"
@@ -142,9 +195,103 @@ func checkHealthEndpoint(client *http.Client, rawURL string) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return errors.New("health check returned non-200")
+		return fmt.Errorf("health check returned status %d", resp.StatusCode)
 	}
 	return nil
+}
+
+func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) installValidationResult {
+	result := installValidationResult{
+		Valid:           true,
+		ResolvedProfile: resolveInstallProfile(cfg),
+		ResolvedRoot:    strings.TrimSpace(cfg.InstallRoot),
+		ResolvedScript:  installScriptPath(cfg),
+		ResolvedWorkdir: installWorkdir(cfg),
+	}
+	if result.ResolvedRoot == "" {
+		result.ResolvedRoot = "/"
+	}
+	if result.ResolvedWorkdir == "" && result.ResolvedScript != "" {
+		result.ResolvedWorkdir = filepath.Dir(result.ResolvedScript)
+	}
+
+	if result.ResolvedScript == "" {
+		result.Valid = false
+		result.Errors = append(result.Errors, "install script is not configured")
+	}
+	if result.ResolvedScript != "" && !isAllowlistedInstallScript(result.ResolvedScript) {
+		result.Valid = false
+		result.Errors = append(result.Errors, "install script is not in the server allowlist")
+	}
+	if result.ResolvedScript != "" {
+		if _, err := os.Stat(result.ResolvedScript); err != nil {
+			result.Valid = false
+			result.Errors = append(result.Errors, "install script is not available")
+		}
+	}
+	if result.ResolvedProfile == "" {
+		result.Valid = false
+		result.Errors = append(result.Errors, "install profile could not be resolved")
+	}
+	if result.ResolvedWorkdir == "" {
+		result.Valid = false
+		result.Errors = append(result.Errors, "install workdir is not configured")
+	}
+	if result.ResolvedWorkdir != "" {
+		if info, err := os.Stat(result.ResolvedWorkdir); err != nil || !info.IsDir() {
+			result.Valid = false
+			result.Errors = append(result.Errors, "install workdir is not available")
+		}
+	}
+
+	result.DangerousRoot = isDangerousInstallRoot(result.ResolvedRoot)
+	if result.DangerousRoot {
+		result.Warnings = append(result.Warnings, "install_root targets the live filesystem root")
+		if !req.ConfirmDangerousRoot {
+			result.Valid = false
+			result.NeedsConfirmation = true
+			result.Errors = append(result.Errors, "dangerous install_root requires explicit confirmation")
+		}
+	}
+
+	if strings.TrimSpace(cfg.KeycenterURL) == "" {
+		result.Warnings = append(result.Warnings, "keycenter_url is empty; post-install verification may be limited")
+	}
+	if strings.TrimSpace(cfg.LocalvaultURL) == "" {
+		result.Warnings = append(result.Warnings, "localvault_url is empty; localvault health verification will be skipped")
+	}
+	result.CommandPreview = installCommand(result.ResolvedScript, cfg)
+	return result
+}
+
+func encodeJSON(v any, fallback string) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return fallback
+	}
+	return string(data)
+}
+
+func installRunToPayload(run *db.InstallRun) installRunPayload {
+	command := []string{}
+	_ = json.Unmarshal([]byte(run.CommandJSON), &command)
+	validation := installValidationResult{}
+	_ = json.Unmarshal([]byte(run.ValidationJSON), &validation)
+	return installRunPayload{
+		RunID:          run.RunID,
+		RunKind:        run.RunKind,
+		Status:         run.Status,
+		InstallProfile: run.InstallProfile,
+		InstallRoot:    run.InstallRoot,
+		ScriptPath:     run.ScriptPath,
+		Workdir:        run.Workdir,
+		Command:        command,
+		Validation:     validation,
+		OutputTail:     run.OutputTail,
+		LastError:      run.LastError,
+		StartedAt:      run.StartedAt,
+		FinishedAt:     run.FinishedAt,
+	}
 }
 
 func (s *Server) snapshotInstallApply() installApplyState {
@@ -171,35 +318,83 @@ func (s *Server) handleGetInstallApply(w http.ResponseWriter, r *http.Request) {
 		InstallRunning: state.Status == "running",
 		ScriptPath:     installScriptPath(cfg),
 		Workdir:        installWorkdir(cfg),
-		Profile:        strings.TrimSpace(cfg.InstallProfile),
+		Profile:        resolveInstallProfile(cfg),
 		InstallRoot:    strings.TrimSpace(cfg.InstallRoot),
 		State:          state,
 	}
 	s.respondJSON(w, http.StatusOK, payload)
 }
 
-func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleGetInstallRuns(w http.ResponseWriter, r *http.Request) {
+	runs, err := s.db.ListInstallRuns(20)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to list install runs")
+		return
+	}
+	payload := make([]installRunPayload, 0, len(runs))
+	for i := range runs {
+		run := runs[i]
+		payload = append(payload, installRunToPayload(&run))
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"runs": payload})
+}
+
+func (s *Server) handleValidateInstallApply(w http.ResponseWriter, r *http.Request) {
+	var req installValidateRequest
+	if err := decodeRequestJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
 	cfg, err := s.db.GetOrCreateUIConfig()
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
+	result := validateInstallConfig(cfg, req)
+	run := &db.InstallRun{
+		RunID:          crypto.GenerateUUID(),
+		RunKind:        "validate",
+		Status:         "validated",
+		InstallProfile: result.ResolvedProfile,
+		InstallRoot:    result.ResolvedRoot,
+		ScriptPath:     result.ResolvedScript,
+		Workdir:        result.ResolvedWorkdir,
+		CommandJSON:    encodeJSON(result.CommandPreview, "[]"),
+		ValidationJSON: encodeJSON(result, "{}"),
+		StartedAt:      time.Now().UTC(),
+		CreatedAt:      time.Now().UTC(),
+	}
+	finishedAt := time.Now().UTC()
+	run.FinishedAt = &finishedAt
+	if !result.Valid {
+		run.Status = "rejected"
+		run.LastError = strings.Join(result.Errors, "; ")
+	}
+	_ = s.db.SaveInstallRun(run)
+	status := http.StatusOK
+	if !result.Valid {
+		status = http.StatusBadRequest
+	}
+	s.respondJSON(w, status, map[string]any{
+		"validation": result,
+		"run":        installRunToPayload(run),
+	})
+}
 
-	scriptPath := installScriptPath(cfg)
-	if scriptPath == "" {
-		s.respondError(w, http.StatusServiceUnavailable, "install script is not configured")
+func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
+	var req installValidateRequest
+	if err := decodeRequestJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	if !isAllowlistedInstallScript(scriptPath) {
-		s.respondError(w, http.StatusForbidden, "install script is not in the server allowlist")
+	cfg, err := s.db.GetOrCreateUIConfig()
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
-	if _, err := os.Stat(scriptPath); err != nil {
-		s.respondError(w, http.StatusServiceUnavailable, "install script is not available")
-		return
-	}
-	if strings.TrimSpace(cfg.InstallProfile) == "" {
-		s.respondError(w, http.StatusBadRequest, "install_profile is required before apply")
+	validation := validateInstallConfig(cfg, req)
+	if !validation.Valid {
+		s.respondJSON(w, http.StatusBadRequest, map[string]any{"validation": validation})
 		return
 	}
 
@@ -210,47 +405,55 @@ func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	startedAt := time.Now().UTC()
-	command := installCommand(scriptPath, cfg)
-	s.installState = installApplyState{
+	runID := crypto.GenerateUUID()
+	state := installApplyState{
 		Status:        "running",
 		LastStartedAt: &startedAt,
-		LastProfile:   strings.TrimSpace(cfg.InstallProfile),
-		LastRoot:      strings.TrimSpace(cfg.InstallRoot),
-		LastScript:    scriptPath,
-		LastCommand:   append([]string(nil), command...),
+		LastProfile:   validation.ResolvedProfile,
+		LastRoot:      validation.ResolvedRoot,
+		LastScript:    validation.ResolvedScript,
+		LastCommand:   append([]string(nil), validation.CommandPreview...),
+		LastRunID:     runID,
 	}
+	s.installState = state
 	s.installMu.Unlock()
 
-	go s.runInstallApply(scriptPath, cfg)
+	run := &db.InstallRun{
+		RunID:          runID,
+		RunKind:        "apply",
+		Status:         "running",
+		InstallProfile: validation.ResolvedProfile,
+		InstallRoot:    validation.ResolvedRoot,
+		ScriptPath:     validation.ResolvedScript,
+		Workdir:        validation.ResolvedWorkdir,
+		CommandJSON:    encodeJSON(validation.CommandPreview, "[]"),
+		ValidationJSON: encodeJSON(validation, "{}"),
+		StartedAt:      startedAt,
+		CreatedAt:      startedAt,
+	}
+	_ = s.db.SaveInstallRun(run)
+
+	go s.runInstallApply(cfg, validation, runID)
 
 	s.respondJSON(w, http.StatusAccepted, map[string]any{
-		"status":          "started",
-		"script_path":     scriptPath,
-		"install_root":    strings.TrimSpace(cfg.InstallRoot),
-		"install_profile": strings.TrimSpace(cfg.InstallProfile),
-		"started_at":      startedAt,
-		"command":         command,
+		"status":     "started",
+		"validation": validation,
+		"run":        installRunToPayload(run),
 	})
 }
 
-func (s *Server) runInstallApply(scriptPath string, cfg *db.UIConfig) {
+func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationResult, runID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), installTimeout())
 	defer cancel()
 
-	command := installCommand(scriptPath, cfg)
+	command := validation.CommandPreview
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-	if workdir := installWorkdir(cfg); workdir != "" {
-		cmd.Dir = workdir
+	if validation.ResolvedWorkdir != "" {
+		cmd.Dir = validation.ResolvedWorkdir
 	}
-
-	root := strings.TrimSpace(cfg.InstallRoot)
-	if root == "" {
-		root = "/"
-	}
-
 	cmd.Env = append(os.Environ(),
-		"VEILKEY_INSTALL_PROFILE="+strings.TrimSpace(cfg.InstallProfile),
-		"VEILKEY_INSTALL_ROOT="+root,
+		"VEILKEY_INSTALL_PROFILE="+validation.ResolvedProfile,
+		"VEILKEY_INSTALL_ROOT="+validation.ResolvedRoot,
 		"VEILKEY_INSTALL_KEYCENTER_URL="+strings.TrimSpace(cfg.KeycenterURL),
 		"VEILKEY_INSTALL_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
 		"VEILKEY_KEYCENTER_URL="+strings.TrimSpace(cfg.KeycenterURL),
@@ -262,28 +465,36 @@ func (s *Server) runInstallApply(scriptPath string, cfg *db.UIConfig) {
 
 	s.markInstallApplyStarted()
 	output, err := cmd.CombinedOutput()
+	outputTail := trimCommandOutput(output)
 	client := installHTTPClient(cfg.TLSCAPath)
-
-	next := installApplyState{
-		Status:         "succeeded",
-		LastStartedAt:  s.snapshotInstallApply().LastStartedAt,
-		LastFinishedAt: timePtr(time.Now().UTC()),
-		LastProfile:    strings.TrimSpace(cfg.InstallProfile),
-		LastRoot:       root,
-		LastScript:     scriptPath,
-		LastCommand:    append([]string(nil), command...),
-		LastOutput:     trimCommandOutput(output),
-	}
-
 	if err == nil {
 		if healthErr := checkHealthEndpoint(client, cfg.KeycenterURL); healthErr != nil {
 			err = healthErr
 		}
 	}
-	if err == nil {
+	if err == nil && strings.TrimSpace(cfg.LocalvaultURL) != "" {
 		if healthErr := checkHealthEndpoint(client, cfg.LocalvaultURL); healthErr != nil {
 			err = healthErr
 		}
+	}
+
+	finishedAt := time.Now().UTC()
+	next := installApplyState{
+		Status:         "succeeded",
+		LastStartedAt:  s.snapshotInstallApply().LastStartedAt,
+		LastFinishedAt: &finishedAt,
+		LastProfile:    validation.ResolvedProfile,
+		LastRoot:       validation.ResolvedRoot,
+		LastScript:     validation.ResolvedScript,
+		LastCommand:    append([]string(nil), validation.CommandPreview...),
+		LastOutput:     outputTail,
+		LastRunID:      runID,
+	}
+	run, loadErr := s.db.GetInstallRun(runID)
+	if loadErr == nil {
+		run.Status = "succeeded"
+		run.OutputTail = outputTail
+		run.FinishedAt = &finishedAt
 	}
 
 	if err != nil {
@@ -293,11 +504,21 @@ func (s *Server) runInstallApply(scriptPath string, cfg *db.UIConfig) {
 		} else {
 			next.LastError = err.Error()
 		}
+		if loadErr == nil {
+			run.Status = "failed"
+			run.LastError = next.LastError
+			run.OutputTail = outputTail
+			run.FinishedAt = &finishedAt
+			_ = s.db.SaveInstallRun(run)
+		}
 		s.setInstallApplyState(next)
 		return
 	}
 
 	_ = s.markInstallApplyCompleted()
+	if loadErr == nil {
+		_ = s.db.SaveInstallRun(run)
+	}
 	s.setInstallApplyState(next)
 }
 
@@ -340,8 +561,4 @@ func (s *Server) markInstallApplyCompleted() error {
 	session.CompletedStagesJSON = encodeStringList(completed)
 	session.LastStage = "final_smoke"
 	return s.db.SaveInstallSession(session)
-}
-
-func timePtr(value time.Time) *time.Time {
-	return &value
 }

@@ -514,7 +514,7 @@ summary::-webkit-details-marker{display:none}
 <div class="summary">
 <strong id="summary-title">자동으로 결정되는 내부 설정</strong>
 <ul>
-<li id="summary-profile">설치 프로파일: linux-host 계열 자동 선택</li>
+<li id="summary-profile">설치 프로파일: host 계열 기본 프로파일 자동 선택</li>
 <li id="summary-script">설치 스크립트: 서버 허용 목록에서 자동 사용</li>
 <li id="summary-session">설치 단계: language → bootstrap → final_smoke</li>
 </ul>
@@ -558,7 +558,7 @@ summary::-webkit-details-marker{display:none}
 </div>
 <div class="field">
 <label for="install_profile">Install Profile</label>
-<input id="install_profile" placeholder="linux-host">
+<input id="install_profile" placeholder="proxmox-host">
 </div>
 <div class="field full">
 <label for="install_script">Install Script</label>
@@ -630,7 +630,7 @@ const copy = {
     localvaultLabel: '기존 LocalVault URL (선택)',
     localvaultHelp: '올인원 설치가 아니고 기존 LocalVault를 연결할 때만 입력합니다.',
     summaryTitle: '자동으로 결정되는 내부 설정',
-    summaryProfile: '설치 프로파일: linux-host 계열 자동 선택',
+    summaryProfile: '설치 프로파일: host 계열 기본 프로파일 자동 선택',
     summaryScript: '설치 스크립트: 서버 허용 목록에서 자동 사용',
     summarySession: '설치 단계: language -> bootstrap -> final_smoke',
     saveQuick: '빠른 설치 저장',
@@ -676,7 +676,7 @@ const copy = {
     localvaultLabel: 'Existing LocalVault URL (optional)',
     localvaultHelp: 'Fill this only when you are connecting an existing LocalVault instead of all-in-one install.',
     summaryTitle: 'Derived internal settings',
-    summaryProfile: 'Install profile: auto-select linux-host family',
+    summaryProfile: 'Install profile: auto-select the default host profile',
     summaryScript: 'Install script: auto-use server allowlisted runner',
     summarySession: 'Install stages: language -> bootstrap -> final_smoke',
     saveQuick: 'Save Quick Setup',
@@ -744,7 +744,7 @@ function guessCurrentHost() {
 }
 
 function deriveInstallProfile() {
-  return 'linux-host';
+  return fields.install_profile.value.trim() || 'proxmox-host';
 }
 
 function deriveInstallScript(existingValue) {
@@ -873,7 +873,7 @@ function applySessionState(data) {
 }
 
 function applyRuntimeConfig(data) {
-  fields.install_profile.value = data.install_profile || 'linux-host';
+  fields.install_profile.value = data.install_profile || 'proxmox-host';
   fields.install_root.value = data.install_root || '/';
   fields.install_script.value = data.install_script || '';
   fields.install_workdir.value = data.install_workdir || '';

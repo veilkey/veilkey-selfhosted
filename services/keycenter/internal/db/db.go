@@ -47,6 +47,7 @@ func (d *DB) migrate() error {
 		&AdminAuthConfig{},
 		&AdminSession{},
 		&UIConfig{},
+		&InstallRun{},
 		&Config{},
 		&BulkApplyTemplate{},
 		&BulkApplyRun{},
