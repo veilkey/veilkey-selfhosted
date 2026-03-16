@@ -230,12 +230,12 @@ const t = computed(() => i18n[store.lang] || i18n.ko)
 
 const derivedProfile = computed(() => {
   if (store.targetType === 'lxc') return 'proxmox-lxc-allinone'
-  return 'linux-host-service'
+  if (store.config.localvault_url) return 'proxmox-host-localvault'
+  return 'proxmox-host'
 })
 
 const derivedScript = computed(() => {
-  if (store.targetType === 'lxc') return '/opt/veilkey/scripts/install-lxc.sh'
-  return '/opt/veilkey/scripts/install-host.sh'
+  return store.config.install_script || '(서버 환경변수에서 결정)'
 })
 
 const derivedWorkdir = computed(() => {
@@ -254,7 +254,7 @@ const derivedKeycenterUrl = computed(() => {
 
 const derivedLocalvaultUrl = computed(() => {
   if (store.config.localvault_url) return store.config.localvault_url
-  return 'https://127.0.0.1:8201'
+  return 'http://127.0.0.1:10180'
 })
 
 const canProceed = computed(() => {
@@ -274,10 +274,10 @@ function goBack() {
 async function goNext() {
   store.error = null
   store.config.install_profile = derivedProfile.value
-  store.config.install_script = derivedScript.value
-  store.config.install_workdir = derivedWorkdir.value
+  if (!store.config.install_script) store.config.install_script = ''
+  if (!store.config.install_workdir) store.config.install_workdir = ''
   store.config.keycenter_url = derivedKeycenterUrl.value
-  store.config.localvault_url = derivedLocalvaultUrl.value || 'https://127.0.0.1:8201'
+  store.config.localvault_url = derivedLocalvaultUrl.value
 
   await saveRuntimeConfig()
   if (store.error) return

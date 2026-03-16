@@ -229,8 +229,8 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	// Exit so systemd (or supervisor) restarts the process in normal mode
 	go func() {
 		time.Sleep(500 * time.Millisecond)
-		log.Println("install: exiting for restart in normal mode")
-		os.Exit(0)
+		log.Println("install: exiting for restart in normal mode (exit 1 for systemd)")
+		os.Exit(1)
 	}()
 }
 
