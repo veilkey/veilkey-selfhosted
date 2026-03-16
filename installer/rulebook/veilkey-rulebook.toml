@@ -42,12 +42,15 @@ docs_required_paths = [
 ]
 doc_paths = [
   "^README\\.md$",
+  "^installer/README\\.md$",
   "^CONTRIBUTING\\.md$",
   "^docs/",
+  "^installer/docs/",
   "^\\.gitlab/merge_request_templates/",
 ]
 test_paths = [
   "^tests?/",
+  "^installer/tests?/",
   "(^|/)[^/]+_test\\.go$",
   "(^|/)test\\.sh$",
   "(^|/)[^/]+_test\\.sh$",

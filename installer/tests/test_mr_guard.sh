@@ -55,5 +55,6 @@ run_case "docs only" "echo 'more docs' >> README.md; git add README.md; git comm
 run_case "deploy with tests and docs" "echo '#!/usr/bin/env bash' > scripts/deploy-host.sh; chmod +x scripts/deploy-host.sh; echo ok > tests/test_deploy.sh; echo 'deploy docs' > docs/deploy.md; git add scripts/deploy-host.sh tests/test_deploy.sh docs/deploy.md; git commit -q -m deploy" 0
 run_case "rulebook without tests" "echo '# comment' >> rulebook/veilkey-rulebook.toml; git add rulebook/veilkey-rulebook.toml; git commit -q -m rulebook" 1
 run_case "rulebook with tests and docs" "echo '# comment' >> rulebook/veilkey-rulebook.toml; echo ok > tests/test_rulebook.sh; echo 'rulebook docs' > docs/rulebook.md; git add rulebook/veilkey-rulebook.toml tests/test_rulebook.sh docs/rulebook.md; git commit -q -m rulebook" 0
+run_case "installer-prefixed tests count as tests" "mkdir -p installer tests installer/docs installer/tests; echo '#!/usr/bin/env bash' > installer/install.sh; chmod +x installer/install.sh; echo ok > installer/tests/test_install.sh; echo 'deploy docs' > installer/docs/deploy.md; git add installer/install.sh installer/tests/test_install.sh installer/docs/deploy.md; git commit -q -m installer-prefixed" 0
 
 echo ok

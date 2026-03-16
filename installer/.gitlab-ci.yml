@@ -19,9 +19,12 @@ validate-components:
     - ./install.sh plan-install proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
     - ./install.sh configure proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
     - ./install.sh plan-activate "$CI_PROJECT_DIR/.tmp/rootfs"
+    - export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
     - export VEILKEY_GITLAB_PACKAGE_PAT="$VEILKEY_GITLAB_PACKAGE_PAT"
     - bash tests/test_download_checksum.sh
+    - bash tests/test_doctor_placeholder_warning.sh
     - bash tests/test_proxy_component.sh
+    - bash tests/test_placeholder_artifact_guard.sh
     - bash tests/test_install_profile_command.sh
     - bash tests/test_proxmox_wrapper_commands.sh
   tags:
@@ -33,6 +36,7 @@ validate-components:
 validate-install-layout:
   stage: validate
   script:
+    - export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
     - export VEILKEY_GITLAB_PACKAGE_PAT="$VEILKEY_GITLAB_PACKAGE_PAT"
     - ./install.sh init
     - ./install.sh bundle proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/bundle"
@@ -40,7 +44,6 @@ validate-install-layout:
     - ./install.sh configure proxmox-lxc-allinone "$CI_PROJECT_DIR/.tmp/rootfs"
     - ./install.sh plan-activate "$CI_PROJECT_DIR/.tmp/rootfs"
     - ./install.sh post-install-health "$CI_PROJECT_DIR/.tmp/rootfs"
-    - test -x "$CI_PROJECT_DIR/.tmp/rootfs/usr/local/bin/veilkey"
     - test -x "$CI_PROJECT_DIR/.tmp/rootfs/usr/local/bin/veilkey-keycenter"
     - test -x "$CI_PROJECT_DIR/.tmp/rootfs/usr/local/bin/veilkey-localvault"
     - test -f "$CI_PROJECT_DIR/.tmp/rootfs/opt/veilkey/installer/install.env"

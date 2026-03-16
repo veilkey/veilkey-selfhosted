@@ -311,6 +311,15 @@ normalize_download_url() {
   local project rest project_json project_id suffix
   local -a auth_args=() tls_args=()
 
+  case "${url}" in
+    *://your-gitlab-host/*|*://your-keycenter-host/*|*://example.com/*|*://localhost/*)
+      if [[ -z "${api_base}" ]]; then
+        echo "Error: placeholder artifact_url requires VEILKEY_INSTALLER_GITLAB_API_BASE or a rewritten manifest URL" >&2
+        exit 1
+      fi
+      ;;
+  esac
+
   if [[ "${url}" =~ /api/v4/projects/([^/]+)/packages/generic/(.+)$ ]]; then
     project="${BASH_REMATCH[1]}"
     rest="${BASH_REMATCH[2]}"
@@ -348,9 +357,19 @@ init_manifest() {
   echo "Wrote ${MANIFEST_FILE}"
 }
 
+manifest_has_placeholder_urls() {
+  if grep -Eq 'https?://(your-gitlab-host|your-keycenter-host|example.com|localhost)(/|:|$)' "${MANIFEST_FILE}"; then
+    return 0
+  fi
+  return 1
+}
+
 cmd_doctor() {
   manifest_cmd validate >/dev/null
   manifest_cmd lint-legacy-layout
+  if manifest_has_placeholder_urls && [[ -z "${VEILKEY_INSTALLER_GITLAB_API_BASE:-}" ]]; then
+    echo "WARNING: manifest contains placeholder artifact URLs; set VEILKEY_INSTALLER_GITLAB_API_BASE or rewrite the manifest before bundle/download/install-profile" >&2
+  fi
 }
 
 verify_sha256() {
@@ -634,6 +653,14 @@ require_profile_file() {
   }
 }
 
+profile_env_default() {
+  local profile="$1"
+  local key="$2"
+  local file
+  file="$(profile_file "${profile}")"
+  awk -F= -v key="${key}" '$1 == key {print $2; exit}' "${file}"
+}
+
 profile_has_component() {
   local profile="$1"
   local component="$2"
@@ -665,13 +692,15 @@ render_profile_envs() {
     default_enable_localvault=0
   fi
   if profile_has_component "${profile}" "proxy"; then
-    # Proxy runtime still depends on a veilkey-cli binary that is not yet
-    # packaged as part of the default installer surface. Keep proxy assets
-    # staged, but require an explicit opt-in before enabling proxy units.
-    default_enable_proxy=0
+    default_enable_proxy="$(profile_env_default "${profile}" "VEILKEY_ENABLE_PROXY")"
+    default_enable_proxy="${default_enable_proxy:-0}"
   else
     default_enable_proxy=0
   fi
+  default_enable_keycenter="${VEILKEY_ENABLE_KEYCENTER_DEFAULT:-$(profile_env_default "${profile}" "VEILKEY_ENABLE_KEYCENTER" || true)}"
+  default_enable_keycenter="${default_enable_keycenter:-$(if profile_has_component "${profile}" "keycenter"; then echo 1; else echo 0; fi)}"
+  default_enable_localvault="${VEILKEY_ENABLE_LOCALVAULT_DEFAULT:-$(profile_env_default "${profile}" "VEILKEY_ENABLE_LOCALVAULT" || true)}"
+  default_enable_localvault="${default_enable_localvault:-$(if profile_has_component "${profile}" "localvault"; then echo 1; else echo 0; fi)}"
 
   enable_keycenter="${VEILKEY_ENABLE_KEYCENTER:-${default_enable_keycenter}}"
   enable_localvault="${VEILKEY_ENABLE_LOCALVAULT:-${default_enable_localvault}}"

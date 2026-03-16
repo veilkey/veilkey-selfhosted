@@ -17,6 +17,7 @@ client-cli:
   rules:
     - changes:
         - client/cli/**/*
+        - shared/**/*
     - if: $CI_COMMIT_TAG
     - if: $CI_PIPELINE_SOURCE == "web"
 
@@ -32,6 +33,7 @@ installer:
   rules:
     - changes:
         - installer/**/*
+        - shared/**/*
     - if: $CI_PIPELINE_SOURCE == "web"
 
 services-keycenter:
@@ -46,6 +48,7 @@ services-keycenter:
   rules:
     - changes:
         - services/keycenter/**/*
+        - shared/**/*
     - if: $CI_PIPELINE_SOURCE == "web"
 
 services-localvault:
@@ -60,6 +63,7 @@ services-localvault:
   rules:
     - changes:
         - services/localvault/**/*
+        - shared/**/*
     - if: $CI_PIPELINE_SOURCE == "web"
 
 services-proxy:
@@ -74,4 +78,5 @@ services-proxy:
   rules:
     - changes:
         - services/proxy/**/*
+        - shared/**/*
     - if: $CI_PIPELINE_SOURCE == "web"

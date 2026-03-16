@@ -8,6 +8,7 @@ tmp_stage="$(mktemp -d)"
 tmp_downloads="$(mktemp -d)"
 trap 'rm -f "$tmp_manifest"; rm -rf "$tmp_stage" "$tmp_downloads"' EXIT
 
+export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh validate >/dev/null
 

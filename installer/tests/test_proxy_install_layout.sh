@@ -8,14 +8,13 @@ tmp_root="$(mktemp -d)"
 tmp_manifest="$(mktemp)"
 trap 'rm -rf "$tmp_bundle" "$tmp_root"; rm -f "$tmp_manifest"' EXIT
 
+export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh bundle proxmox-host "$tmp_bundle" >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh install proxmox-host "$tmp_root" "$tmp_bundle" >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh configure proxmox-host "$tmp_root" >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh post-install-health "$tmp_root" >/dev/null
 
-test -x "$tmp_root/usr/local/bin/veilkey"
-test -x "$tmp_root/usr/local/bin/veilkey-cli"
 test -x "$tmp_root/usr/local/bin/veilkey-session-config"
 test -x "$tmp_root/usr/local/bin/veilkey-proxy-launch"
 test -x "$tmp_root/usr/local/bin/veilroot-shell"

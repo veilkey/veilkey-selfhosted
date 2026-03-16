@@ -44,6 +44,8 @@ The active install targets are:
 
 - `INSTALL.md`
   - operator install flow
+- `docs/deployment-readiness.md`
+  - deploy-time guardrails and preflight expectations
 - `profiles/`
   - install target inputs
 - `scripts/`
@@ -141,6 +143,8 @@ Top-level commands:
 ./install.sh post-install-health <root>
 ```
 
+`doctor` warns when the active manifest still contains placeholder artifact URLs and `VEILKEY_INSTALLER_GITLAB_API_BASE` is unset.
+
 Operator-facing wrappers:
 
 ```bash
@@ -235,8 +239,10 @@ export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
 Create a fresh Debian LXC, copy the installer tree and bundle into the container, then run:
 
 ```bash
-VEILKEY_KEYCENTER_PASSWORD='replace-keycenter-password' \
-VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
+echo -n 'replace-keycenter-password' > /etc/veilkey/keycenter.password
+chmod 600 /etc/veilkey/keycenter.password
+echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
 ./scripts/proxmox-lxc-allinone-install.sh --activate / /root/all-bundle
 
 ./scripts/proxmox-lxc-allinone-health.sh /
@@ -245,7 +251,8 @@ VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
 For a second LocalVault-only runtime LXC that registers into the all-in-one KeyCenter:
 
 ```bash
-VEILKEY_LOCALVAULT_PASSWORD='replace-localvault-password' \
+echo -n 'replace-localvault-password' > /etc/veilkey/localvault.password
+chmod 600 /etc/veilkey/localvault.password
 VEILKEY_KEYCENTER_URL='http://<allinone-ip>:10181' \
 ./scripts/proxmox-lxc-runtime-install.sh --activate / /root/runtime-bundle
 
