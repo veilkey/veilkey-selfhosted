@@ -4,6 +4,7 @@ import path from 'node:path';
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const appVue = fs.readFileSync(path.join(root, 'src', 'App.vue'), 'utf8');
 const useAdminApp = fs.readFileSync(path.join(root, 'src', 'useAdminApp.js'), 'utf8');
+const adminConfig = fs.readFileSync(path.join(root, 'src', 'adminConfig.js'), 'utf8');
 
 function fail(message) {
   console.error(message);
@@ -64,6 +65,27 @@ for (const helper of helperCalls) {
   if (helper === 'pageConfig') continue;
   if (!destructured.has(helper)) {
     fail(`App.vue contract check failed: template calls "${helper}()" but it is not destructured from useAdminApp().`);
+  }
+}
+
+const pageConfigMatch = adminConfig.match(/export const pageConfig = (\{[\s\S]*?\n\});/);
+const routeEntriesMatch = adminConfig.match(/export const routeEntries = (\[[\s\S]*?\n\]);/);
+if (!pageConfigMatch || !routeEntriesMatch) {
+  fail('adminConfig contract check failed: unable to parse pageConfig or routeEntries.');
+}
+
+const pageConfig = Function(`"use strict"; return (${pageConfigMatch[1]});`)();
+const routeEntries = Function(`"use strict"; return (${routeEntriesMatch[1]});`)();
+const routeSet = new Set(routeEntries.map((entry) => `${entry.page}::${entry.tab}`));
+
+for (const [page, config] of Object.entries(pageConfig)) {
+  for (const tab of config.tabs || []) {
+    if (page === 'vaults' && tab === '키 / 환경값') {
+      continue;
+    }
+    if (!routeSet.has(`${page}::${tab}`)) {
+      fail(`adminConfig contract check failed: missing route entry for ${page} / ${tab}.`);
+    }
   }
 }
 
