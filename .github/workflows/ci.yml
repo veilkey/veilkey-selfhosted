@@ -58,6 +58,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v7
         with:
+          only-new-issues: true
           working-directory: services/keycenter
           version: "v2.1"
       - name: Test
@@ -89,6 +90,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v7
         with:
+          only-new-issues: true
           working-directory: services/localvault
           version: "v2.1"
       - name: Test
@@ -118,6 +120,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v7
         with:
+          only-new-issues: true
           working-directory: services/proxy
           version: "v2.1"
       - name: Test
@@ -151,6 +154,7 @@ jobs:
       - name: Lint
         uses: golangci/golangci-lint-action@v7
         with:
+          only-new-issues: true
           working-directory: client/cli
           version: "v2.1"
       - name: Test
