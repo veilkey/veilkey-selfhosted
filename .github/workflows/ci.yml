@@ -1,0 +1,213 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── 변경 감지 ─────────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      keycenter: ${{ steps.filter.outputs.keycenter }}
+      localvault: ${{ steps.filter.outputs.localvault }}
+      proxy: ${{ steps.filter.outputs.proxy }}
+      cli: ${{ steps.filter.outputs.cli }}
+      installer: ${{ steps.filter.outputs.installer }}
+      shared: ${{ steps.filter.outputs.shared }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            keycenter:
+              - 'services/keycenter/**'
+            localvault:
+              - 'services/localvault/**'
+            proxy:
+              - 'services/proxy/**'
+            cli:
+              - 'client/cli/**'
+            installer:
+              - 'installer/**'
+            shared:
+              - 'shared/**'
+
+  # ── KeyCenter ─────────────────────────────────────────────────
+  keycenter:
+    needs: changes
+    if: needs.changes.outputs.keycenter == 'true' || needs.changes.outputs.shared == 'true' || github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/keycenter
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/keycenter/go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: services/keycenter
+      - name: Test
+        run: go test ./... -race -count=1
+      - name: Build
+        run: CGO_ENABLED=1 go build -o veilkey-keycenter ./cmd
+      - name: Upload artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: veilkey-keycenter-linux-amd64
+          path: services/keycenter/veilkey-keycenter
+
+  # ── LocalVault ────────────────────────────────────────────────
+  localvault:
+    needs: changes
+    if: needs.changes.outputs.localvault == 'true' || needs.changes.outputs.shared == 'true' || github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/localvault
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/localvault/go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: services/localvault
+      - name: Test
+        run: go test ./... -race -count=1
+      - name: Build
+        run: CGO_ENABLED=1 go build -o veilkey-localvault ./cmd
+      - name: Upload artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: veilkey-localvault-linux-amd64
+          path: services/localvault/veilkey-localvault
+
+  # ── Proxy ─────────────────────────────────────────────────────
+  proxy:
+    needs: changes
+    if: needs.changes.outputs.proxy == 'true' || needs.changes.outputs.shared == 'true' || github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/proxy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/proxy/go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: services/proxy
+      - name: Test
+        run: go test ./... -race -count=1
+      - name: Build
+        run: |
+          CGO_ENABLED=0 go build -o veilkey-proxy ./cmd/veilkey-proxy
+          CGO_ENABLED=0 go build -o veilkey-session-config ./cmd/veilkey-session-config
+      - name: Upload artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: veilkey-proxy-linux-amd64
+          path: |
+            services/proxy/veilkey-proxy
+            services/proxy/veilkey-session-config
+
+  # ── CLI ───────────────────────────────────────────────────────
+  cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true' || needs.changes.outputs.shared == 'true' || github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/cli
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: client/cli/go.mod
+      - name: Lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          working-directory: client/cli
+      - name: Test
+        run: go test ./... -race -count=1
+      - name: Build
+        run: CGO_ENABLED=0 go build -o veilkey-cli .
+      - name: Upload artifact
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        uses: actions/upload-artifact@v4
+        with:
+          name: veilkey-cli-linux-amd64
+          path: client/cli/veilkey-cli
+
+  # ── Installer (shell tests) ──────────────────────────────────
+  installer:
+    needs: changes
+    if: needs.changes.outputs.installer == 'true' || needs.changes.outputs.shared == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: installer
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: installer/go.mod
+      - name: Init manifest
+        run: ./install.sh init
+      - name: Validate
+        run: |
+          ./install.sh validate
+          ./install.sh doctor
+      - name: Shell tests
+        run: |
+          bash tests/test_placeholder_artifact_guard.sh
+          bash tests/test_install_profile_command.sh
+          bash tests/test_proxmox_wrapper_commands.sh
+          bash tests/test_rulebook_format.sh
+
+  # ── Shared tests ──────────────────────────────────────────────
+  shared:
+    needs: changes
+    if: needs.changes.outputs.shared == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Shell tests
+        run: |
+          cd shared
+          bash tests/test_veilroot_shell_hook.sh
+          bash tests/test_mr_guard.sh
+
+  # ── PR 게이트 (모든 필수 job 통과 확인) ──────────────────────
+  pr-gate:
+    if: always()
+    needs: [keycenter, localvault, proxy, cli, installer, shared]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          results=("${{ needs.keycenter.result }}" "${{ needs.localvault.result }}" "${{ needs.proxy.result }}" "${{ needs.cli.result }}" "${{ needs.installer.result }}" "${{ needs.shared.result }}")
+          for r in "${results[@]}"; do
+            if [[ "$r" == "failure" || "$r" == "cancelled" ]]; then
+              echo "Job failed: $r"
+              exit 1
+            fi
+          done
+          echo "All jobs passed or skipped"
