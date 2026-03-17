@@ -1,4 +1,13 @@
-# VeilKey Self-Hosted
+<div align="center">
+  <h1>VeilKey Self-Hosted</h1>
+  <p><strong>Self-hosted secret lifecycle control and node-local execution boundary for operator-managed AI infrastructure.</strong></p>
+  <p>
+    <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+    <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
+    <a href="https://veil-key.com"><img src="https://img.shields.io/badge/home-veil--key.com-0f766e?logo=googlechrome&logoColor=white" alt="Website"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT License"></a>
+  </p>
+</div>
 
 `veilkey-selfhosted` is the self-hosted VeilKey product tree for secret lifecycle control, node-local runtime enforcement, and operator-managed infrastructure.
 
