@@ -80,9 +80,6 @@ set_default_env() {
   export VEILKEY_KEYCENTER_URL="${VEILKEY_KEYCENTER_URL:-https://127.0.0.1:10181}"
   export VEILKEY_LOCALVAULT_DB_PATH="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
   export VEILKEY_KEYCENTER_DB_PATH="${VEILKEY_KEYCENTER_DB_PATH:-/opt/veilkey/keycenter/data/veilkey.db}"
-  # TLS: default to self-signed cert path. install.sh configure will generate if missing.
-  export VEILKEY_TLS_CERT="${VEILKEY_TLS_CERT:-/etc/veilkey/tls/server.crt}"
-  export VEILKEY_TLS_KEY="${VEILKEY_TLS_KEY:-/etc/veilkey/tls/server.key}"
   if [[ "${VEILKEY_ENABLE_PROXY:-0}" = "1" ]]; then
     echo "Error: proxmox-lxc-allinone cannot enable proxy runtime inside the LXC." >&2
     echo "Use ./scripts/proxmox-host-cli-install.sh on the Proxmox host for the companion boundary." >&2

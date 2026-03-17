@@ -118,20 +118,10 @@ func runSetupServer(dbPath, dataDir string) {
 		handleInstallInit(w, r, database, dataDir, server)
 	})
 
-	// Ensure self-signed TLS cert exists for HTTPS-by-default.
+	log.Printf("veilkey-localvault setup mode on %s (waiting for initialization)", addr)
+
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
 	tlsKey := os.Getenv("VEILKEY_TLS_KEY")
-	if tlsCert == "" && tlsKey == "" {
-		tlsDir := filepath.Join(dataDir, "..", "tls")
-		certPath := filepath.Join(tlsDir, "server.crt")
-		keyPath := filepath.Join(tlsDir, "server.key")
-		if _, err := os.Stat(certPath); err == nil {
-			tlsCert = certPath
-			tlsKey = keyPath
-		}
-	}
-
-	log.Printf("veilkey-localvault setup mode on %s (waiting for initialization)", addr)
 	if tlsCert != "" && tlsKey != "" {
 		if err := http.ListenAndServeTLS(addr, tlsCert, tlsKey, api.LogMiddleware(mux)); err != nil {
 			log.Fatalf("Setup server failed: %v", err)
