@@ -282,6 +282,9 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	if strings.TrimSpace(cfg.LocalvaultURL) == "" {
 		result.Warnings = append(result.Warnings, "localvault_url is empty; localvault health verification will be skipped")
 	}
+	if strings.TrimSpace(cfg.TLSCertPath) == "" || strings.TrimSpace(cfg.TLSKeyPath) == "" {
+		result.Warnings = append(result.Warnings, "TLS cert/key not configured; services will start without HTTPS. Place cert at /etc/veilkey/tls/server.crt and key at /etc/veilkey/tls/server.key")
+	}
 	result.CommandPreview = installCommand(result.ResolvedScript, cfg)
 	return result
 }
