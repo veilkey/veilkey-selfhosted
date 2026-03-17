@@ -68,16 +68,9 @@ build:
   stage: build
   script:
     - CGO_ENABLED=1 go build -o veilkey-localvault ./cmd/
-    - |
-      GLIBC_MIN="$(strings -a veilkey-localvault | grep -Eo 'GLIBC_[0-9]+\.[0-9]+' | sed 's/^GLIBC_//' | sort -V | tail -n1)"
-      : > artifact-runtime.env
-      if [[ -n "${GLIBC_MIN}" ]]; then
-        printf 'VEILKEY_RUNTIME_GLIBC_MIN=%s\n' "${GLIBC_MIN}" > artifact-runtime.env
-      fi
   artifacts:
     paths:
       - services/localvault/veilkey-localvault
-      - services/localvault/artifact-runtime.env
     expire_in: 1 week
   rules:
     - if: $CI_COMMIT_BRANCH
@@ -95,7 +88,6 @@ package:
     - PKG_VERSION="${CI_COMMIT_SHA}"
     - mkdir -p dist/package
     - install -m 755 veilkey-localvault dist/package/veilkey-localvault
-    - install -m 644 artifact-runtime.env dist/package/artifact-runtime.env
     - install -m 644 README.md dist/package/README.md
     - mkdir -p dist/package/scripts
     - install -m 755 scripts/deploy-lxc.sh dist/package/scripts/deploy-lxc.sh
