@@ -178,6 +178,40 @@ rebind prepared with key_version=9
 
 The full operator guide lives in [`installer/INSTALL.md`](./installer/INSTALL.md).
 
+## Operator Path
+
+The operator path is easiest to understand as one control path and one execution path.
+
+```text
+operator / CLI
+      |
+      v
+  KeyCenter API
+      |
+      +---- policy / catalog / bulk apply
+      |
+      +---- LocalVault node A
+      |         |
+      |         +---- ciphertext + runtime context
+      |         +---- heartbeat / rebind / rotation
+      |         +---- wrapped execution boundary
+      |
+      +---- LocalVault node B
+                |
+                +---- same node-local model
+```
+
+The outbound enforcement edge is where `services/proxy` belongs. The intended split is:
+
+- `KeyCenter`
+  - central policy, registration, audit, bulk operations
+- `LocalVault`
+  - node-local runtime, ciphertext/context, execution boundary
+- `proxy`
+  - outbound enforcement surface when runtime traffic must be mediated
+
+Additional operating notes live in [`docs/OPERATING-MODEL.md`](./docs/OPERATING-MODEL.md).
+
 ## Main Use Cases
 
 - run KeyCenter and LocalVault inside your own Proxmox environment
