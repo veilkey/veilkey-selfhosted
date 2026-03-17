@@ -28,6 +28,11 @@ https://github.com/veilkey/veilkey-selfhosted/releases/download/<tag>/veilkey-cl
 ```
 
 The example manifest leaves this as `RELEASE_OR_TAG` until a real tagged release exists.
+You can satisfy that placeholder either by rewriting the manifest or by exporting:
+
+```bash
+export VEILKEY_INSTALLER_CLI_RELEASE_TAG="v0.3.0"
+```
 
 Password handling for operator installs should use password files:
 

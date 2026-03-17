@@ -183,7 +183,7 @@ Important behavior:
 - fresh installs can download artifacts directly from the URL already encoded in the active manifest
 - the example manifest still uses placeholder URLs until release refs are filled in:
   - `keycenter` / `localvault` normalize through `VEILKEY_INSTALLER_GITLAB_API_BASE`
-  - `cli` uses a GitHub release asset placeholder with `RELEASE_OR_TAG`
+  - `cli` uses a GitHub release asset placeholder with `RELEASE_OR_TAG`, which can be resolved by `VEILKEY_INSTALLER_CLI_RELEASE_TAG`
 - `post-install-health` validates the installed scaffold
 - wrapper commands add target-specific runtime checks on top
 - `proxmox-lxc-allinone` stages boundary assets for host export and follow-up setup
@@ -196,6 +196,12 @@ https://github.com/veilkey/veilkey-selfhosted/releases/download/<tag>/veilkey-cl
 ```
 
 Until a real tag is published, `components.toml` must be rewritten or the focused local artifact test path should be used.
+
+Operator shorthand for the CLI placeholder:
+
+```bash
+export VEILKEY_INSTALLER_CLI_RELEASE_TAG="v0.3.0"
+```
 
 ## Bootstrap SSH Export
 

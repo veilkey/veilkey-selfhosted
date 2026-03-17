@@ -54,6 +54,7 @@ Environment:
   VEILKEY_INSTALLER_AUTH_HEADER Custom curl auth header for package download
   VEILKEY_GITLAB_PACKAGE_PAT   PRIVATE-TOKEN used for package download
   VEILKEY_INSTALLER_GITLAB_API_BASE Override GitLab API base for package URL normalization
+  VEILKEY_INSTALLER_CLI_RELEASE_TAG Replace RELEASE_OR_TAG in cli artifact URLs
 EOF
 }
 
@@ -308,8 +309,17 @@ curl_auth_args() {
 normalize_download_url() {
   local url="$1"
   local api_base="${VEILKEY_INSTALLER_GITLAB_API_BASE:-}"
+  local cli_release_tag="${VEILKEY_INSTALLER_CLI_RELEASE_TAG:-}"
   local project rest project_json project_id suffix
   local -a auth_args=() tls_args=()
+
+  if [[ "${url}" == *RELEASE_OR_TAG* ]]; then
+    if [[ -z "${cli_release_tag}" ]]; then
+      echo "Error: placeholder artifact_url still contains an unresolved release/tag token" >&2
+      exit 1
+    fi
+    url="${url//RELEASE_OR_TAG/${cli_release_tag}}"
+  fi
 
   case "${url}" in
     *://your-gitlab-host/*|*://your-keycenter-host/*|*://example.com/*|*://localhost/*)
@@ -373,6 +383,9 @@ cmd_doctor() {
   manifest_cmd lint-legacy-layout
   if manifest_has_placeholder_urls && [[ -z "${VEILKEY_INSTALLER_GITLAB_API_BASE:-}" ]]; then
     echo "WARNING: manifest contains placeholder artifact URLs; set VEILKEY_INSTALLER_GITLAB_API_BASE or rewrite the manifest before bundle/download/install-profile" >&2
+  fi
+  if grep -q 'RELEASE_OR_TAG' "${MANIFEST_FILE}" && [[ -z "${VEILKEY_INSTALLER_CLI_RELEASE_TAG:-}" ]]; then
+    echo "WARNING: manifest contains RELEASE_OR_TAG placeholders; set VEILKEY_INSTALLER_CLI_RELEASE_TAG or rewrite the manifest before bundle/download/install-profile" >&2
   fi
 }
 

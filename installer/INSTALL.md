@@ -35,12 +35,19 @@ The example manifest keeps placeholder package URLs.
 That means fresh `bundle` or `download` commands require one of:
 
 - `VEILKEY_INSTALLER_GITLAB_API_BASE` for the GitLab-backed runtime components
-- a rewritten `components.toml` with a real CLI tag in the GitHub release asset URL
+- `VEILKEY_INSTALLER_CLI_RELEASE_TAG=<tag>` for the CLI GitHub release asset placeholder
+- or a rewritten `components.toml` with a real CLI tag in the GitHub release asset URL
 
 Expected CLI release asset pattern:
 
 ```text
 https://github.com/veilkey/veilkey-selfhosted/releases/download/<tag>/veilkey-cli_<tag>_linux_amd64.tar.gz
+```
+
+Example:
+
+```bash
+export VEILKEY_INSTALLER_CLI_RELEASE_TAG="v0.3.0"
 ```
 
 ## 2. Install a Host LocalVault
@@ -218,7 +225,7 @@ If downloads fail, verify:
 - GitLab availability for `keycenter` / `localvault`
 - internal routing to the GitLab artifact source
 - `VEILKEY_INSTALLER_GITLAB_API_BASE` is set to the active GitLab API base
-- the `cli` artifact URL has a real release tag instead of `RELEASE_OR_TAG`
+- `VEILKEY_INSTALLER_CLI_RELEASE_TAG` is set, or the `cli` artifact URL already has a real release tag instead of `RELEASE_OR_TAG`
 
 If install stops with a glibc compatibility error, the packaged runtime artifact was built against a newer libc than the target provides. Rebuild against an older baseline or move to a newer target runtime.
 
