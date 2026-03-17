@@ -666,6 +666,17 @@ install_component_payload() {
   copy_tree "${component_src}" "${component_dst}"
 
   case "${component}" in
+    cli)
+      mkdir -p "${root%/}/etc/veilkey"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-cli" 0755 \
+        "${component_src}/veilkey-cli"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-session-config" 0755 \
+        "${component_src}/veilkey-session-config"
+      install_optional_asset "${VEILKEY_OS_BIN_DIR}/vk" 0755 \
+        "${component_src}/vk"
+      install_optional_asset "${root%/}/etc/veilkey/session-tools.toml.example" 0644 \
+        "${component_src}/session-tools.toml.example"
+      ;;
     keycenter)
       install -m 0755 "${component_src}/veilkey-keycenter" "${VEILKEY_OS_BIN_DIR}/veilkey-keycenter"
       ;;
