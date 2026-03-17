@@ -6,10 +6,11 @@ tools_csv="${VEIL_WORK_TMUX_TOOLS:-shell,claude,codex}"
 
 IFS=',' read -r -a tools <<<"${tools_csv}"
 
-shell_cmd="${VEIL_WORK_TMUX_SHELL_CMD:-exec \$SHELL -li}"
-claude_cmd="${VEIL_WORK_TMUX_CLAUDE_CMD:-claude}"
-codex_cmd="${VEIL_WORK_TMUX_CODEX_CMD:-codex}"
-opencode_cmd="${VEIL_WORK_TMUX_OPENCODE_CMD:-opencode}"
+veilkey_bin="${VEIL_WORK_TMUX_VEILKEY_BIN:-veilkey-cli}"
+shell_cmd="${VEIL_WORK_TMUX_SHELL_CMD:-${veilkey_bin} wrap-pty bash -li}"
+claude_cmd="${VEIL_WORK_TMUX_CLAUDE_CMD:-${veilkey_bin} wrap-pty claude}"
+codex_cmd="${VEIL_WORK_TMUX_CODEX_CMD:-${veilkey_bin} wrap-pty codex}"
+opencode_cmd="${VEIL_WORK_TMUX_OPENCODE_CMD:-${veilkey_bin} wrap-pty opencode}"
 
 cmd_for_tool() {
   case "${1}" in
