@@ -1,124 +1,37 @@
-#!/bin/bash
-# vk — Encrypt a value with VeilKey and output VK:ref token
+#!/usr/bin/env bash
+# vk — VeilKey 수동 시크릿 등록
 #
 # Usage:
-#   vk                           Hidden input (typing not visible)
-#   echo "secret" | vk          Read from stdin
-#
-# Inside vk_wrap shell:
-#   🔒VK $ vk
-#   Enter secret value: (typing not visible)
-#   VK:a1b2c3d4
-
+#   vk <KEY_NAME>
+#   example: vk CLOUDFLARE_API_KEY
 set -euo pipefail
 
-resolve_veilkey_url() {
-  if [[ -n "${VEILKEY_LOCALVAULT_URL:-}" ]]; then
-    echo "$VEILKEY_LOCALVAULT_URL"
-    return
-  fi
-  if [[ -n "${VEILKEY_API:-}" ]]; then
-    echo "$VEILKEY_API"
-    return
-  fi
-  if [[ -n "${VEILKEY_HUB_URL:-}" ]]; then
-    echo "$VEILKEY_HUB_URL"
-    return
-  fi
-  if [[ -n "${VK_BASH_API:-}" ]]; then
-    echo "$VK_BASH_API"
-    return
-  fi
-  echo ""
-}
+if [ $# -lt 1 ]; then
+  echo "usage: vk <KEY_NAME>" >&2
+  echo "  example: vk CLOUDFLARE_API_KEY" >&2
+  exit 2
+fi
 
-export VEILKEY_API="$(resolve_veilkey_url)"
-if [[ -z "$VEILKEY_API" ]]; then
-  echo "Error: VEILKEY_LOCALVAULT_URL, VEILKEY_API, VEILKEY_HUB_URL, or VK_BASH_API not set" >&2
+name="$1"
+url="${VEILKEY_LOCALVAULT_URL:-${VEILKEY_API:-}}"
+url="${url//\'/}"
+if [ -z "$url" ]; then
+  echo "error: VEILKEY_LOCALVAULT_URL or VEILKEY_API is not set" >&2
   exit 1
 fi
 
-STATE_DIR="${VEILKEY_STATE_DIR:-${TMPDIR:-/tmp}/veilkey-cli}"
+read -r -s -p "Secret: " value
+echo ""
 
-_cli_pause() {
-    [[ -f "$STATE_DIR/guard.pid" ]] && kill -USR2 "$(cat "$STATE_DIR/guard.pid")" 2>/dev/null || true
-}
-_cli_resume() {
-    [[ -f "$STATE_DIR/guard.pid" ]] && kill -USR1 "$(cat "$STATE_DIR/guard.pid")" 2>/dev/null || true
-}
-trap '_cli_resume' EXIT
-_cli_pause
-
-usage() {
-    cat <<'EOF'
-vk — Encrypt a value with VeilKey
-
-Usage:
-  vk                  Hidden input (recommended)
-  echo "secret" | vk  Read from stdin
-
-Output: VK:ref (encrypted, stored in agent)
-
-Options:
-  -h, --help    Show this help
-EOF
-    exit 0
-}
-
-while [[ $# -gt 0 ]]; do
-    case "$1" in
-        -h|--help)  usage ;;
-        -*)         echo "Error: unknown option $1" >&2; exit 1 ;;
-        *)          echo "Error: passing secret as argument exposes it in terminal history." >&2
-                    echo "  Run vk without arguments (hidden input)." >&2
-                    exit 1 ;;
-    esac
-done
-
-if [[ ! -t 0 ]]; then
-    VALUE=$(cat)
-elif [[ -e /dev/tty ]]; then
-    read -rsp "Enter secret value: " VALUE </dev/tty
-    echo >&2
-    read -rsp "Confirm secret value: " VALUE2 </dev/tty
-    echo >&2
-    if [[ "$VALUE" != "$VALUE2" ]]; then
-        echo "Error: values do not match." >&2
-        exit 1
-    fi
-else
-    read -rsp "Enter secret value: " VALUE
-    echo >&2
-    read -rsp "Confirm secret value: " VALUE2
-    echo >&2
-    if [[ "$VALUE" != "$VALUE2" ]]; then
-        echo "Error: values do not match." >&2
-        exit 1
-    fi
+if [ -z "$value" ]; then
+  echo "error: empty input" >&2
+  exit 1
 fi
 
-if [[ -z "$VALUE" ]]; then
-    echo "Error: value is empty." >&2
-    exit 1
-fi
-
-PAYLOAD=$(jq -nc --arg v "$VALUE" '{plaintext:$v}')
-
-RESP=$(curl -sf -X POST "${VEILKEY_API}/api/encrypt" \
-    -H 'Content-Type: application/json' \
-    -d "$PAYLOAD" 2>/dev/null) || {
-    echo "Error: VeilKey encrypt failed" >&2
-    exit 1
+json=$(printf '{"plaintext":"%s","name":"%s"}' "$value" "$name")
+result=$(/usr/bin/curl --noproxy '*' -sf -X POST "$url/api/encrypt" \
+  -H 'Content-Type: application/json' -d "$json" 2>&1) || {
+  echo "error: encrypt failed" >&2; exit 1
 }
-
-TOKEN=$(echo "$RESP" | jq -r '.token // .ciphertext // empty')
-if [[ -n "$TOKEN" ]]; then
-    mkdir -p "$STATE_DIR"
-    grep -qF "$VALUE" "$STATE_DIR/watchlist" 2>/dev/null || \
-        printf '%s\t%s\n' "$VALUE" "$TOKEN" >> "$STATE_DIR/watchlist"
-    echo "$TOKEN"
-else
-    echo "Error: token not found in response." >&2
-    echo "$RESP" >&2
-    exit 1
-fi
+ref=$(echo "$result" | grep -o '"ref":"[^"]*"' | cut -d'"' -f4)
+echo "$ref"
