@@ -14,10 +14,14 @@ func TestHandleBulkApplyExecuteReturnsPostchecks(t *testing.T) {
 	handler := server.SetupRoutes()
 
 	tmpDir := t.TempDir()
-	configDir := filepath.Join(tmpDir, "mattermost", "config")
-	overrideDir := filepath.Join(tmpDir, "systemd", "mattermost.service.d")
-	configPath := filepath.Join(configDir, "config.json")
-	overridePath := filepath.Join(overrideDir, "override.conf")
+	configPath := filepath.Join(tmpDir, "mattermost", "config", "config.json")
+	overridePath := filepath.Join(tmpDir, "systemd", "mattermost.service.d", "override.conf")
+	allowedBulkApplyTargets[configPath] = struct{}{}
+	allowedBulkApplyTargets[overridePath] = struct{}{}
+	t.Cleanup(func() {
+		delete(allowedBulkApplyTargets, configPath)
+		delete(allowedBulkApplyTargets, overridePath)
+	})
 
 	body, err := json.Marshal(map[string]any{
 		"name": "mattermost-apply",
@@ -98,6 +102,8 @@ func TestHandleBulkApplyPrecheckAcceptsGitLabConfig(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	gitlabPath := filepath.Join(tmpDir, "gitlab", "gitlab.rb")
+	allowedBulkApplyTargets[gitlabPath] = struct{}{}
+	t.Cleanup(func() { delete(allowedBulkApplyTargets, gitlabPath) })
 
 	body, err := json.Marshal(map[string]any{
 		"name": "gitlab-phase1-apply",
