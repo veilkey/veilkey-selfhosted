@@ -32,7 +32,7 @@ This component owns:
 
 - `vk`
   - CLI entrypoint
-- `vk_wrap`
+- `veilkey-cli wrap-pty`
   - secure PTY wrapper
 - `veilroot`
   - host boundary shell and session tooling
@@ -48,7 +48,7 @@ This component owns:
 
 ## Masking Behavior
 
-When inside a `vk_wrap` secure terminal session:
+When inside a `veilkey-cli wrap-pty` secure terminal session:
 
 1. On Enter: watchlist values in the current line are masked on screen
 2. Automatic VK:hash resolution: a DEBUG trap restores any `VK:xxxx` tokens to their original values before execution
@@ -63,7 +63,7 @@ DATABASE_PASSWORD=VK:a1b2c3d4    <- VK token shown instead of the actual passwor
 
 ### vk -- Value Encryption (Watchlist Registration)
 
-The `vk` command encrypts a plaintext value into a VeilKey token. The encrypted value is added to the watchlist and automatically masked inside a `vk_wrap` terminal.
+The `vk` command encrypts a plaintext value into a VeilKey token. The encrypted value is added to the watchlist and automatically masked inside a wrapped terminal.
 
 ```bash
 # Hidden input (typing is not displayed)
@@ -91,13 +91,14 @@ veilkey-cli exec env DATABASE_URL="postgres://user:VK:b2c3d4e5@db:5432/app" ./mi
 ## Installation
 
 ```bash
-# Script install (binary + vk, vk_wrap scripts)
+# Script install (binary + session config + vk helper)
 bash install/install.sh
 
 # Or build directly
 make build
-cp bin/veilkey-cli /usr/local/bin/
-cp scripts/vk scripts/vk_wrap /usr/local/bin/
+go build -o bin/veilkey-session-config ./cmd/veilkey-session-config
+cp bin/veilkey-cli bin/veilkey-session-config /usr/local/bin/
+cp scripts/vk /usr/local/bin/
 ```
 
 ## Veilroot Host Boundary
@@ -174,7 +175,7 @@ kubectl get secret -o yaml | veilkey-cli filter
 veilkey-cli scan --exit-code --format sarif src/
 
 # Enter the secure terminal
-vk_wrap
+veilkey-cli wrap-pty
 
 # Encrypt a value
 echo "my-api-key" | vk
@@ -216,7 +217,7 @@ PROJECT_ID = "VE:LOCAL:GITLAB_PROJECT_ID"
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  vk_wrap (secure terminal)                               │
+│  veilkey-cli wrap-pty (secure terminal)                  │
 │  ┌─────────┐     ┌──────────────┐     ┌──────────────┐  │
 │  │  stdin   │────>│ Input filter  │────>│  PTY (bash)  │  │
 │  │(keyboard)│     │ 5ms paste    │     │              │  │

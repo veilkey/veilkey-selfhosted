@@ -87,9 +87,9 @@ install_binary() {
         tar -xzf "$tmpfile" -C "$tmpdir"
         mv "$tmpdir/veilkey-cli-${PLATFORM}" "$bindir/veilkey-cli"
         chmod +x "$bindir/veilkey-cli"
-        # Install scripts (Linux/macOS)
+        # Install helpers (Linux/macOS)
         [[ -f "$tmpdir/vk" ]] && mv "$tmpdir/vk" "$bindir/vk" && chmod +x "$bindir/vk"
-        [[ -f "$tmpdir/vk_wrap" ]] && mv "$tmpdir/vk_wrap" "$bindir/vk_wrap" && chmod +x "$bindir/vk_wrap"
+        [[ -f "$tmpdir/veilkey-session-config" ]] && mv "$tmpdir/veilkey-session-config" "$bindir/veilkey-session-config" && chmod +x "$bindir/veilkey-session-config"
         rm -rf "$tmpdir"
     fi
 
@@ -174,10 +174,6 @@ install_from_source() {
         ln -sf "$INSTALL_DIR/scripts/vk" /usr/local/bin/vk
         echo "  linked: /usr/local/bin/vk"
     fi
-    if [ -f "$INSTALL_DIR/scripts/vk_wrap" ]; then
-        ln -sf "$INSTALL_DIR/scripts/vk_wrap" /usr/local/bin/vk_wrap
-        echo "  linked: /usr/local/bin/vk_wrap"
-    fi
 }
 
 install_go() {
@@ -245,6 +241,6 @@ echo "  veilkey-cli scan <file>          Scan file for secrets"
 echo "  veilkey-cli exec <command>       Resolve VK: hashes and run"
 echo "  veilkey-cli resolve <VK:hash>    Resolve VK hash to value"
 if [[ "$OS" != "windows" ]]; then
-    echo "  vk_wrap                           Protected shell environment"
+    echo "  veilkey-cli wrap-pty             Protected shell environment"
     echo "  vk                                Manual VK registration"
 fi

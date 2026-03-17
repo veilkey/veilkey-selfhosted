@@ -5,7 +5,7 @@
 #   vk                           Hidden input (typing not visible)
 #   echo "secret" | vk          Read from stdin
 #
-# Inside vk_wrap shell:
+# Inside a veilkey-cli wrap-pty shell:
 #   🔒VK $ vk
 #   Enter secret value: (typing not visible)
 #   VK:a1b2c3d4

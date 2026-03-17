@@ -1,3 +1,4 @@
+version: 2
 project_name: veilkey-cli
 
 dist: dist
@@ -19,21 +20,67 @@ builds:
     ignore:
       - goos: windows
         goarch: arm64
+  - id: veilkey-session-config
+    main: ./cmd/veilkey-session-config
+    binary: veilkey-session-config
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}} -X main.builtBy=goreleaser
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: windows
+        goarch: arm64
 
 archives:
   - id: default
-    format: tar.gz
+    formats:
+      - tar.gz
     format_overrides:
       - goos: windows
-        format: zip
+        formats:
+          - zip
     files:
       - src: scripts/vk
-        dst: .
-      - src: scripts/vk_wrap
-        dst: .
-    # Exclude helper scripts from Windows archives
-    rlcp: true
+        dst: vk
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+nfpms:
+  - id: veilkey-cli-linux-packages
+    package_name: veilkey-cli
+    ids:
+      - veilkey-cli
+      - veilkey-session-config
+    formats:
+      - deb
+      - rpm
+    file_name_template: "{{ .ConventionalFileName }}"
+    contents:
+      - src: scripts/vk
+        dst: /usr/local/bin/vk
+        file_info:
+          mode: 0755
+      - src: deploy/host/session-tools.toml.example
+        dst: /etc/veilkey/session-tools.toml.example
+        type: config|noreplace
+        file_info:
+          mode: 0644
+    maintainer: VeilKey Maintainers
+    description: |-
+      VeilKey operator CLI package.
+      Includes the veilkey-cli binary, veilkey-session-config, the vk helper,
+      and example session-tools configuration for host boundary setup.
+    license: MIT
+    bindir: /usr/local/bin
+
+snapshot:
+  version_template: "{{ .Version }}-SNAPSHOT-{{ .ShortCommit }}"
 
 checksum:
   name_template: "checksums.txt"
@@ -47,7 +94,6 @@ changelog:
       - "^test:"
       - "^ci:"
 
-# GitLab release
 gitlab_urls:
   api: "{{ if index .Env \"CI_API_V4_URL\" }}{{ .Env.CI_API_V4_URL }}{{ else }}https://gitlab.com/api/v4{{ end }}"
   download: "{{ if index .Env \"CI_SERVER_URL\" }}{{ .Env.CI_SERVER_URL }}{{ else }}https://gitlab.com{{ end }}"

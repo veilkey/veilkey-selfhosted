@@ -21,6 +21,16 @@ install_order = 20
 artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-localvault/packages/generic/veilkey-localvault/1778f521624b36b2d7f8034e2788e0994ddc6710/veilkey-localvault.tar.gz"
 sha256 = ""
 
+[components.cli]
+source = "gitlab"
+project = "veilkey/veilkey-selfhosted"
+ref = "RELEASE_OR_COMMIT"
+type = "binary"
+install_order = 25
+artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-selfhosted/packages/generic/veilkey-cli/RELEASE_OR_COMMIT/veilkey-cli.tar.gz"
+artifact_filename = "veilkey-cli.tar.gz"
+sha256 = ""
+
 [components.proxy]
 source = "gitlab"
 project = "veilkey/veilkey-proxy"
@@ -58,7 +68,7 @@ post_install_verify = [
 
 [profiles.proxmox-host-cli]
 description = "Proxmox host boundary CLI and proxy asset install"
-components = ["proxy"]
+components = ["cli", "proxy"]
 
 [profiles.proxmox-host]
 description = "Proxmox host install with proxy boundary assets"
