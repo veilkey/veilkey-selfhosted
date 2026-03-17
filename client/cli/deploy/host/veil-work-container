@@ -29,7 +29,8 @@ container_name="${VEIL_WORK_CONTAINER_NAME:-veil-${safe_user}}"
 home_volume="${VEIL_WORK_CONTAINER_HOME_VOLUME:-veil-home-${safe_user}}"
 workspace_dir="${VEIL_WORK_CONTAINER_WORKSPACE:-$PWD}"
 image="${VEIL_WORK_CONTAINER_IMAGE:-ghcr.io/veilkey/veil-workspace:latest}"
-shell_cmd="${VEIL_WORK_CONTAINER_SHELL:-tmux new-session -Ad -s main; exec tmux attach -t main}"
+tmux_helper="${VEIL_WORK_CONTAINER_TMUX_HELPER:-/usr/local/bin/veil-work-tmux}"
+shell_cmd="${VEIL_WORK_CONTAINER_SHELL:-if [ -x \"${tmux_helper}\" ]; then exec \"${tmux_helper}\"; fi; tmux new-session -Ad -s main; exec tmux attach -t main}"
 
 inspect_args=(container inspect "${container_name}")
 run_args=(
