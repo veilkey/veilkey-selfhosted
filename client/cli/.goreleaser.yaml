@@ -99,6 +99,6 @@ gitlab_urls:
   download: "{{ if index .Env \"CI_SERVER_URL\" }}{{ .Env.CI_SERVER_URL }}{{ else }}https://gitlab.com{{ end }}"
 
 release:
-  gitlab:
-    owner: "{{ .Env.CI_PROJECT_NAMESPACE }}"
-    name: "{{ .Env.CI_PROJECT_NAME }}"
+  github:
+    owner: veilkey
+    name: veilkey-selfhosted

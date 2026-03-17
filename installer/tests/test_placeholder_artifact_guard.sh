@@ -18,6 +18,6 @@ if env -u VEILKEY_INSTALLER_GITLAB_API_BASE \
   exit 1
 fi
 
-grep -F "placeholder artifact_url requires VEILKEY_INSTALLER_GITLAB_API_BASE or a rewritten manifest URL" "$tmp_err" >/dev/null
+grep -E "placeholder artifact_url requires VEILKEY_INSTALLER_GITLAB_API_BASE or a rewritten manifest URL|placeholder artifact_url still contains an unresolved release/tag token" "$tmp_err" >/dev/null
 
 echo "ok: placeholder artifact_url guard"

@@ -22,13 +22,13 @@ artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-local
 sha256 = ""
 
 [components.cli]
-source = "gitlab"
+source = "github"
 project = "veilkey/veilkey-selfhosted"
-ref = "RELEASE_OR_COMMIT"
+ref = "RELEASE_OR_TAG"
 type = "binary"
 install_order = 25
-artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-selfhosted/packages/generic/veilkey-cli/RELEASE_OR_COMMIT/veilkey-cli.tar.gz"
-artifact_filename = "veilkey-cli.tar.gz"
+artifact_url = "https://github.com/veilkey/veilkey-selfhosted/releases/download/RELEASE_OR_TAG/veilkey-cli_RELEASE_OR_TAG_linux_amd64.tar.gz"
+artifact_filename = "veilkey-cli_RELEASE_OR_TAG_linux_amd64.tar.gz"
 sha256 = ""
 
 [components.proxy]

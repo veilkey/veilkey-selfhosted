@@ -318,6 +318,10 @@ normalize_download_url() {
         exit 1
       fi
       ;;
+    *RELEASE_OR_*)
+      echo "Error: placeholder artifact_url still contains an unresolved release/tag token" >&2
+      exit 1
+      ;;
   esac
 
   if [[ "${url}" =~ /api/v4/projects/([^/]+)/packages/generic/(.+)$ ]]; then

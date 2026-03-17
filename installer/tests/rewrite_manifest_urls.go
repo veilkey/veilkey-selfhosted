@@ -40,8 +40,9 @@ func main() {
 	text := string(textBytes)
 
 	replacements := [][2]string{
-		{`ref = "RELEASE_OR_COMMIT"`, `ref = "local-test"`},
-		{`artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-selfhosted/packages/generic/veilkey-cli/RELEASE_OR_COMMIT/veilkey-cli.tar.gz"`, fmt.Sprintf(`artifact_url = "file://%s"`, cliArtifact)},
+		{`ref = "RELEASE_OR_TAG"`, `ref = "local-test"`},
+		{`artifact_url = "https://github.com/veilkey/veilkey-selfhosted/releases/download/RELEASE_OR_TAG/veilkey-cli_RELEASE_OR_TAG_linux_amd64.tar.gz"`, fmt.Sprintf(`artifact_url = "file://%s"`, cliArtifact)},
+		{`artifact_filename = "veilkey-cli_RELEASE_OR_TAG_linux_amd64.tar.gz"`, `artifact_filename = "veilkey-cli.tar.gz"`},
 		{`artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-proxy/repository/archive.tar.gz?sha=670d1e33736adab35149275428ed3aa75b4e787b"`, fmt.Sprintf(`artifact_url = "file://%s"`, proxyArtifact)},
 		{`artifact_filename = "veilkey-proxy-670d1e33736adab35149275428ed3aa75b4e787b.tar.gz"`, `artifact_filename = "veilkey-proxy-local.tar.gz"`},
 	}
