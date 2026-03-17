@@ -386,20 +386,10 @@
                                                         <option v-for="option in vaultTargetOptions(true)" :key="option.value" :value="option.value" :selected="option.value === vaultPanel().targetVaultDefault">{{ option.label }}</option>
                                                     </select>
                                                 </div>
-                                                <div class="kv">
-                                                    <span class="label">{{ t('target_scope') }}</span>
-                                                    <select class="select" name="target_scope">
-                                                        <option v-for="option in vaultPanel().scopeOptions" :key="option" :value="option" :selected="option === vaultPanel().currentScope">{{ option }}</option>
-                                                    </select>
-                                                </div>
-                                                <div class="kv">
-                                                    <span class="label">{{ t('value_to_send') }}</span>
-                                                    <textarea class="textarea" name="move_value" :placeholder="t('move_value_placeholder')">{{ vaultPanel().visibleValue || '' }}</textarea>
-                                                </div>
                                             </div>
                                             <div class="muted">{{ vaultPanel().moveHelperText }}</div>
                                         </div>
-                                        <button class="btn btn-soft" type="submit" :disabled="!vaultPanel().visibleValue">{{ vaultPanel().isConfigItem ? t('move_config') : t('move_key') }}</button>
+                                        <button class="btn btn-soft" type="submit" :disabled="!vaultPanel().detailName">{{ vaultPanel().isConfigItem ? t('move_config') : t('move_key') }}</button>
                                     </form>
                                     <form class="stack" :data-form="vaultPanel().saveForm">
                                         <div class="card">
