@@ -35,7 +35,7 @@ stage_assets = [
   "deploy/lxc/verify-proxy-lxc.sh",
   "deploy/lxc/veilkey-egress-proxy@.service",
   "deploy/lxc/veilkey-proxy-launch",
-  "deploy/shared/veilkey-session-config",
+  "cmd/veilkey-session-config/main.go",
   "deploy/host/session-tools.toml.example",
   "deploy/host/install-veilroot-boundary.sh",
   "deploy/host/install-veilroot-codex.sh",

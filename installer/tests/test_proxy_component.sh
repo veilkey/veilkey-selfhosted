@@ -19,7 +19,7 @@ download_plan="$(VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh plan-do
 printf '%s\n' "$plan" | grep -F "proxy" >/dev/null
 printf '%s\n' "$stage_plan" | grep -F "project=veilkey/veilkey-proxy" >/dev/null
 printf '%s\n' "$stage_plan" | grep -F "type=source_archive" >/dev/null
-printf '%s\n' "$stage_plan" | grep -F "stage_assets=deploy/lxc/install-proxy-lxc.sh,deploy/lxc/verify-proxy-lxc.sh,deploy/lxc/veilkey-egress-proxy@.service,deploy/lxc/veilkey-proxy-launch,deploy/shared/veilkey-session-config,deploy/host/session-tools.toml.example" >/dev/null
+printf '%s\n' "$stage_plan" | grep -F "stage_assets=deploy/lxc/install-proxy-lxc.sh,deploy/lxc/verify-proxy-lxc.sh,deploy/lxc/veilkey-egress-proxy@.service,deploy/lxc/veilkey-proxy-launch,cmd/veilkey-session-config/main.go,deploy/host/session-tools.toml.example" >/dev/null
 printf '%s\n' "$stage_plan" | grep -F "post_install_verify=/usr/local/lib/veilkey-proxy/verify-proxy-lxc.sh" >/dev/null
 printf '%s\n' "$download_plan" | grep -F "veilkey-proxy-" >/dev/null
 

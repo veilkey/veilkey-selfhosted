@@ -528,6 +528,40 @@ plan_field() {
   return 1
 }
 
+first_existing_path() {
+  local path
+  for path in "$@"; do
+    if [[ -f "${path}" ]]; then
+      printf '%s\n' "${path}"
+      return 0
+    fi
+  done
+  return 1
+}
+
+install_required_asset() {
+  local destination="$1"
+  local mode="$2"
+  shift 2
+  local source
+  source="$(first_existing_path "$@")" || {
+    echo "Error: missing required asset for ${destination}: $*" >&2
+    exit 1
+  }
+  install -m "${mode}" "${source}" "${destination}"
+}
+
+install_optional_asset() {
+  local destination="$1"
+  local mode="$2"
+  shift 2
+  local source
+  if ! source="$(first_existing_path "$@")"; then
+    return 0
+  fi
+  install -m "${mode}" "${source}" "${destination}"
+}
+
 install_component_payload() {
   local component="$1"
   local extract_root="$2"
@@ -547,21 +581,17 @@ install_component_payload() {
       install -m 0755 "${component_src}/veilkey-localvault" "${VEILKEY_OS_BIN_DIR}/veilkey-localvault"
       ;;
     proxy)
-      local session_config_tmp proxy_real_bin
+      local session_config_tmp
       mkdir -p "${root%/}/usr/local/lib/veilkey-proxy" "${root%/}/etc/veilkey" "${root%/}/var/log/veilkey-proxy"
       if [[ -f "${component_src}/go.mod" ]] && [[ -f "${component_src}/cmd/veilkey-session-config/main.go" ]]; then
         require_go
         session_config_tmp="$(mktemp)"
-        proxy_real_bin="${root%/}/root/veilkey-proxy/bin/veilkey-session-config"
-        mkdir -p "$(dirname "${proxy_real_bin}")"
         (cd "${component_src}" && "${GO_BIN}" build -o "${session_config_tmp}" ./cmd/veilkey-session-config)
-        install -m 0755 "${session_config_tmp}" "${proxy_real_bin}"
-        install -m 0755 "${component_src}/deploy/shared/veilkey-session-config" \
-          "${VEILKEY_OS_BIN_DIR}/veilkey-session-config"
+        install -m 0755 "${session_config_tmp}" "${VEILKEY_OS_BIN_DIR}/veilkey-session-config"
         rm -f "${session_config_tmp}"
       else
-        install -m 0755 "${component_src}/deploy/shared/veilkey-session-config" \
-          "${VEILKEY_OS_BIN_DIR}/veilkey-session-config"
+        install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-session-config" 0755 \
+          "${component_src}/deploy/shared/veilkey-session-config"
       fi
       install -m 0755 "${component_src}/deploy/lxc/veilkey-proxy-launch" \
         "${VEILKEY_OS_BIN_DIR}/veilkey-proxy-launch"
@@ -571,33 +601,40 @@ install_component_payload() {
         "${VEILKEY_OS_SERVICE_DIR}/veilkey-egress-proxy@.service"
       install -m 0644 "${component_src}/deploy/host/session-tools.toml.example" \
         "${root%/}/etc/veilkey/session-tools.toml"
-      install -m 0755 "${component_src}/deploy/host/install-veilroot-boundary.sh" \
-        "${root%/}/usr/local/lib/veilkey-proxy/install-veilroot-boundary.sh"
-      install -m 0755 "${component_src}/deploy/host/install-veilroot-codex.sh" \
-        "${root%/}/usr/local/lib/veilkey-proxy/install-veilroot-codex.sh"
-      install -m 0755 "${component_src}/deploy/host/verify-veilroot-session.sh" \
-        "${VEILKEY_OS_BIN_DIR}/verify-veilroot-session"
+      install_required_asset "${root%/}/usr/local/lib/veilkey-proxy/install-veilroot-boundary.sh" 0755 \
+        "${component_src}/deploy/host/install-veilroot-boundary.sh" \
+        "${component_src}/deploy/host/install-root-ai-boundary.sh"
+      install_optional_asset "${root%/}/usr/local/lib/veilkey-proxy/install-veilroot-codex.sh" 0755 \
+        "${component_src}/deploy/host/install-veilroot-codex.sh"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/verify-veilroot-session" 0755 \
+        "${component_src}/deploy/host/verify-veilroot-session.sh" \
+        "${component_src}/deploy/host/verify-root-ai-session.sh"
       install -m 0755 "${component_src}/deploy/host/veilroot-shell" \
         "${VEILKEY_OS_BIN_DIR}/veilroot-shell"
-      install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-session" \
-        "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-session"
-      install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-observe" \
-        "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-observe"
-      install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-egress-guard" \
-        "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-egress-guard"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-session" 0755 \
+        "${component_src}/deploy/host/veilkey-veilroot-session" \
+        "${component_src}/deploy/host/veilkey-root-ai-session"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-observe" 0755 \
+        "${component_src}/deploy/host/veilkey-veilroot-observe" \
+        "${component_src}/deploy/host/veilkey-root-ai-observe"
+      install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-egress-guard" 0755 \
+        "${component_src}/deploy/host/veilkey-veilroot-egress-guard" \
+        "${component_src}/deploy/host/veilkey-root-ai-egress-guard"
       install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-curl" \
         "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-curl"
       install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-wget" \
         "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-wget"
       install -m 0755 "${component_src}/deploy/host/veilkey-veilroot-http" \
         "${VEILKEY_OS_BIN_DIR}/veilkey-veilroot-http"
-      install -m 0644 "${component_src}/deploy/host/veilkey-veilroot-observe@.service" \
-        "${VEILKEY_OS_SERVICE_DIR}/veilkey-veilroot-observe@.service"
-      install -m 0644 "${component_src}/deploy/host/veilkey-veilroot-egress-guard@.service" \
-        "${VEILKEY_OS_SERVICE_DIR}/veilkey-veilroot-egress-guard@.service"
+      install_required_asset "${VEILKEY_OS_SERVICE_DIR}/veilkey-veilroot-observe@.service" 0644 \
+        "${component_src}/deploy/host/veilkey-veilroot-observe@.service" \
+        "${component_src}/deploy/host/veilkey-root-ai-observe@.service"
+      install_required_asset "${VEILKEY_OS_SERVICE_DIR}/veilkey-veilroot-egress-guard@.service" 0644 \
+        "${component_src}/deploy/host/veilkey-veilroot-egress-guard@.service" \
+        "${component_src}/deploy/host/veilkey-root-ai-egress-guard@.service"
       install -d "${root%/}/usr/local/share/veilkey/snippets"
-      install -m 0755 "${component_src}/deploy/host/snippets/veilroot-veilkey-shell.sh" \
-        "${root%/}/usr/local/share/veilkey/snippets/veilroot-veilkey-shell.sh"
+      install_optional_asset "${root%/}/usr/local/share/veilkey/snippets/veilroot-veilkey-shell.sh" 0755 \
+        "${component_src}/deploy/host/snippets/veilroot-veilkey-shell.sh"
       ;;
   esac
 }
@@ -712,11 +749,11 @@ render_profile_envs() {
   fi
   default_keycenter_addr=":10180"
   default_localvault_addr=":10180"
-  default_keycenter_url="https://127.0.0.1:10180"
+  default_keycenter_url="http://127.0.0.1:10180"
   if [[ "${default_enable_keycenter}" = "1" && "${default_enable_localvault}" = "1" ]]; then
     default_keycenter_addr=":10181"
     default_localvault_addr=":10180"
-    default_keycenter_url="https://127.0.0.1:10181"
+    default_keycenter_url="http://127.0.0.1:10181"
   fi
   keycenter_addr="${VEILKEY_KEYCENTER_ADDR:-${default_keycenter_addr}}"
   keycenter_db="${VEILKEY_KEYCENTER_DB_PATH:-/opt/veilkey/keycenter/data/veilkey.db}"
