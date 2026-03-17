@@ -15,6 +15,18 @@ cli_root="${tmp_artifact_dir}/cli"
 proxy_root="${tmp_artifact_dir}/veilkey-proxy-local"
 
 mkdir -p "$cli_root" "$proxy_root"
+if [[ ! -x ../client/cli/bin/veilkey-cli-linux-amd64 ]]; then
+  (
+    cd ../client/cli
+    make build-linux-amd64
+  )
+fi
+if [[ ! -x ../client/cli/bin/veilkey-session-config-linux-amd64 ]]; then
+  (
+    cd ../client/cli
+    make build-session-config-linux-amd64
+  )
+fi
 cp ../client/cli/bin/veilkey-cli-linux-amd64 "$cli_root/veilkey-cli"
 cp ../client/cli/bin/veilkey-session-config-linux-amd64 "$cli_root/veilkey-session-config"
 cp ../client/cli/scripts/vk "$cli_root/vk"
