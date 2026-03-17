@@ -2,7 +2,7 @@ VERSION := 0.3.0
 LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64 windows-amd64
 
-.PHONY: build build-session-config test lint bench coverage install clean build-all package package-release $(addprefix build-,$(PLATFORMS))
+.PHONY: build build-session-config test lint bench coverage install clean build-all package package-release $(addprefix build-,$(PLATFORMS)) $(addprefix build-session-config-,$(PLATFORMS))
 
 build:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli .
@@ -35,19 +35,34 @@ clean:
 build-linux-amd64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli-linux-amd64 .
 
+build-session-config-linux-amd64:
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-session-config-linux-amd64 ./cmd/veilkey-session-config
+
 build-linux-arm64:
 	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli-linux-arm64 .
+
+build-session-config-linux-arm64:
+	CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-session-config-linux-arm64 ./cmd/veilkey-session-config
 
 build-darwin-amd64:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli-darwin-amd64 .
 
+build-session-config-darwin-amd64:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-session-config-darwin-amd64 ./cmd/veilkey-session-config
+
 build-darwin-arm64:
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli-darwin-arm64 .
+
+build-session-config-darwin-arm64:
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-session-config-darwin-arm64 ./cmd/veilkey-session-config
 
 build-windows-amd64:
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-cli-windows-amd64.exe .
 
-build-all: $(addprefix build-,$(PLATFORMS))
+build-session-config-windows-amd64:
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="$(LDFLAGS)" -o bin/veilkey-session-config-windows-amd64.exe ./cmd/veilkey-session-config
+
+build-all: $(addprefix build-,$(PLATFORMS)) $(addprefix build-session-config-,$(PLATFORMS))
 
 package: build-all
 	@mkdir -p dist/manual
