@@ -22,40 +22,6 @@ locale_lib_dir="${VEILKEY_VEILROOT_LIB_DIR:-/usr/local/lib/veilkey}"
 locale_lib_path="${VEILKEY_VEILROOT_LOCALE_LIB_PATH:-$locale_lib_dir/veilkey-locale.sh}"
 have_user=1
 
-migrate_session_tools() {
-  local path="${1:-}"
-  [[ -n "$path" ]] || return 0
-  [[ -f "$path" ]] || return 0
-  if grep -q '^\[dalroot\]$' "$path" && ! grep -q '^\[veilroot\]$' "$path"; then
-    perl -0pi -e 's/\[dalroot\]/[veilroot]/g; s/unit_prefix = "dalroot"/unit_prefix = "veilroot"/g' "$path"
-  fi
-}
-
-cleanup_legacy_dalroot() {
-  rm -f \
-    "${bin_dir}/veilkey-dalroot-session" \
-    "${bin_dir}/veilkey-dalroot-observe" \
-    "${bin_dir}/veilkey-dalroot-egress-guard" \
-    "${bin_dir}/verify-dalroot-session" \
-    "${systemd_dir}/veilkey-dalroot-observe@.service" \
-    "${systemd_dir}/veilkey-dalroot-egress-guard@.service" \
-    "${profile_dir}/dalroot-workspace.sh" \
-    "${profile_dir}/dalroot-veilkey-proxy.sh" \
-    "${sudoers_dir}/dalroot"
-}
-
-cleanup_legacy_systemd_state() {
-  local profile
-  for profile in codex claude opencode default; do
-    "$systemctl_bin" stop "veilkey-dalroot-observe@${profile}.service" "veilkey-dalroot-egress-guard@${profile}.service" >/dev/null 2>&1 || true
-    "$systemctl_bin" disable "veilkey-dalroot-observe@${profile}.service" "veilkey-dalroot-egress-guard@${profile}.service" >/dev/null 2>&1 || true
-    "$systemctl_bin" reset-failed "veilkey-dalroot-observe@${profile}.service" "veilkey-dalroot-egress-guard@${profile}.service" >/dev/null 2>&1 || true
-  done
-  "$systemctl_bin" stop "veilkey-proxy-observe@${user_name}.service" "veilkey-user-egress-guard@${user_name}.service" >/dev/null 2>&1 || true
-  "$systemctl_bin" disable "veilkey-proxy-observe@${user_name}.service" "veilkey-user-egress-guard@${user_name}.service" >/dev/null 2>&1 || true
-  "$systemctl_bin" reset-failed "veilkey-proxy-observe@${user_name}.service" "veilkey-user-egress-guard@${user_name}.service" >/dev/null 2>&1 || true
-}
-
 ensure_tmux() {
   if command -v tmux >/dev/null 2>&1; then
     return 0
@@ -101,10 +67,7 @@ if [[ "$skip_account_management" != "1" && $have_user -eq 1 ]]; then
 fi
 
 ensure_tmux
-migrate_session_tools "$config_src"
 VEILKEY_ALLOW_SESSION_BOOTSTRAP=1 "$install_user_boundary_script" "$user_name" "$config_src"
-migrate_session_tools /etc/veilkey/session-tools.toml
-cleanup_legacy_dalroot
 install -d "$bin_dir" "$systemd_dir" "$log_dir" "$locale_lib_dir"
 install -m 0755 "$repo_root/deploy/shared/veilkey-session-config" "$bin_dir/veilkey-session-config"
 install -m 0644 "$repo_root/deploy/shared/veilkey-locale.sh" "$locale_lib_path"
@@ -215,7 +178,6 @@ if [[ $have_user -eq 1 ]]; then
   chown "$user_name":"$user_name" "$home_dir/.bashrc" "$home_dir/.profile"
 fi
 "$systemctl_bin" daemon-reload
-cleanup_legacy_systemd_state
 
 echo "installed veilroot boundary for ${user_name}"
 echo "  account: ${user_name} (sudo ALL enabled)"
