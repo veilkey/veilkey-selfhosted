@@ -9,7 +9,7 @@ if [[ -z "$vmid" ]]; then
   exit 2
 fi
 
-bin_src="${VEILKEY_PROXY_CLI_SRC:-/opt/veilkey/artifacts/hostvault/veilkey-cli}"
+bin_src="${VEILKEY_PROXY_CLI_SRC:-/opt/veilkey/artifacts/cli/veilkey-cli}"
 config_src="${VEILKEY_PROXY_POLICY_SRC:?VEILKEY_PROXY_POLICY_SRC must be set (see policy/proxy-profiles.toml.example)}"
 access_log_format="${VEILKEY_PROXY_ACCESS_LOG_FORMAT:-jsonl}"
 
@@ -58,11 +58,9 @@ install -m 0644 "$config_src" "$bundle_dir/etc/veilkey/session-tools.toml"
 install -m 0755 "$repo_root/deploy/lxc/verify-proxy-lxc.sh" "$bundle_dir/usr/local/lib/veilkey-proxy/verify-proxy-lxc.sh"
 localvault_url="${VEILKEY_LOCALVAULT_URL:-$("$bundle_dir/usr/local/bin/veilkey-session-config" --config "$bundle_dir/etc/veilkey/session-tools.toml" veilkey-localvault-url)}"
 hub_url="${VEILKEY_HUB_URL:-$("$bundle_dir/usr/local/bin/veilkey-session-config" --config "$bundle_dir/etc/veilkey/session-tools.toml" veilkey-hub-url)}"
-hostvault_url="${VEILKEY_HOSTVAULT_URL:-$("$bundle_dir/usr/local/bin/veilkey-session-config" --config "$bundle_dir/etc/veilkey/session-tools.toml" veilkey-hostvault-url)}"
 cat >"$bundle_dir/etc/veilkey/proxy.env" <<EOF
 VEILKEY_LOCALVAULT_URL=$localvault_url
 VEILKEY_HUB_URL=$hub_url
-VEILKEY_HOSTVAULT_URL=$hostvault_url
 VEILKEY_PROXY_ACCESS_LOG_FORMAT=$access_log_format
 EOF
 

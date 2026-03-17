@@ -9,7 +9,7 @@ function vhEsc(value) {
 function vhBadge(value) {
   const normalized = String(value || "").toLowerCase();
   let klass = "warn";
-  if (normalized === "ok" || normalized === "active" || normalized === "hostvault" || normalized === "localvault") klass = "ok";
+  if (normalized === "ok" || normalized === "active" || normalized === "localvault") klass = "ok";
   if (normalized === "blocked" || normalized === "error") klass = "err";
   return '<span class="badge ' + klass + '">' + vhEsc(value || "unknown") + '</span>';
 }

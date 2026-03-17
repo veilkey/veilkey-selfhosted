@@ -232,7 +232,6 @@ run_remote_test() {
       export VEILKEY_KEYCENTER_PASSWORD='e2e-keycenter'
       export VEILKEY_LOCALVAULT_PASSWORD='e2e-localvault'
       export VEILKEY_KEYCENTER_URL='http://127.0.0.1:10180'
-      export VEILKEY_HOSTVAULT_LOCALVAULT_URL='http://127.0.0.1:10180'
       ./install.sh install '${PROFILE}' / '${REMOTE_WORKDIR}/bundle'
       ./install.sh configure '${PROFILE}' /
       ./install.sh plan-activate /

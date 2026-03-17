@@ -8,14 +8,13 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
 TEST_HUB_IP="10.0.0.1"
-TEST_HOSTVAULT_IP="10.0.0.2"
 
 cat >"$tmp/curl" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 args="\$*"
 case "\$args" in
-  *127.0.0.1:10180/health*|*${TEST_HUB_IP}:10180/health*|*${TEST_HOSTVAULT_IP}:10180/health*)
+  *127.0.0.1:10180/health*|*${TEST_HUB_IP}:10180/health*)
     printf '%s' '{"status":"ok"}'
     ;;
   *)
@@ -31,7 +30,7 @@ set -euo pipefail
 echo "VMID=$1 CMD=$2" >>"$TEST_STATE_DIR/vibe.log"
 if [[ "$2" == *"/var/log/veilkey-proxy/default-rewrite.jsonl"* ]]; then
   printf '%s\n' "[]"
-elif [[ "$2" == *"/api/agents/veilkey-hostvault/secrets"* ]]; then
+elif [[ "$2" == *"/api/agents/"*"/secrets"* ]]; then
   printf '%s' '{"scope":"TEMP","status":"temp","token":"VK:TEMP:testref"}'
 else
   printf '%s\n' "mock"
@@ -49,7 +48,6 @@ export PATH="$tmp:$PATH"
 export TEST_STATE_DIR="$tmp"
 export VEILKEY_LOCALVAULT_HEALTH_URL="http://127.0.0.1:10180/health"
 export VEILKEY_KEYCENTER_HEALTH_URL="http://${TEST_HUB_IP}:10180/health"
-export VEILKEY_HOSTVAULT_HEALTH_URL="http://${TEST_HOSTVAULT_IP}:10180/health"
 export VEILKEY_KEYCENTER_VMID="999001"
 export VEILKEY_VEILROOT_VERIFY_BIN="$tmp/verify-veilroot-session"
 export VEILKEY_VEILROOT_USER="root"

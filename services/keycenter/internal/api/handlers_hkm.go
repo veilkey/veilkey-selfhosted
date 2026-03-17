@@ -59,9 +59,7 @@ func (s *Server) SetupHKMRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/functions/global/{name}/run", s.requireTrustedIP(ready(s.handleGlobalFunctionRun)))
 	mux.HandleFunc("GET /api/agents/{agent}/secrets", ready(s.handleAgentSecrets))
 	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}", ready(s.handleAgentGetSecret))
-	mux.HandleFunc("GET /api/host-vault/keys", ready(s.handleHostVaultKeys))
-	mux.HandleFunc("GET /api/host-vault/keys/{name}", ready(s.handleHostVaultKeyGet))
-	mux.HandleFunc("POST /api/host-vault/keys", s.requireTrustedIP(ready(s.handleHostVaultKeySave)))
+
 	mux.HandleFunc("POST /api/agents/{agent}/secrets", s.requireTrustedIP(ready(s.handleAgentSaveSecret)))
 	mux.HandleFunc("POST /api/agents/{agent}/secrets/{name}/fields", s.requireTrustedIP(ready(s.handleAgentSaveSecretFields)))
 	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}/fields/{field}", ready(s.handleAgentGetSecretField))
@@ -114,9 +112,6 @@ func (s *Server) SetupHKMRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/configs/bulk-set", s.requireTrustedIP(ready(s.handleConfigsBulkSet)))
 
 	// Agent configs (plaintext key-value proxy)
-	mux.HandleFunc("GET /api/host-vault/configs", ready(s.handleHostVaultConfigs))
-	mux.HandleFunc("GET /api/host-vault/configs/{key}", ready(s.handleHostVaultConfigGet))
-	mux.HandleFunc("POST /api/host-vault/configs", s.requireTrustedIP(ready(s.handleHostVaultConfigSave)))
 	mux.HandleFunc("GET /api/agents/{agent}/configs", ready(s.handleAgentConfigs))
 	mux.HandleFunc("GET /api/agents/{agent}/configs/{key}", ready(s.handleAgentGetConfig))
 	mux.HandleFunc("POST /api/agents/{agent}/configs", s.requireTrustedIP(ready(s.handleAgentSaveConfig)))

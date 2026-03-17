@@ -428,7 +428,7 @@ func TestSecretMetadataRoundTrip(t *testing.T) {
 		DisplayName:    "OpenAI API Key",
 		Description:    "Primary upstream token",
 		TagsJSON:       `["llm","prod"]`,
-		Origin:         "hostvault",
+		Origin:         "localvault",
 		LastRotatedAt:  rotatedAt,
 		LastRevealedAt: revealedAt,
 	}

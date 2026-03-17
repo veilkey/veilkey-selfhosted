@@ -137,7 +137,7 @@ systemctl enable --now veilkey-veilroot-egress-guard@codex.service
 
 Checks:
 
-- LocalVault, KeyCenter, and HostVault health
+- LocalVault and KeyCenter health
 - veilroot session boundary
 - veilroot observer and egress guard unit state
 - recent rewrite log sanity for all profiles

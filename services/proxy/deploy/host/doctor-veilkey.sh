@@ -5,7 +5,6 @@ script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 check_temp_issuance=0
 localvault_health_url="${VEILKEY_LOCALVAULT_HEALTH_URL:-http://127.0.0.1:10180/health}"
 keycenter_health_url="${VEILKEY_KEYCENTER_HEALTH_URL:?VEILKEY_KEYCENTER_HEALTH_URL must be set}"
-hostvault_health_url="${VEILKEY_HOSTVAULT_HEALTH_URL:?VEILKEY_HOSTVAULT_HEALTH_URL must be set}"
 keycenter_vmid="${VEILKEY_KEYCENTER_VMID:-100206}"
 veilroot_verify_bin="${VEILKEY_VEILROOT_VERIFY_BIN:-/usr/local/bin/verify-veilroot-session}"
 veilroot_default_profile="${VEILKEY_VEILROOT_DEFAULT_PROFILE:-$(/usr/local/bin/veilkey-session-config veilroot-default-profile 2>/dev/null || echo codex)}"
@@ -50,9 +49,6 @@ echo
 echo "-- keycenter --"
 curl -fsS "$keycenter_health_url"
 echo
-echo "-- hostvault --"
-curl -fsS "$hostvault_health_url"
-echo
 echo
 
 echo "== veilroot boundary =="
@@ -91,7 +87,7 @@ echo
 
 if [[ "$check_temp_issuance" == "1" ]]; then
   echo "== keycenter temp issuance =="
-  resp="$(vibe_lxc_ops "$keycenter_vmid" "curl -fsS -X POST http://127.0.0.1:10180/api/agents/veilkey-hostvault/secrets -H 'Content-Type: application/json' -d '{\"name\":\"doctor-temp-check\",\"value\":\"doctor-temp-check-value\"}'")"
+  resp="$(vibe_lxc_ops "$keycenter_vmid" "curl -fsS -X POST http://127.0.0.1:10180/api/agents/veilkey-proxy/secrets -H 'Content-Type: application/json' -d '{\"name\":\"doctor-temp-check\",\"value\":\"doctor-temp-check-value\"}'")"
   printf '%s\n' "$resp"
   python3 - <<'PY' "$resp"
 import json, sys

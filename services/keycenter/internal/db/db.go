@@ -64,23 +64,13 @@ func (d *DB) migrate() error {
 	if err := d.EnsureTokenRefCanonicalUniqueness(); err != nil {
 		return err
 	}
-	agents, err := d.ListAgents()
-	if err != nil {
-		return err
-	}
-	excluded := map[string]bool{}
-	for _, agent := range agents {
-		if agent.Label == "veilkey-hostvault" {
-			excluded[agent.AgentHash] = true
-		}
-	}
 	if _, err := d.BackfillVaultInventoryFromAgents(); err != nil {
 		return err
 	}
 	if _, err := d.BackfillSecretCatalogFromTrackedRefs(); err != nil {
 		return err
 	}
-	return d.PromoteOperationalTempRefs(excluded)
+	return d.PromoteOperationalTempRefs(nil)
 }
 
 func (d *DB) Close() error {

@@ -56,7 +56,6 @@ ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "${REMOTE_POR
     export VEILKEY_KEYCENTER_PASSWORD='e2e-keycenter'
     export VEILKEY_LOCALVAULT_PASSWORD='e2e-localvault'
     export VEILKEY_KEYCENTER_URL='http://127.0.0.1:10180'
-    export VEILKEY_HOSTVAULT_LOCALVAULT_URL='http://127.0.0.1:10180'
     ./install.sh detect-os
     ./install.sh install '${PROFILE}' '${REMOTE_WORKDIR}/rootfs' '${REMOTE_WORKDIR}/bundle'
     ./install.sh configure '${PROFILE}' '${REMOTE_WORKDIR}/rootfs'

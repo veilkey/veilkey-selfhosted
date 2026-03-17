@@ -49,7 +49,6 @@ type profileDefaults struct {
 type veilkeyConfig struct {
 	LocalvaultURL string `toml:"localvault_url"`
 	HubURL        string `toml:"hub_url"`
-	HostvaultURL  string `toml:"hostvault_url"`
 }
 
 type rewriteConfig struct {
@@ -98,14 +97,6 @@ func (c *config) veilkeyHubURL() string {
 	)
 }
 
-func (c *config) veilkeyHostvaultURL() string {
-	return getenvFirst(
-		c.Veilkey.HostvaultURL,
-		os.Getenv("VEILKEY_HOSTVAULT_URL"),
-		c.veilkeyHubURL(),
-	)
-}
-
 func (c *config) toolProxy(name string) (proxyTarget, error) {
 	toolCfg, ok := c.Tools[name]
 	if !ok {
@@ -148,7 +139,7 @@ func (c *config) mergedNoProxy(base string) string {
 	for _, item := range strings.Split(base, ",") {
 		add(item)
 	}
-	for _, raw := range []string{c.veilkeyLocalvaultURL(), c.veilkeyHubURL(), c.veilkeyHostvaultURL()} {
+	for _, raw := range []string{c.veilkeyLocalvaultURL(), c.veilkeyHubURL()} {
 		add(hostname(raw))
 	}
 	return strings.Join(order, ",")
@@ -348,7 +339,6 @@ func main() {
 			{"NO_PROXY", cfg.mergedNoProxy(cfg.Proxy.Default.NoProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_HUB_URL", cfg.veilkeyHubURL()},
-			{"VEILKEY_HOSTVAULT_URL", cfg.veilkeyHostvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyHubURL()},
 		})
 	case "tool-shell-exports":
@@ -373,7 +363,6 @@ func main() {
 			{"NO_PROXY", cfg.mergedNoProxy(noProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_HUB_URL", cfg.veilkeyHubURL()},
-			{"VEILKEY_HOSTVAULT_URL", cfg.veilkeyHostvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyHubURL()},
 		})
 	case "veilroot-default-profile":
@@ -387,8 +376,6 @@ func main() {
 		fmt.Println(cfg.veilkeyLocalvaultURL())
 	case "veilkey-hub-url":
 		fmt.Println(cfg.veilkeyHubURL())
-	case "veilkey-hostvault-url":
-		fmt.Println(cfg.veilkeyHostvaultURL())
 	case "veilroot-unit-prefix":
 		value, err := chooseProfileValue(cfg.Veilroot.UnitPrefix, cfg.RootAI.UnitPrefix, "veilroot.unit_prefix")
 		if err != nil {

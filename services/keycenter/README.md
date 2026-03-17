@@ -223,11 +223,11 @@ volumes:
 ### Secrets / Agent Plaintext Flow
 
 KeyCenter is not a central plaintext secret store.
-Plaintext input is accepted only from hostvault or explicit agent routes; direct `/api/secrets*` CRUD is not supported.
+Plaintext input is accepted only from explicit agent routes; direct `/api/secrets*` CRUD is not supported.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| `POST /api/agents/{agent}/secrets` | `{"name":"key","value":"val"}` | Store hostvault/plaintext input; returns canonical `token`, `scope`, `status`, and vault metadata |
+| `POST /api/agents/{agent}/secrets` | `{"name":"key","value":"val"}` | Store plaintext input; returns canonical `token`, `scope`, `status`, and vault metadata |
 | `GET /api/agents/{agent}/secrets` | | List secret inventory based on LocalVault metadata |
 | `GET /api/agents/{agent}/secrets/{name}` | | Retrieve plaintext by vault hash |
 | `GET /api/resolve-agent/{token}` | | Direct resolve by vault hash + ref token (internal/ops use) |

@@ -946,44 +946,6 @@ func TestDBNewPromotesOperationalTempRefsOnStartup(t *testing.T) {
 	}
 }
 
-func TestDBNewKeepsHostvaultTempRefsOnStartup(t *testing.T) {
-	dir := t.TempDir()
-	dbPath := filepath.Join(dir, "test.db")
-
-	first, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("first New failed: %v", err)
-	}
-	if err := first.UpsertAgent("node-hostvault", "veilkey-hostvault", "vault-01", "hostvault", "127.0.0.1", 10180, 0, 0, 1, 1); err != nil {
-		t.Fatalf("UpsertAgent failed: %v", err)
-	}
-	if err := first.UpdateAgentDEK("node-hostvault", "agent-hostvault", []byte("0123456789abcdef0123456789abcdef"), []byte("123456789012")); err != nil {
-		t.Fatalf("UpdateAgentDEK failed: %v", err)
-	}
-	if err := first.SaveRef(RefParts{Family: "VK", Scope: "TEMP", ID: "startup02"}, "ciphertext-2", 1, "temp", "agent-hostvault"); err != nil {
-		t.Fatalf("SaveRef failed: %v", err)
-	}
-	if err := first.Close(); err != nil {
-		t.Fatalf("first Close failed: %v", err)
-	}
-
-	second, err := New(dbPath)
-	if err != nil {
-		t.Fatalf("second New failed: %v", err)
-	}
-	defer second.Close()
-
-	ref, err := second.GetRef("VK:TEMP:startup02")
-	if err != nil {
-		t.Fatalf("hostvault temp ref should remain after restart: %v", err)
-	}
-	if ref.Status != "temp" {
-		t.Fatalf("hostvault temp ref status = %q, want temp", ref.Status)
-	}
-	if _, err := second.GetRef("VK:LOCAL:startup02"); err == nil {
-		t.Fatal("hostvault temp ref should not be promoted to LOCAL on restart")
-	}
-}
 
 func TestDBNewKeepsHostOwnedTempRefsOnStartup(t *testing.T) {
 	dir := t.TempDir()

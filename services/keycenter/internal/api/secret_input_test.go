@@ -10,7 +10,7 @@ import (
 
 func TestSecretInputChallengeRoundTrip(t *testing.T) {
 	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/agents/veilkey-hostvault/secrets" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/agents/test-agent/secrets" {
 			http.NotFound(w, r)
 			return
 		}
@@ -30,8 +30,8 @@ func TestSecretInputChallengeRoundTrip(t *testing.T) {
 
 	request := postJSON(handler, "/api/approvals/secret-input/request", map[string]any{
 		"email":       "tex02@naver.com",
-		"endpoint":    agent.URL + "/api/agents/veilkey-hostvault",
-		"vault":       "hostvault",
+		"endpoint":    agent.URL + "/api/agents/test-agent",
+		"vault":       "testvault",
 		"secret_name": "INSTALL_PASSWORD__TEST",
 		"reason":      "install password custody",
 		"base_url":    "https://keycenter.test",
@@ -53,7 +53,7 @@ func TestSecretInputChallengeRoundTrip(t *testing.T) {
 	if page.Code != 200 {
 		t.Fatalf("secret input page: expected 200, got %d: %s", page.Code, page.Body.String())
 	}
-	for _, needle := range []string{"Secure Secret Input", "INSTALL_PASSWORD__TEST", "hostvault"} {
+	for _, needle := range []string{"Secure Secret Input", "INSTALL_PASSWORD__TEST", "testvault"} {
 		if !strings.Contains(page.Body.String(), needle) {
 			t.Fatalf("expected secret input page to contain %q", needle)
 		}
@@ -82,7 +82,7 @@ func TestSecretInputChallengeRoundTrip(t *testing.T) {
 
 func TestSecretInputChallengeAllowsMissingEmail(t *testing.T) {
 	agent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/api/agents/veilkey-hostvault/secrets" {
+		if r.Method != http.MethodPost || r.URL.Path != "/api/agents/test-agent/secrets" {
 			http.NotFound(w, r)
 			return
 		}
@@ -94,8 +94,8 @@ func TestSecretInputChallengeAllowsMissingEmail(t *testing.T) {
 	srv, handler, _ := setupServerWithPassword(t, "install-pass")
 
 	request := postJSON(handler, "/api/approvals/secret-input/request", map[string]any{
-		"endpoint":    agent.URL + "/api/agents/veilkey-hostvault",
-		"vault":       "hostvault",
+		"endpoint":    agent.URL + "/api/agents/test-agent",
+		"vault":       "testvault",
 		"secret_name": "INSTALL_PASSWORD__TEST",
 		"reason":      "install password custody",
 		"base_url":    "https://keycenter.test",
@@ -137,8 +137,8 @@ func TestSecretInputRequestRespectsTrustedIP(t *testing.T) {
 
 	blocked := postJSONFromIP(handler, "/api/approvals/secret-input/request", "192.168.1.50:9999", map[string]any{
 		"email":       "tex02@naver.com",
-		"endpoint":    "http://127.0.0.1:10180/api/agents/veilkey-hostvault",
-		"vault":       "hostvault",
+		"endpoint":    "http://127.0.0.1:10180/api/agents/test-agent",
+		"vault":       "testvault",
 		"secret_name": "INSTALL_PASSWORD__TEST",
 	})
 	if blocked.Code != 403 {
@@ -147,8 +147,8 @@ func TestSecretInputRequestRespectsTrustedIP(t *testing.T) {
 
 	allowed := postJSONFromIP(handler, "/api/approvals/secret-input/request", "10.0.0.100:9999", map[string]any{
 		"email":       "tex02@naver.com",
-		"endpoint":    "http://127.0.0.1:10180/api/agents/veilkey-hostvault",
-		"vault":       "hostvault",
+		"endpoint":    "http://127.0.0.1:10180/api/agents/test-agent",
+		"vault":       "testvault",
 		"secret_name": "INSTALL_PASSWORD__TEST",
 		"base_url":    "https://keycenter.test",
 	})
