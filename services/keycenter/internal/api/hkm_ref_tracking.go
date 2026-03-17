@@ -114,7 +114,7 @@ func (s *Server) syncTrackedRef(ref string, previousRef string, version int, sta
 
 func (s *Server) deleteTrackedRef(ref string) error {
 	if _, err := s.db.GetRef(ref); err != nil {
-		return nil
+		return err
 	}
 	return s.db.DeleteRef(ref)
 }

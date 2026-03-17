@@ -320,7 +320,7 @@ func (s *Server) loadBulkApplyWorkflowFile(vaultHash, name string) (*bulkApplyWo
 	}
 	var workflow bulkApplyWorkflowFile
 	if err := decodeStrictJSON(raw, &workflow); err != nil {
-		return nil, "parse_error", err.Error(), nil
+		return nil, "parse_error", err.Error(), err
 	}
 	if strings.TrimSpace(workflow.Kind) != bulkApplyWorkflowKind {
 		return nil, "schema_error", "kind must be BulkApplyWorkflow", nil
@@ -334,7 +334,7 @@ func (s *Server) loadBulkApplyWorkflowFile(vaultHash, name string) (*bulkApplyWo
 		}
 		row, err := s.loadBulkApplyTemplateRecord(vaultHash, step.Template)
 		if err != nil {
-			return nil, "missing_template", "referenced template not found", nil
+			return nil, "missing_template", "referenced template not found", err
 		}
 		if row.ValidationStatus != "valid" {
 			return nil, "missing_template", "referenced template is broken", nil

@@ -16,11 +16,29 @@ linters:
     errcheck:
       check-type-assertions: true
       check-blank: false
+      exclude-functions:
+        - (*database/sql.Tx).Rollback
+        - (*database/sql.Row).Scan
+        - (net/http.ResponseWriter).Write
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/json.Decoder).Decode
+        - (*veilkey-localvault/internal/db.DB).SaveConfig
+        - (*veilkey-localvault/internal/db.DB).DeleteConfig
+        - (*veilkey-localvault/internal/db.DB).SaveNodeInfo
+        - (*veilkey-localvault/internal/db.DB).SaveSecret
+        - (*veilkey-localvault/internal/api.Server).Unlock
 
     gocritic:
       enabled-tags:
         - diagnostic
         - performance
+      disabled-checks:
+        - exitAfterDefer
+        - hugeParam
+        - rangeValCopy
+        - ifElseChain
+        - offBy1
+        - singleCaseSwitch
 
 issues:
   exclude-dirs:

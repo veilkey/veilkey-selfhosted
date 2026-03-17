@@ -90,10 +90,6 @@ func ParseActivationScope(raw string) (RefScope, error) {
 	}
 }
 
-func tempVKToken(ref string) string {
-	return string(RefFamilyVK) + ":" + string(RefScopeTemp) + ":" + ref
-}
-
 func validateRefID(id string) error {
 	if id == "" {
 		return fmt.Errorf("id is required")
