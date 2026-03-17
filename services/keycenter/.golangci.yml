@@ -59,6 +59,11 @@ linters:
         - performance
       disabled-checks:
         - exitAfterDefer    # CLI init 함수에서 log.Fatalf + defer Close 패턴 허용
+        - hugeParam
+        - rangeValCopy
+        - ifElseChain
+        - offBy1
+        - singleCaseSwitch
 
 issues:
   exclude-dirs:

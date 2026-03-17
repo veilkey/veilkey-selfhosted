@@ -39,7 +39,7 @@ func (d *DB) CarrySecretCatalogIdentity(previousRefCanonical, newRefCanonical st
 
 	previous, err := d.GetSecretCatalogByRef(previousRefCanonical)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	current, err := d.GetSecretCatalogByRef(newRefCanonical)

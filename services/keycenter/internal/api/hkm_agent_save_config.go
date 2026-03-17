@@ -34,7 +34,7 @@ func (s *Server) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	scope, status, err := normalizeScopeStatus("VE", reqData.Scope, reqData.Status, "LOCAL")
+	scope, _, err := normalizeScopeStatus("VE", reqData.Scope, reqData.Status, "LOCAL")
 	if err != nil {
 		s.respondError(w, http.StatusBadRequest, err.Error())
 		return

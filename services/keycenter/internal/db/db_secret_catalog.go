@@ -32,7 +32,7 @@ func (d *DB) UpsertSecretCatalogFromTrackedRef(ref *TokenRef) error {
 
 	agent, err := d.GetAgentByHash(ref.AgentHash)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	bindingCount, err := d.CountBindingsForRef(ref.RefCanonical)
