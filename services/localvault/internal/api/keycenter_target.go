@@ -20,8 +20,6 @@ func (s *Server) resolveKeycenterTarget() keycenterTarget {
 	}{
 		{label: "env:VEILKEY_KEYCENTER_URL", value: strings.TrimSpace(os.Getenv("VEILKEY_KEYCENTER_URL"))},
 		{label: "db:VEILKEY_KEYCENTER_URL", value: s.lookupConfigValue("VEILKEY_KEYCENTER_URL")},
-		{label: "env:VEILKEY_HUB_URL", value: strings.TrimSpace(os.Getenv("VEILKEY_HUB_URL"))},
-		{label: "db:VEILKEY_HUB_URL", value: s.lookupConfigValue("VEILKEY_HUB_URL")},
 	}
 
 	selected := keycenterTarget{}

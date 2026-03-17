@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 	"veilkey-localvault/internal/crypto"
 )
@@ -146,7 +147,58 @@ func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
-	s.respondError(w, http.StatusForbidden, keycenterOnlyDecryptMessage)
+	// Only allow cascade requests from keycenter (federated resolve)
+	if r.Header.Get("X-VeilKey-Cascade") != "true" {
+		s.respondError(w, http.StatusForbidden, keycenterOnlyDecryptMessage)
+		return
+	}
+
+	ref := r.PathValue("ref")
+	if ref == "" {
+		s.respondError(w, http.StatusBadRequest, "ref is required")
+		return
+	}
+
+	secret, err := s.db.GetSecretByRef(ref)
+	if err != nil {
+		// Try by canonical ref parts
+		parts := strings.SplitN(ref, ":", 3)
+		if len(parts) == 3 {
+			secret, err = s.db.GetSecretByRef(parts[2])
+		}
+		if err != nil {
+			s.respondError(w, http.StatusNotFound, "ref not found")
+			return
+		}
+	}
+
+	info, err := s.db.GetNodeInfo()
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "node info not available")
+		return
+	}
+
+	s.kekMu.RLock()
+	kek := s.kek
+	s.kekMu.RUnlock()
+
+	dek, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to decrypt DEK")
+		return
+	}
+
+	plaintext, err := crypto.Decrypt(dek, secret.Ciphertext, secret.Nonce)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "decryption failed")
+		return
+	}
+
+	s.respondJSON(w, http.StatusOK, map[string]any{
+		"ref":   ref,
+		"name":  secret.Name,
+		"value": string(plaintext),
+	})
 }
 
 func (s *Server) handleRekey(w http.ResponseWriter, r *http.Request) {

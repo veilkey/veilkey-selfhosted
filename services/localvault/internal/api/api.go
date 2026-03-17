@@ -195,6 +195,7 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("GET /api/cipher/{ref}/fields/{field}", s.requireTrustedIP(s.requireUnlocked(s.handleCipherField)))
 	mux.HandleFunc("POST /api/cipher", s.requireTrustedIP(s.requireUnlocked(s.handleSaveCipher)))
 	mux.HandleFunc("POST /api/decrypt", s.requireTrustedIP(s.requireUnlocked(s.handleDecrypt)))
+	mux.HandleFunc("POST /api/promote", s.requireTrustedIP(s.requireUnlocked(s.handlePromote)))
 
 	// Encrypt (CLI-compatible: plaintext → VK:TEMP:ref token)
 	mux.HandleFunc("POST /api/encrypt", s.requireUnlocked(s.handleEncrypt))

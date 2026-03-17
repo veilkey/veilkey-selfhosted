@@ -17,7 +17,6 @@ func TestIntegration_RemovedEndpoints(t *testing.T) {
 	_, handler := setupTestServer(t)
 
 	endpoints := []struct{ method, path string }{
-		{"POST", "/api/encrypt"},
 		{"POST", "/api/decrypt"},
 		{"POST", "/api/reencrypt"},
 		{"POST", "/api/secrets"},

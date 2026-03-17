@@ -2,6 +2,9 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
@@ -89,6 +92,11 @@ func runServer() {
 	} else {
 		log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 	}
+
+	gcStop := make(chan struct{})
+	defer close(gcStop)
+	go api.StartTempRefGC(database, parseDurationEnv("VEILKEY_GC_INTERVAL", 5*time.Minute), gcStop)
+	log.Println("Temp ref GC started")
 
 	handler := server.SetupRoutes()
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
@@ -199,13 +207,39 @@ func runHKMInit() {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
 
+	// Store password as temp ref (auto-deletes after 1 hour)
+	pwCiphertext, pwNonce, pwErr := crypto.Encrypt(dek, []byte(password))
+	tempRef := ""
+	if pwErr == nil {
+		pwRefID, refErr := generateInitRef(16)
+		if refErr == nil {
+			parts := db.RefParts{Family: "VK", Scope: "TEMP", ID: pwRefID}
+			encoded := base64Encode(pwCiphertext) + ":" + base64Encode(pwNonce)
+			expiresAt := time.Now().UTC().Add(1 * time.Hour)
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, "temp", expiresAt, "KEYCENTER_PASSWORD"); saveErr == nil {
+				tempRef = parts.Canonical()
+			}
+		}
+	}
+
 	fmt.Println("VeilKey HKM initialized (root node).")
 	fmt.Printf("  Node ID: %s\n", nodeID)
 	fmt.Printf("  Salt:    %s\n", saltFile)
 	fmt.Printf("  DB:      %s\n", dbPath)
 	fmt.Printf("  DEK v1:  created\n")
+	if tempRef != "" {
+		fmt.Println("")
+		fmt.Printf("  Password ref: %s\n", tempRef)
+		fmt.Println("  This ref expires in 1 hour. Retrieve your password before then:")
+		fmt.Printf("    curl -s http://localhost:10180/api/resolve/%s\n", tempRef)
+	}
 	fmt.Println("")
-	fmt.Println("  IMPORTANT: Remember your password. Lost password = unrecoverable data.")
+	fmt.Println("  WARNING: Your password is the only way to unlock this server.")
+	fmt.Println("  Store it in a secure location (e.g. password manager) within 1 hour.")
+	fmt.Println("  After 1 hour, the temporary password ref is permanently deleted.")
+	fmt.Println("  If you lose your password, all encrypted data is unrecoverable.")
+	fmt.Println("  VeilKey assumes no liability for data loss due to lost passwords.")
+	fmt.Println("  Full responsibility for password custody lies with the operator.")
 }
 
 // readPasswordFromFileEnv reads the password from the file path specified in VEILKEY_PASSWORD_FILE.
@@ -286,4 +320,16 @@ func detectExternalIP() string {
 		}
 	}
 	return ""
+}
+
+func generateInitRef(length int) (string, error) {
+	b := make([]byte, length)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+func base64Encode(data []byte) string {
+	return base64.StdEncoding.EncodeToString(data)
 }
