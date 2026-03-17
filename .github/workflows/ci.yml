@@ -198,6 +198,7 @@ jobs:
           ./install.sh doctor
       - name: Shell tests
         run: |
+          bash tests/test_install_script_helpers.sh
           bash tests/test_glibc_runtime_guard.sh
           bash tests/test_placeholder_artifact_guard.sh
           bash tests/test_cli_component.sh

@@ -64,33 +64,7 @@ require_go() {
   required_go_version="$(awk '/^toolchain /{print $2; exit} /^go /{print "go"$2; exit}' "${ROOT_DIR}/go.mod")"
 
   if command -v "${current_go_bin}" >/dev/null 2>&1; then
-    if python3 - "${current_go_bin}" "${required_go_version}" <<'PY'
-import re
-import subprocess
-import sys
-
-go_bin = sys.argv[1]
-required = sys.argv[2]
-
-def norm(value: str):
-    m = re.search(r'go(\d+)\.(\d+)(?:\.(\d+))?', value)
-    if not m:
-        return None
-    return tuple(int(part or 0) for part in m.groups())
-
-try:
-    version = subprocess.check_output([go_bin, "version"], text=True, stderr=subprocess.DEVNULL)
-except Exception:
-    raise SystemExit(1)
-
-current = norm(version)
-target = norm(required)
-if current is None or target is None:
-    raise SystemExit(1)
-
-raise SystemExit(0 if current >= target else 1)
-PY
-    then
+    if go_version_satisfies "${current_go_bin}" "${required_go_version}"; then
       GO_BIN="${current_go_bin}"
       return 0
     fi
@@ -108,37 +82,9 @@ PY
     elif command -v brew >/dev/null 2>&1; then
       brew install go >/dev/null
     fi
-    if command -v "${current_go_bin}" >/dev/null 2>&1; then
-      if python3 - "${current_go_bin}" "${required_go_version}" <<'PY'
-import re
-import subprocess
-import sys
-
-go_bin = sys.argv[1]
-required = sys.argv[2]
-
-def norm(value: str):
-    m = re.search(r'go(\d+)\.(\d+)(?:\.(\d+))?', value)
-    if not m:
-        return None
-    return tuple(int(part or 0) for part in m.groups())
-
-try:
-    version = subprocess.check_output([go_bin, "version"], text=True, stderr=subprocess.DEVNULL)
-except Exception:
-    raise SystemExit(1)
-
-current = norm(version)
-target = norm(required)
-if current is None or target is None:
-    raise SystemExit(1)
-
-raise SystemExit(0 if current >= target else 1)
-PY
-      then
-        GO_BIN="${current_go_bin}"
-        return 0
-      fi
+    if command -v "${current_go_bin}" >/dev/null 2>&1 && go_version_satisfies "${current_go_bin}" "${required_go_version}"; then
+      GO_BIN="${current_go_bin}"
+      return 0
     fi
   fi
 
@@ -168,6 +114,52 @@ PY
   GO_BIN="${downloaded_go}"
 }
 
+go_version_satisfies() {
+  local go_bin="$1"
+  local required="$2"
+  local current current_major current_minor current_patch required_major required_minor required_patch
+
+  current="$("${go_bin}" version 2>/dev/null | awk '{print $3}')"
+  [[ -n "${current}" ]] || return 1
+
+  parse_go_version "${current}" current_major current_minor current_patch || return 1
+  parse_go_version "${required}" required_major required_minor required_patch || return 1
+
+  if (( current_major > required_major )); then
+    return 0
+  fi
+  if (( current_major < required_major )); then
+    return 1
+  fi
+  if (( current_minor > required_minor )); then
+    return 0
+  fi
+  if (( current_minor < required_minor )); then
+    return 1
+  fi
+  (( current_patch >= required_patch ))
+}
+
+parse_go_version() {
+  local raw="$1"
+  local major_ref="$2"
+  local minor_ref="$3"
+  local patch_ref="$4"
+  local version major minor patch
+
+  version="${raw#go}"
+  IFS=. read -r major minor patch _ <<< "${version}"
+  patch="${patch:-0}"
+
+  [[ "${major}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${minor}" =~ ^[0-9]+$ ]] || return 1
+  [[ "${patch}" =~ ^[0-9]+$ ]] || return 1
+
+  printf -v "${major_ref}" '%d' "${major}"
+  printf -v "${minor_ref}" '%d' "${minor}"
+  printf -v "${patch_ref}" '%d' "${patch}"
+}
+
 manifest_cmd() {
   require_go
   "${GO_BIN}" run ./cmd/installer-manifest --manifest "${MANIFEST_FILE}" "$@"
@@ -187,32 +179,15 @@ json_field() {
     return
   fi
 
-  python3 -c '
-import json
-import sys
-
-field = sys.argv[1]
-try:
-    data = json.load(sys.stdin)
-except Exception:
-    raise SystemExit(1)
-
-value = data
-for key in field.split("."):
-    if isinstance(value, dict):
-        value = value.get(key)
-    else:
-        value = None
-        break
-
-if value is None:
-    raise SystemExit(1)
-
-if isinstance(value, (dict, list)):
-    print(json.dumps(value))
-else:
-    print(value)
-' "$field"
+  case "${field}" in
+    id)
+      sed -n 's/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' | head -n1
+      ;;
+    *)
+      echo "Error: json_field without jq only supports the 'id' field" >&2
+      return 1
+      ;;
+  esac
 }
 
 resolve_gitlab_pat() {
@@ -225,49 +200,38 @@ resolve_gitlab_pat() {
     return 0
   fi
 
-  python3 - <<'PY' 2>/dev/null || true
-import os
-import subprocess
+  local mirror_ip gitlab_host vault_ip extra_host proto host res line
+  local -a candidates=()
 
-candidates = []
+  mirror_ip="${VEILKEY_MIRROR_IP:-}"
+  gitlab_host="${VEILKEY_GITLAB_HOST:-}"
+  vault_ip="${VEILKEY_VAULT_IP:-}"
+  extra_host="${VEILKEY_GITLAB_PACKAGE_HOST:-}"
 
-mirror_ip = os.environ.get("VEILKEY_MIRROR_IP", "").strip()
-gitlab_host = os.environ.get("VEILKEY_GITLAB_HOST", "").strip()
-vault_ip = os.environ.get("VEILKEY_VAULT_IP", "").strip()
+  if [[ -n "${extra_host}" ]]; then
+    if [[ "${extra_host}" == *://* ]]; then
+      proto="${extra_host%%://*}"
+      host="${extra_host#*://}"
+      candidates+=("${proto}|${host}")
+    else
+      candidates+=("http|${extra_host}")
+    fi
+  fi
+  [[ -n "${mirror_ip}" ]] && candidates+=("http|${mirror_ip}")
+  [[ -n "${gitlab_host}" ]] && candidates+=("https|${gitlab_host}")
+  [[ -n "${vault_ip}" ]] && candidates+=("http|${vault_ip}")
 
-if mirror_ip:
-    candidates.append(("http", mirror_ip))
-if gitlab_host:
-    candidates.append(("https", gitlab_host))
-if vault_ip:
-    candidates.append(("http", vault_ip))
-
-extra_host = os.environ.get("VEILKEY_GITLAB_PACKAGE_HOST", "").strip()
-if extra_host:
-    if "://" in extra_host:
-        proto, host = extra_host.split("://", 1)
-        candidates.insert(0, (proto, host))
-    else:
-        candidates.insert(0, ("http", extra_host))
-
-for proto, host in candidates:
-    req = f"protocol={proto}\nhost={host}\n\n".encode()
-    try:
-        res = subprocess.run(
-            ["git", "credential", "fill"],
-            input=req,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-    except Exception:
-        continue
-
-    for line in res.stdout.decode().splitlines():
-        if line.startswith("password="):
-            print(line.split("=", 1)[1])
-            raise SystemExit(0)
-PY
+  for candidate in "${candidates[@]}"; do
+    proto="${candidate%%|*}"
+    host="${candidate#*|}"
+    res="$(printf 'protocol=%s\nhost=%s\n\n' "${proto}" "${host}" | git credential fill 2>/dev/null || true)"
+    while IFS= read -r line; do
+      if [[ "${line}" == password=* ]]; then
+        printf '%s\n' "${line#password=}"
+        return 0
+      fi
+    done <<< "${res}"
+  done
 }
 
 load_os_module() {
