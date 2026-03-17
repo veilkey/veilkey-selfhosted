@@ -31,6 +31,15 @@ mkdir -p \
 trap 'rm -rf "$tmp_root"' EXIT
 
 export VEILKEY_INSTALLER_GITLAB_API_BASE="${VEILKEY_INSTALLER_GITLAB_API_BASE:-https://gitlab.60.internal.kr/api/v4}"
+
+# 외부 CI에서 내부 gitlab 접근 불가 시 skip
+if [[ "${CI:-}" == "true" ]]; then
+  if ! curl -sf --max-time 5 "${VEILKEY_INSTALLER_GITLAB_API_BASE}" >/dev/null 2>&1; then
+    echo "skip: internal gitlab unreachable in CI"
+    exit 0
+  fi
+fi
+
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./scripts/proxmox-host-install.sh "$tmp_host_root" "$tmp_host_bundle" >/dev/null
 test -x "$tmp_host_root/usr/local/bin/veilroot-shell"
