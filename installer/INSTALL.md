@@ -15,6 +15,23 @@ The currently validated install targets are:
 - `proxmox-host-localvault`
 - `proxmox-lxc-allinone`
 
+## Current Operator Entry Command
+
+For the host-side CLI boundary, the installer now ships:
+
+- `veil`
+- `veilkey-cli`
+- `veilkey-session-config`
+- `vk`
+
+Operator guidance:
+
+- prefer `veil` as the first command
+- treat `veilkey-cli wrap-pty` as the lower-level fallback/debug surface
+- `veil` currently enters the existing host boundary/session path
+- a later phase will move `veil` behind a per-user work-container runtime
+- do not treat `veilroot` as the primary operator command anymore
+
 ## 1. Prepare the Installer Repository
 
 Clone the installer repository and initialize the local manifest:
@@ -236,3 +253,26 @@ Runtime LXC:
 ./scripts/proxmox-lxc-runtime-install.sh --activate /
 ./scripts/proxmox-lxc-runtime-health.sh /
 ```
+
+## Host CLI Boundary Surface
+
+When the `proxmox-host-cli` profile is installed successfully, the expected CLI/session files are:
+
+```text
+/usr/local/bin/veil
+/usr/local/bin/veilkey-cli
+/usr/local/bin/veilkey-session-config
+/usr/local/bin/vk
+/etc/veilkey/session-tools.toml.example
+```
+
+Quick check:
+
+```bash
+command -v veil
+command -v veilkey-cli
+command -v veilkey-session-config
+command -v vk
+```
+
+If `veil` cannot find its required boundary/session runtime, it fails with an explicit error instead of silently dropping to an unguarded host path.

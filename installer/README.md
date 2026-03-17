@@ -40,6 +40,32 @@ The active install targets are:
 - `proxmox-lxc-allinone`
 - `proxmox-lxc-runtime`
 
+## Current CLI / Session Surface
+
+The installer now treats the CLI boundary surface as:
+
+- `veil`
+  - canonical user-facing session entrypoint
+- `veilkey-cli`
+  - lower-level CLI and PTY wrapper surface
+- `veilkey-session-config`
+  - session/boundary configuration helper
+- `vk`
+  - manual ref issuance helper
+
+Current behavior:
+
+- the `cli` component package installs `veil`, `veilkey-cli`, `veilkey-session-config`, and `vk`
+- `veil` is intended to be the one command an operator types first
+- the current implementation still delegates into the existing host-boundary/session path
+- future work will move `veil` behind the per-user work-container runtime tracked in issues `#31`, `#37`, and `#36`
+
+Surface direction:
+
+- keep `veil` as the only user-facing session entrypoint
+- keep `veilkey-cli`, `veilkey-session-config`, and `vk` as lower-level/operator helpers
+- demote `veilroot` and legacy session-launch helper names from primary install/operator paths
+
 ## Main Documents
 
 - `INSTALL.md`
@@ -186,6 +212,25 @@ Important behavior:
 - wrapper commands add target-specific runtime checks on top
 - `proxmox-lxc-allinone` stages boundary assets for host export and follow-up setup
 - `proxmox-lxc-allinone` does not support `VEILKEY_ENABLE_PROXY=1` inside the LXC; use `proxmox-host-cli` on the Proxmox host for companion boundary/proxy runtime
+
+## CLI Component Contract
+
+The `proxmox-host-cli` install profile now assumes a dedicated CLI component payload.
+
+Installed files expected from the `cli` component:
+
+- `/usr/local/bin/veil`
+- `/usr/local/bin/veilkey-cli`
+- `/usr/local/bin/veilkey-session-config`
+- `/usr/local/bin/vk`
+- `/etc/veilkey/session-tools.toml.example`
+
+Validation coverage:
+
+- `installer/tests/test_cli_component.sh`
+  - bundles a local CLI artifact
+  - installs the `proxmox-host-cli` profile
+  - verifies the expected CLI/session files are present
 
 ## Bootstrap SSH Export
 
