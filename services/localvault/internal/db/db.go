@@ -3,9 +3,11 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
+	"os"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
 
 type DB struct {
@@ -88,18 +90,53 @@ type FunctionLog struct {
 }
 
 func New(dbPath string) (*DB, error) {
-	conn, err := sql.Open("sqlite3", dbPath+"?_journal_mode=wal&_busy_timeout=5000")
+	dsn := dbPath + "?_journal_mode=wal&_busy_timeout=5000"
+
+	// SQLCipher: 환경변수로 DB 암호화 키가 설정된 경우 DSN에 _pragma_key 추가
+	if key := os.Getenv("VEILKEY_DB_KEY"); key != "" {
+		dsn += "&_pragma_key=" + url.QueryEscape(key)
+	}
+
+	conn, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
 	if err := conn.Ping(); err != nil {
 		return nil, err
 	}
+
+	// SQLCipher 키가 설정된 경우, 드라이버 지원 여부와 DB 접근 가능 여부를 함께 검증
+	if os.Getenv("VEILKEY_DB_KEY") != "" {
+		version, verErr := sqlCipherVersion(conn)
+		if verErr != nil {
+			return nil, fmt.Errorf("sqlcipher 지원 확인 실패: %w", verErr)
+		}
+		if version == "" {
+			return nil, fmt.Errorf("VEILKEY_DB_KEY가 설정되었으나 바이너리가 SQLCipher 없이 빌드됨")
+		}
+		if _, verErr = conn.Exec("SELECT count(*) FROM sqlite_master"); verErr != nil {
+			return nil, fmt.Errorf("sqlcipher DB 키 검증 실패: %w", verErr)
+		}
+	}
+
 	db := &DB{conn: conn}
 	if err := db.migrate(); err != nil {
 		return nil, err
 	}
 	return db, nil
+}
+
+// sqlCipherVersion checks if the underlying driver supports SQLCipher.
+func sqlCipherVersion(conn *sql.DB) (string, error) {
+	var version sql.NullString
+	err := conn.QueryRow("PRAGMA cipher_version").Scan(&version)
+	if err == sql.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return version.String, nil
 }
 
 func (d *DB) migrate() error {

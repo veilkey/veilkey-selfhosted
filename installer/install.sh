@@ -99,7 +99,7 @@ PY
     if command -v apt-get >/dev/null 2>&1; then
       export DEBIAN_FRONTEND=noninteractive
       apt-get update >/dev/null
-      apt-get install -y golang-go >/dev/null
+      apt-get install -y golang-go libsqlcipher1 >/dev/null
     elif command -v dnf >/dev/null 2>&1; then
       dnf install -y golang >/dev/null
     elif command -v yum >/dev/null 2>&1; then
