@@ -53,10 +53,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/keycenter/go.mod
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
       - name: Lint
         uses: golangci/golangci-lint-action@v6
         with:
           working-directory: services/keycenter
+          version: latest
       - name: Test
         run: go test ./... -race -count=1
       - name: Build
@@ -81,10 +84,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: services/localvault/go.mod
+      - name: Install SQLCipher
+        run: sudo apt-get update && sudo apt-get install -y libsqlcipher-dev
       - name: Lint
         uses: golangci/golangci-lint-action@v6
         with:
           working-directory: services/localvault
+          version: latest
       - name: Test
         run: go test ./... -race -count=1
       - name: Build
@@ -113,6 +119,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           working-directory: services/proxy
+          version: latest
       - name: Test
         run: go test ./... -race -count=1
       - name: Build
@@ -145,6 +152,7 @@ jobs:
         uses: golangci/golangci-lint-action@v6
         with:
           working-directory: client/cli
+          version: latest
       - name: Test
         run: go test ./... -race -count=1
       - name: Build
