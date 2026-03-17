@@ -180,12 +180,22 @@ The installer works in four stages:
 Important behavior:
 
 - `install-profile` reuses an existing `bundle_root` when present
-- fresh installs can download artifacts directly from the internal GitLab HTTPS source
-- when using the example manifest, set `VEILKEY_INSTALLER_GITLAB_API_BASE=https://gitlab.60.internal.kr/api/v4` so placeholder package URLs normalize to the active GitLab API
+- fresh installs can download artifacts directly from the URL already encoded in the active manifest
+- the example manifest still uses placeholder URLs until release refs are filled in:
+  - `keycenter` / `localvault` normalize through `VEILKEY_INSTALLER_GITLAB_API_BASE`
+  - `cli` uses a GitHub release asset placeholder with `RELEASE_OR_TAG`
 - `post-install-health` validates the installed scaffold
 - wrapper commands add target-specific runtime checks on top
 - `proxmox-lxc-allinone` stages boundary assets for host export and follow-up setup
 - `proxmox-lxc-allinone` does not support `VEILKEY_ENABLE_PROXY=1` inside the LXC; use `proxmox-host-cli` on the Proxmox host for companion boundary/proxy runtime
+
+For the `cli` component, the intended published path is:
+
+```text
+https://github.com/veilkey/veilkey-selfhosted/releases/download/<tag>/veilkey-cli_<tag>_linux_amd64.tar.gz
+```
+
+Until a real tag is published, `components.toml` must be rewritten or the focused local artifact test path should be used.
 
 ## Bootstrap SSH Export
 

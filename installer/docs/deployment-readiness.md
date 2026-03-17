@@ -9,6 +9,7 @@ This note summarizes the guardrails added around the installer deployment path.
 - placeholder artifact URLs such as `https://your-gitlab-host/...` are now treated as an explicit operator setup requirement:
   - `./install.sh doctor` warns when the active manifest still contains placeholder URLs and `VEILKEY_INSTALLER_GITLAB_API_BASE` is unset
   - `download`, `bundle`, and `install-profile` fail fast when placeholder URLs would otherwise be used directly
+  - unresolved GitHub release placeholders such as `RELEASE_OR_TAG` also fail fast
 
 ## Operator Expectation
 
@@ -19,6 +20,14 @@ export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
 ```
 
 Or rewrite `components.toml` so `artifact_url` values already point at the real package host.
+
+For the `cli` package, the current intended published path is a GitHub release asset:
+
+```text
+https://github.com/veilkey/veilkey-selfhosted/releases/download/<tag>/veilkey-cli_<tag>_linux_amd64.tar.gz
+```
+
+The example manifest leaves this as `RELEASE_OR_TAG` until a real tagged release exists.
 
 Password handling for operator installs should use password files:
 
@@ -53,6 +62,7 @@ The installer regression path now covers:
 
 - placeholder manifest warning path
 - placeholder manifest fail-fast path
+- unresolved release-tag placeholder fail-fast path
 - install-profile success path with API base override
 - proxy component staging path
 - proxmox wrapper install paths
