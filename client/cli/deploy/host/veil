@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ "${VEIL_WORK_CONTAINER_ENABLE:-0}" == "1" ]]; then
-  work_container_bin="${VEIL_WORK_CONTAINER_BIN:-/usr/local/bin/veil-work-container}"
-  if [[ ! -x "${work_container_bin}" ]]; then
-    echo "veil: configured work-container entrypoint not found: ${work_container_bin}" >&2
-    exit 1
-  fi
+work_container_bin="${VEIL_WORK_CONTAINER_BIN:-/usr/local/bin/veil-work-container}"
+if [[ -x "${work_container_bin}" ]]; then
   exec "${work_container_bin}" "$@"
 fi
 
-veilroot_shell="${VEILKEY_VEILROOT_SHELL_BIN:-/usr/local/bin/veilroot-shell}"
-
-if [[ ! -x "${veilroot_shell}" ]]; then
-  echo "veil: required session entrypoint not found: ${veilroot_shell}" >&2
-  echo "veil: install the Veil host boundary first or set VEILKEY_VEILROOT_SHELL_BIN" >&2
-  exit 1
+if [[ "${VEIL_LEGACY_VEILROOT:-0}" == "1" ]]; then
+  veilroot_shell="${VEILKEY_VEILROOT_SHELL_BIN:-/usr/local/bin/veilroot-shell}"
+  if [[ ! -x "${veilroot_shell}" ]]; then
+    echo "veil: legacy veilroot entrypoint not found: ${veilroot_shell}" >&2
+    exit 1
+  fi
+  exec "${veilroot_shell}" open "$@"
 fi
 
-exec "${veilroot_shell}" open "$@"
+echo "veil: work-container entrypoint not found: ${work_container_bin}" >&2
+echo "veil: install the Veil work-container runtime or set VEIL_WORK_CONTAINER_BIN" >&2
+echo "veil: set VEIL_LEGACY_VEILROOT=1 only for temporary fallback during migration" >&2
+exit 1
