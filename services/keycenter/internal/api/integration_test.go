@@ -355,7 +355,6 @@ func TestIntegration_RemovedEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"POST", "/api/encrypt"},
 		{"POST", "/api/decrypt"},
 		{"POST", "/api/reencrypt"},
 		{"POST", "/api/rotate"},

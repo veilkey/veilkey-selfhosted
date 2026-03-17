@@ -55,7 +55,7 @@ unit_prefix = "veilroot"
 
 [veilkey]
 localvault_url = "http://127.0.0.1:10180"
-hub_url = "http://<HUB_IP>:10180"
+keycenter_url = "http://<HUB_IP>:10180"
 
 # Environment examples:
 #   export VEILKEY_LOCALE=ko

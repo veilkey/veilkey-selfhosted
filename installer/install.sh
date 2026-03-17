@@ -762,7 +762,7 @@ EOF
 
   cat > "${veilkey_etc}/proxy.env.example" <<'EOF'
 VEILKEY_LOCALVAULT_URL=
-VEILKEY_HUB_URL=
+VEILKEY_KEYCENTER_URL=
 VEILKEY_PROXY_ACCESS_LOG_FORMAT=jsonl
 EOF
 }
@@ -804,7 +804,7 @@ render_profile_envs() {
   local enable_keycenter enable_localvault enable_proxy
   local default_enable_keycenter default_enable_localvault default_enable_proxy
   local keycenter_addr keycenter_db localvault_addr localvault_db localvault_trusted_ips
-  local keycenter_url proxy_localvault_url proxy_hub_url
+  local keycenter_url proxy_localvault_url proxy_keycenter_url
   local default_keycenter_addr default_localvault_addr default_keycenter_url
 
   require_profile_file "${profile}"
@@ -854,7 +854,7 @@ render_profile_envs() {
   localvault_trusted_ips="${VEILKEY_LOCALVAULT_TRUSTED_IPS:-}"
   keycenter_url="${VEILKEY_KEYCENTER_URL:-${default_keycenter_url}}"
   proxy_localvault_url="${VEILKEY_PROXY_LOCALVAULT_URL:-https://127.0.0.1:10180}"
-  proxy_hub_url="${VEILKEY_PROXY_HUB_URL:-${keycenter_url}}"
+  proxy_keycenter_url="${VEILKEY_PROXY_KEYCENTER_URL:-${keycenter_url}}"
 
   cat > "${installer_state}" <<EOF
 VEILKEY_PROFILE=${profile}
@@ -863,7 +863,7 @@ VEILKEY_ENABLE_LOCALVAULT=${enable_localvault}
 VEILKEY_ENABLE_PROXY=${enable_proxy}
 VEILKEY_KEYCENTER_URL=${keycenter_url}
 VEILKEY_PROXY_LOCALVAULT_URL=${proxy_localvault_url}
-VEILKEY_PROXY_HUB_URL=${proxy_hub_url}
+VEILKEY_PROXY_KEYCENTER_URL=${proxy_keycenter_url}
 EOF
 
   # Write password files with restricted permissions (never store in env files)
@@ -898,7 +898,7 @@ EOF
 
   cat > "${veilkey_etc}/proxy.env" <<EOF
 VEILKEY_LOCALVAULT_URL=${proxy_localvault_url}
-VEILKEY_HUB_URL=${proxy_hub_url}
+VEILKEY_KEYCENTER_URL=${proxy_keycenter_url}
 VEILKEY_PROXY_ACCESS_LOG_FORMAT=${VEILKEY_PROXY_ACCESS_LOG_FORMAT:-jsonl}
 EOF
 }

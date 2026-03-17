@@ -21,15 +21,9 @@ path = Path('$env_file')
 if not path.exists():
     raise SystemExit(0)
 lines = path.read_text().splitlines()
-hub = ''
-has_keycenter = False
-for line in lines:
-    if line.startswith('VEILKEY_KEYCENTER_URL='):
-        has_keycenter = True
-    elif line.startswith('VEILKEY_HUB_URL='):
-        hub = line.split('=', 1)[1]
-if (not has_keycenter) and hub:
-    lines.append(f'VEILKEY_KEYCENTER_URL={hub}')
+has_keycenter = any(line.startswith('VEILKEY_KEYCENTER_URL=') for line in lines)
+if not has_keycenter:
+    lines.append('VEILKEY_KEYCENTER_URL=')
     path.write_text('\\n'.join(lines) + '\\n')
 PY"
 }

@@ -190,7 +190,7 @@ Port mappings per profile:
 Key runtime env values:
 
 - `VEILKEY_LOCALVAULT_URL`: resolve endpoint
-- `VEILKEY_HUB_URL`: temp issue endpoint
+- `VEILKEY_KEYCENTER_URL`: temp issue endpoint
 - `VEILKEY_PROXY_ACCESS_LOG_FORMAT`: access log format
 - `VEILKEY_PROXY_REWRITE_LOG`: plaintext detection and rewrite audit path
 

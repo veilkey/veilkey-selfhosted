@@ -20,11 +20,13 @@ func RenderInstallWizard(w http.ResponseWriter) {
 
 // installStatus returns current initialization and keycenter connection status.
 type installStatus struct {
-	Initialized     bool   `json:"initialized"`
-	KeycenterURL    string `json:"keycenter_url,omitempty"`
-	KeycenterSource string `json:"keycenter_source,omitempty"`
-	Connected       bool   `json:"connected"`
-	Error           string `json:"error,omitempty"`
+	Initialized        bool   `json:"initialized"`
+	KeycenterURL       string `json:"keycenter_url,omitempty"`
+	KeycenterSource    string `json:"keycenter_source,omitempty"`
+	Connected          bool   `json:"connected"`
+	KeycenterConnected bool   `json:"keycenter_connected"`
+	Error              string `json:"error,omitempty"`
+	KeycenterError     string `json:"keycenter_error,omitempty"`
 }
 
 // HandleInstallStatus returns setup and keycenter connection status.
@@ -41,12 +43,17 @@ func (s *Server) HandleInstallStatus(w http.ResponseWriter, r *http.Request) {
 		resp, err := s.httpClient.Get(healthURL)
 		if err != nil {
 			status.Connected = false
+			status.KeycenterConnected = false
 			status.Error = err.Error()
+			status.KeycenterError = err.Error()
 		} else {
 			resp.Body.Close()
 			status.Connected = resp.StatusCode == http.StatusOK
+			status.KeycenterConnected = status.Connected
 			if !status.Connected {
-				status.Error = "keycenter returned " + resp.Status
+				errMsg := "keycenter returned " + resp.Status
+				status.Error = errMsg
+				status.KeycenterError = errMsg
 			}
 		}
 	}

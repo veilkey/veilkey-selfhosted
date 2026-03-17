@@ -1,0 +1,15 @@
+status=pending
+date=2026-03-18
+object=repo-checkout-materialization-bug
+repo=/opt/veilkey-selfhosted-repo
+scope=git clone/worktree checkout of tracked files in this environment
+target=fresh local clone and worktree created from /opt/veilkey-selfhosted-repo while preparing cli package and installer manifest work
+expected=tracked files present in HEAD should materialize into the working tree after clone, worktree add, checkout, and reset --hard
+observed=multiple tracked files exist in git objects and can be read with git show HEAD:path, but do not materialize into the working tree; git status reports them as deleted; git checkout-index can sometimes restore individual files transiently, but the working tree remains inconsistent
+evidence=git show HEAD:installer/install.sh and git show HEAD:client/cli/install.sh succeed; git fsck --full passes; partial clone and sparse checkout settings are absent; lsattr shows no immutable flags; fresh clone under /root/clones/veilkey-cli-contract and worktree under /root/worktrees/veilkey-cli-contract both showed widespread tracked-file deletions across installer/services/shared/client paths
+impact=package-contract and installer wiring work cannot be completed reliably outside the original tree because new clones/worktrees do not provide a stable working copy
+pending_items=identify why tracked files under installer/services/shared/client subpaths fail to materialize; check host filesystem or overlay behavior; verify whether a repo-local filter/driver or external sync process is interfering; decide whether a tarball export or rsync snapshot is required as a temporary clean-workspace workaround
+next_owner=repo/host environment owner
+blocker=clean isolated workspace for cli package plus installer contract work is not currently trustworthy
+target_repo=veilkey-selfhosted-repo
+next_action=capture a minimal reproduction with clone plus git checkout-index behavior and either fix the environment issue or establish a supported clean-copy workaround before resuming manifest wiring

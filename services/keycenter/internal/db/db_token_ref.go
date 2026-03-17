@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
@@ -262,6 +263,35 @@ func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) err
 		"ref_canonical": gorm.Expr("ref_family || ':LOCAL:' || ref_id"),
 		"status":        "active",
 	}).Error
+}
+
+func (d *DB) SaveRefWithExpiry(parts RefParts, ciphertext string, version int, status string, expiresAt time.Time, secretName string) error {
+	if err := parts.Validate(); err != nil {
+		return err
+	}
+	if status == "" {
+		status = "temp"
+	}
+	secretName = strings.TrimSpace(secretName)
+	if secretName == "" {
+		secretName = parts.ID
+	}
+	return d.conn.Exec(`
+INSERT INTO token_refs (
+	ref_canonical, ref_family, ref_scope, ref_id, secret_name, agent_hash, ciphertext, version, status, expires_at, created_at
+) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+ON CONFLICT(ref_canonical) DO UPDATE SET
+	ciphertext = excluded.ciphertext,
+	version = excluded.version,
+	status = excluded.status,
+	expires_at = excluded.expires_at,
+	secret_name = excluded.secret_name
+`, parts.Canonical(), parts.Family, parts.Scope, parts.ID, secretName, ciphertext, version, status, expiresAt).Error
+}
+
+func (d *DB) DeleteExpiredTempRefs() (int64, error) {
+	result := d.conn.Exec(`DELETE FROM token_refs WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP`)
+	return result.RowsAffected, result.Error
 }
 
 func (d *DB) EnsureTokenRefCanonicalUniqueness() error {

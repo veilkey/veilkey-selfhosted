@@ -48,7 +48,7 @@ type profileDefaults struct {
 
 type veilkeyConfig struct {
 	LocalvaultURL string `toml:"localvault_url"`
-	HubURL        string `toml:"hub_url"`
+	KeycenterURL  string `toml:"keycenter_url"`
 }
 
 type rewriteConfig struct {
@@ -88,12 +88,10 @@ func (c *config) veilkeyLocalvaultURL() string {
 	)
 }
 
-func (c *config) veilkeyHubURL() string {
+func (c *config) veilkeyKeycenterURL() string {
 	return getenvFirst(
-		c.Veilkey.HubURL,
-		os.Getenv("VEILKEY_HUB_URL"),
+		c.Veilkey.KeycenterURL,
 		os.Getenv("VEILKEY_KEYCENTER_URL"),
-		os.Getenv("VEILKEY_DEFAULT_HUB_URL"),
 	)
 }
 
@@ -139,7 +137,7 @@ func (c *config) mergedNoProxy(base string) string {
 	for _, item := range strings.Split(base, ",") {
 		add(item)
 	}
-	for _, raw := range []string{c.veilkeyLocalvaultURL(), c.veilkeyHubURL()} {
+	for _, raw := range []string{c.veilkeyLocalvaultURL(), c.veilkeyKeycenterURL()} {
 		add(hostname(raw))
 	}
 	return strings.Join(order, ",")
@@ -338,8 +336,7 @@ func main() {
 			{"ALL_PROXY", cfg.Proxy.Default.URL},
 			{"NO_PROXY", cfg.mergedNoProxy(cfg.Proxy.Default.NoProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
-			{"VEILKEY_HUB_URL", cfg.veilkeyHubURL()},
-			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyHubURL()},
+			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyKeycenterURL()},
 		})
 	case "tool-shell-exports":
 		if len(cmdArgs) < 1 {
@@ -362,8 +359,7 @@ func main() {
 			{"ALL_PROXY", target.URL},
 			{"NO_PROXY", cfg.mergedNoProxy(noProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
-			{"VEILKEY_HUB_URL", cfg.veilkeyHubURL()},
-			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyHubURL()},
+			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyKeycenterURL()},
 		})
 	case "veilroot-default-profile":
 		value, err := chooseProfileValue(cfg.Veilroot.DefaultProfile, cfg.RootAI.DefaultProfile, "veilroot.default_profile")
@@ -374,8 +370,8 @@ func main() {
 		fmt.Println(value)
 	case "veilkey-localvault-url":
 		fmt.Println(cfg.veilkeyLocalvaultURL())
-	case "veilkey-hub-url":
-		fmt.Println(cfg.veilkeyHubURL())
+	case "veilkey-keycenter-url":
+		fmt.Println(cfg.veilkeyKeycenterURL())
 	case "veilroot-unit-prefix":
 		value, err := chooseProfileValue(cfg.Veilroot.UnitPrefix, cfg.RootAI.UnitPrefix, "veilroot.unit_prefix")
 		if err != nil {

@@ -66,8 +66,6 @@ Heartbeat and tracked-ref sync share a single effective KeyCenter URL, resolved 
 
 1. `VEILKEY_KEYCENTER_URL` environment variable
 2. `VEILKEY_KEYCENTER_URL` stored in DB config
-3. `VEILKEY_HUB_URL` environment variable (legacy alias)
-4. `VEILKEY_HUB_URL` stored in DB config (legacy alias)
 
 If multiple sources contain differing values, a drift warning is logged at startup and runtime.
 

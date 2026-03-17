@@ -25,8 +25,9 @@ type TokenRef struct {
 	AgentHash    string    `gorm:"column:agent_hash;size:16;index" json:"agent_hash"`
 	Ciphertext   string    `gorm:"column:ciphertext;not null" json:"ciphertext"`
 	Version      int       `gorm:"column:version;not null" json:"version"`
-	Status       string    `gorm:"column:status;default:temp" json:"status"`
-	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	Status       string     `gorm:"column:status;default:temp" json:"status"`
+	ExpiresAt    *time.Time `gorm:"column:expires_at;index" json:"expires_at"`
+	CreatedAt    time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
 
 func (TokenRef) TableName() string { return "token_refs" }

@@ -130,7 +130,6 @@ go build -o /usr/local/bin/veilkey-session-config ./cmd/veilkey-session-config
 |----------|----------|-------------|
 | `VEILKEY_LOCALVAULT_URL` | Yes (recommended) | localvault endpoint URL |
 | `VEILKEY_API` | No | Legacy endpoint variable (fallback) |
-| `VEILKEY_HUB_URL` | No | Hub URL fallback |
 | `VEILKEY_STATE_DIR` | No | State directory (default: `$TMPDIR/veilkey-cli`) |
 | `VEILKEY_FUNCTION_DIR` | No | Function catalog directory |
 

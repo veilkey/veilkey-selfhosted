@@ -10,7 +10,6 @@
 # Environment:
 #   VEILKEY_LOCALVAULT_URL  Preferred localvault URL
 #   VEILKEY_API             Legacy endpoint variable (fallback)
-#   VEILKEY_HUB_URL         Hub URL fallback
 #   VEILKEY_CLI_BIN      veilkey-cli binary path (auto-detected)
 
 set -euo pipefail
@@ -24,10 +23,6 @@ resolve_veilkey_url() {
     echo "$VEILKEY_API"
     return
   fi
-  if [[ -n "${VEILKEY_HUB_URL:-}" ]]; then
-    echo "$VEILKEY_HUB_URL"
-    return
-  fi
   if [[ -n "${VK_BASH_API:-}" ]]; then
     echo "$VK_BASH_API"
     return
@@ -37,7 +32,7 @@ resolve_veilkey_url() {
 
 export VEILKEY_API="$(resolve_veilkey_url)"
 if [[ -z "$VEILKEY_API" ]]; then
-  echo "Error: VEILKEY_LOCALVAULT_URL, VEILKEY_API, VEILKEY_HUB_URL, or VK_BASH_API not set" >&2
+  echo "Error: VEILKEY_LOCALVAULT_URL, VEILKEY_API, or VK_BASH_API not set" >&2
   exit 1
 fi
 export VEILKEY_ACTIVE=1

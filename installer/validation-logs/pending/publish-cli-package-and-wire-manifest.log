@@ -1,0 +1,15 @@
+status=pending
+date=2026-03-18
+object=publish-cli-package-and-wire-manifest
+repo=/opt/veilkey-selfhosted-repo
+scope=move verified local cli package artifact flow into a published installer manifest contract
+target=published veilkey-cli artifact consumed by installer components manifest and proxmox-host-cli profile
+expected=installer components manifest defines a stable cli package source and proxmox-host-cli can install veilkey-cli, veilkey-session-config, and vk from that published artifact instead of depending on proxy source staging for host cli delivery
+observed=local smoke path is validated in cli-package-artifact-smoke.log, but current tree has no pending issue that tracks artifact publication, components.cli manifest wiring, release naming contract, or proxmox-host-cli migration criteria
+evidence=validated local file:// artifact flow exists; current installer/validation-logs tree contains cli-package-artifact-smoke.log and repo-checkout-materialization-bug.log but no manifest-wiring follow-up object
+impact=package work risks stalling at prototype stage; installer remains split between validated local artifact consumption and legacy/default manifest behavior
+pending_items=choose publish surface GitLab generic package or equivalent; define stable artifact naming/version refs; add components.cli contract to installer manifest; decide whether proxmox-host-cli consumes cli package by default or behind an explicit manifest gate; add CI coverage for published artifact contract
+next_owner=installer plus cli owners
+blocker=stable artifact publish contract is not yet encoded; isolated-workspace checkout bug also makes follow-up wiring work less reliable
+target_repo=veilkey-selfhosted-repo
+next_action=land a minimal manifest contract for components.cli tied to the current client/cli package output, then wire one focused installer profile and CI check against that published artifact path

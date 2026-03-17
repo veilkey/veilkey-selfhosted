@@ -51,7 +51,6 @@ Options:
 Environment:
   VEILKEY_LOCALVAULT_URL       Preferred localvault URL
   VEILKEY_API                  Legacy endpoint variable (fallback)
-  VEILKEY_HUB_URL              Hub URL fallback
   VEILKEY_STATE_DIR            State directory (default: $TMPDIR/veilkey-cli)
   VEILKEY_FUNCTION_DIR         Function catalog directory for function subcommands
 `)
@@ -62,9 +61,6 @@ func resolveAPIURL() string {
 		return v
 	}
 	if v := os.Getenv("VEILKEY_API"); v != "" {
-		return v
-	}
-	if v := os.Getenv("VEILKEY_HUB_URL"); v != "" {
 		return v
 	}
 	return ""

@@ -4,11 +4,11 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 . tests/lib/testlib.sh
 
-TEST_HUB_IP="10.0.0.1"
+TEST_KC_IP="10.0.0.1"
 
 cfg="$(mktemp)"
 trap 'rm -f "$cfg"' EXIT
-sed -e "s/<HUB_IP>/${TEST_HUB_IP}/g" \
+sed -e "s/<HUB_IP>/${TEST_KC_IP}/g" \
     -e "s/<INTERNAL_DOMAIN>/test.internal/g" \
     -e "s/<VHOST_DOMAIN>/vhost.test/g" \
     deploy/host/session-tools.toml.example > "$cfg"
@@ -28,11 +28,10 @@ out="$(deploy/shared/veilkey-session-config shell-exports)"
 assert_contains "$out" "VEILKEY_PROXY_URL="
 assert_contains "$out" "HTTP_PROXY="
 assert_contains "$out" "VEILKEY_LOCALVAULT_URL='http://127.0.0.1:10180'"
-assert_contains "$out" "VEILKEY_HUB_URL='http://${TEST_HUB_IP}:10180'"
-assert_contains "$out" "VEILKEY_KEYCENTER_URL="
+assert_contains "$out" "VEILKEY_KEYCENTER_URL='http://${TEST_KC_IP}:10180'"
 out_tool="$(deploy/shared/veilkey-session-config tool-shell-exports codex)"
 assert_contains "$out_tool" "NO_PROXY="
-assert_contains "$out_tool" "${TEST_HUB_IP}"
+assert_contains "$out_tool" "${TEST_KC_IP}"
 assert_contains "$out_tool" "127.0.0.1"
 
 echo "ok: session-config"

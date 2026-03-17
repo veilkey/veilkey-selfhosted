@@ -214,6 +214,17 @@ func (s *Server) resolveTrackedRef(w http.ResponseWriter, ref string, tracked *d
 		return true
 	}
 
+	// Temp encrypt refs: ciphertext stored directly in token_refs
+	if tracked.RefScope == "TEMP" && tracked.Ciphertext != "" && tracked.AgentHash == "" {
+		if resolved, err := s.resolveTempRef(tracked); err == nil {
+			s.respondJSON(w, http.StatusOK, map[string]interface{}{
+				"ref":   ref,
+				"value": resolved,
+			})
+			return true
+		}
+	}
+
 	if secret, err := s.resolveHostTrackedSecret(tracked); err == nil && secret != nil {
 		now := time.Now().UTC()
 		s.respondJSON(w, http.StatusOK, map[string]interface{}{
