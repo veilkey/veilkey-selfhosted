@@ -9,8 +9,7 @@ Usage: ./scripts/proxmox-host-cli-install.sh [--activate] [--health] [root] [bun
 
 Install the Proxmox host CLI profile:
   1. proxy assets via install.sh install-profile
-  2. veilroot boundary (user + scripts + systemd)
-  3. veilkey CLI
+  2. veilroot boundary (user + scripts + systemd) — only on live root
 EOF
 }
 
@@ -29,29 +28,30 @@ root="${1:-/}"
 bundle_root="${2:-}"
 
 # Step 1: Install proxy assets via manifest engine
-printf '[host-cli] step 1/3: proxy assets\n'
+printf '[host-cli] step 1/2: proxy assets\n'
 if [[ -n "${bundle_root}" ]]; then
   "${ROOT_DIR}/install.sh" install-profile "${args[@]}" proxmox-host-cli "${root}" "${bundle_root}"
 else
   "${ROOT_DIR}/install.sh" install-profile "${args[@]}" proxmox-host-cli "${root}"
 fi
 
-# Step 2: Set up veilroot boundary (user, scripts, systemd)
-BOUNDARY_SCRIPT="${root%/}/usr/local/lib/veilkey-proxy/install-veilroot-boundary.sh"
-if [[ -x "${BOUNDARY_SCRIPT}" ]]; then
-  printf '[host-cli] step 2/3: veilroot boundary\n'
-  bash "${BOUNDARY_SCRIPT}" "${root%/}/etc/veilkey/session-tools.toml"
+# Step 2: Set up veilroot boundary — ONLY on live root (/) to avoid
+# polluting a non-live staging rootfs with user/service changes.
+if [[ "${root}" == "/" ]]; then
+  BOUNDARY_SCRIPT="/usr/local/lib/veilkey-proxy/install-veilroot-boundary.sh"
+  if [[ -x "${BOUNDARY_SCRIPT}" ]]; then
+    printf '[host-cli] step 2/2: veilroot boundary\n'
+    bash "${BOUNDARY_SCRIPT}" "/etc/veilkey/session-tools.toml"
+  else
+    printf '[host-cli] step 2/2: skipped (install-veilroot-boundary.sh not found at %s)\n' "${BOUNDARY_SCRIPT}"
+  fi
 else
-  printf '[host-cli] step 2/3: skipped (install-veilroot-boundary.sh not found)\n'
+  printf '[host-cli] step 2/2: skipped (veilroot boundary only runs on live root, got %s)\n' "${root}"
 fi
 
-# Step 3: Install veilkey CLI (if source available)
-CLI_INSTALL="${ROOT_DIR}/../client/cli/install.sh"
-if [[ -f "${CLI_INSTALL}" ]]; then
-  printf '[host-cli] step 3/3: veilkey CLI\n'
-  bash "${CLI_INSTALL}"
-else
-  printf '[host-cli] step 3/3: skipped (client/cli/install.sh not found)\n'
-fi
+# NOTE: CLI installation is intentionally NOT included here.
+# client/cli/install.sh is not root-aware and would install to the
+# host machine regardless of the target root. Install CLI separately
+# on the target machine after this profile completes.
 
 printf '[host-cli] completed\n'
