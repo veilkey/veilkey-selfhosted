@@ -667,6 +667,30 @@ profile_has_component() {
   manifest_cmd plan "${profile}" | awk 'NF >= 2 {print $2}' | grep -Fx "${component}" >/dev/null 2>&1
 }
 
+# Generate a self-signed TLS certificate if none exists at the default path.
+# This ensures HTTPS-by-default works even without operator-provided certs.
+ensure_self_signed_tls() {
+  local tls_dir="${1:-/etc/veilkey/tls}"
+  local cert="${tls_dir}/server.crt"
+  local key="${tls_dir}/server.key"
+  if [[ -f "$cert" && -f "$key" ]]; then
+    return 0
+  fi
+  if ! command -v openssl >/dev/null 2>&1; then
+    echo "Warning: openssl not found, skipping self-signed TLS generation" >&2
+    return 1
+  fi
+  mkdir -p "$tls_dir"
+  local hostname
+  hostname="$(hostname 2>/dev/null || echo "veilkey")"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 \
+    -keyout "$key" -out "$cert" -days 3650 -nodes \
+    -subj "/CN=${hostname}/O=VeilKey Self-Signed" 2>/dev/null
+  chmod 600 "$key"
+  chmod 644 "$cert"
+  echo "Generated self-signed TLS certificate: $cert"
+}
+
 render_profile_envs() {
   local profile="$1"
   local root="$2"
@@ -680,6 +704,15 @@ render_profile_envs() {
 
   require_profile_file "${profile}"
   mkdir -p "${veilkey_etc}"
+
+  # Ensure TLS certificates exist (self-signed if not provided).
+  local tls_dir="${root%/}/etc/veilkey/tls"
+  if [[ -z "${VEILKEY_TLS_CERT:-}" && -z "${VEILKEY_TLS_KEY:-}" ]]; then
+    if ensure_self_signed_tls "${tls_dir}"; then
+      export VEILKEY_TLS_CERT="${tls_dir}/server.crt"
+      export VEILKEY_TLS_KEY="${tls_dir}/server.key"
+    fi
+  fi
 
   if profile_has_component "${profile}" "keycenter"; then
     default_enable_keycenter=1
