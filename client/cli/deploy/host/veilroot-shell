@@ -4,6 +4,7 @@ set -euo pipefail
 user_name="${VEILROOT_USER:-veilroot}"
 session_launcher="${VEILKEY_VEILROOT_LAUNCHER:-/usr/local/bin/veilkey-veilroot-session}"
 session_config_bin="${VEILKEY_SESSION_CONFIG_BIN:-/usr/local/bin/veilkey-session-config}"
+veilkey_bin="${VEILKEY_BIN:-/usr/local/bin/veilkey}"
 locale_lib="${VEILKEY_LOCALE_LIB:-/usr/local/lib/veilkey/veilkey-locale.sh}"
 profile_active="${VEILKEY_VEILROOT_PROFILE_ACTIVE:-/etc/profile.d/${user_name}-veilkey-proxy.sh}"
 profile_disabled="${VEILKEY_VEILROOT_PROFILE_DISABLED:-${profile_active}.disabled}"
@@ -128,11 +129,12 @@ open_session() {
     exec bash -lc '
       profile="$1"
       session_config_bin="$2"
+      veilkey_bin="$3"
       eval "$("$session_config_bin" tool-shell-exports "$profile")"
       export VEILKEY_VEILROOT=1
       export VEILKEY_VEILROOT_PROFILE="$profile"
-      exec /usr/local/bin/veilkey session bash -li
-    ' _ "$profile" "$session_config_bin"
+      exec "$veilkey_bin" wrap-pty bash -li
+    ' _ "$profile" "$session_config_bin" "$veilkey_bin"
   fi
 
   if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
@@ -142,7 +144,7 @@ open_session() {
   fi
 
   print_status_banner
-  exec su - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec /usr/local/bin/veilkey session bash -li' _ '$profile' '$session_config_bin'"
+  exec su -s /bin/bash - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; veilkey_bin=\"\$3\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec \"\$veilkey_bin\" wrap-pty bash -li' _ '$profile' '$session_config_bin' '$veilkey_bin'"
 }
 
 proxy_status() {

@@ -62,7 +62,9 @@ jobs:
           working-directory: services/keycenter
           version: "v2.1"
       - name: Test
-        run: go test ./... -race -count=1
+        run: |
+          go test ./... -race -count=1
+          bash tests/test_veilroot_open_wrap_pty.sh
       - name: Build
         run: CGO_ENABLED=1 go build -o veilkey-keycenter ./cmd
       - name: Upload artifact
@@ -94,7 +96,9 @@ jobs:
           working-directory: services/localvault
           version: "v2.1"
       - name: Test
-        run: go test ./... -race -count=1
+        run: |
+          go test ./... -race -count=1
+          bash tests/test_veilroot_open_wrap_pty.sh
       - name: Build
         run: CGO_ENABLED=1 go build -o veilkey-localvault ./cmd
       - name: Upload artifact
