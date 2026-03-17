@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${VEIL_WORK_CONTAINER_ENABLE:-0}" == "1" ]]; then
+  work_container_bin="${VEIL_WORK_CONTAINER_BIN:-/usr/local/bin/veil-work-container}"
+  if [[ ! -x "${work_container_bin}" ]]; then
+    echo "veil: configured work-container entrypoint not found: ${work_container_bin}" >&2
+    exit 1
+  fi
+  exec "${work_container_bin}" "$@"
+fi
+
 veilroot_shell="${VEILKEY_VEILROOT_SHELL_BIN:-/usr/local/bin/veilroot-shell}"
 
 if [[ ! -x "${veilroot_shell}" ]]; then
