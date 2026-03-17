@@ -236,7 +236,7 @@ fi
 
 echo ""
 echo "Required setup:"
-echo "  export VEILKEY_LOCALVAULT_URL=http://127.0.0.1:10180"
+echo "  export VEILKEY_LOCALVAULT_URL=https://127.0.0.1:10180"
 echo ""
 echo "Usage:"
 echo "  veilkey-cli status              Show status"

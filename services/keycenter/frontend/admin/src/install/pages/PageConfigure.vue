@@ -254,7 +254,7 @@ const derivedKeycenterUrl = computed(() => {
 
 const derivedLocalvaultUrl = computed(() => {
   if (store.config.localvault_url) return store.config.localvault_url
-  return 'http://127.0.0.1:10180'
+  return 'https://127.0.0.1:10180'
 })
 
 const canProceed = computed(() => {

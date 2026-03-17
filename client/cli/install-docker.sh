@@ -138,7 +138,7 @@ docker compose up -d 2>&1
 # Health check
 info "서버 준비 대기 (최대 30초)..."
 for i in $(seq 1 30); do
-    if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
+    if curl -sfk "https://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1 || curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
         break
     fi
     sleep 1
@@ -146,8 +146,8 @@ done
 
 # Verify
 echo ""
-if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
-    NODE_INFO=$(curl -sf "http://127.0.0.1:${VEILKEY_PORT}/api/status")
+if curl -sfk "https://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1 || curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
+    NODE_INFO=$(curl -sfk "https://127.0.0.1:${VEILKEY_PORT}/api/status" || curl -sf "http://127.0.0.1:${VEILKEY_PORT}/api/status")
     info "VeilKey KeyCenter 설치 완료!"
     echo ""
     echo "  ╔══════════════════════════════════════════════════════╗"
@@ -162,7 +162,7 @@ if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
     echo "  관리 명령어:"
     echo "    docker compose -f $INSTALL_DIR/docker-compose.yml logs -f"
     echo "    docker compose -f $INSTALL_DIR/docker-compose.yml restart"
-    echo "    curl http://127.0.0.1:${VEILKEY_PORT}/api/status"
+    echo "    curl -k https://127.0.0.1:${VEILKEY_PORT}/api/status"
     echo ""
 else
     error "서버가 응답하지 않습니다. 로그 확인: docker compose -f $INSTALL_DIR/docker-compose.yml logs"

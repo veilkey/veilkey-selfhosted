@@ -47,7 +47,7 @@ systemctl is-active --quiet veilkey-localvault.service || {
 
 localvault_addr="$(read_addr_from_env /etc/veilkey/localvault.env :10180)"
 localvault_port="${localvault_addr##*:}"
-curl -sf "http://127.0.0.1:${localvault_port}/health" >/dev/null || {
+curl -sfk "https://127.0.0.1:${localvault_port}/health" >/dev/null || curl -sf "http://127.0.0.1:${localvault_port}/health" >/dev/null || {
   echo "Error: health request failed for localvault on ${localvault_addr}" >&2
   exit 1
 }

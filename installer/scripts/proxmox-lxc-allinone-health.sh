@@ -18,7 +18,7 @@ require_cmd() {
 addr_to_url() {
   local addr="$1"
   local port="${addr##*:}"
-  echo "http://127.0.0.1:${port}"
+  echo "https://127.0.0.1:${port}"
 }
 
 read_addr_from_env() {
@@ -47,7 +47,7 @@ check_live_service() {
 
 check_live_http() {
   local url="$1"
-  curl -sf "${url}" >/dev/null || {
+  curl -sfk "${url}" >/dev/null || {
     echo "Error: health request failed for ${url}" >&2
     exit 1
   }

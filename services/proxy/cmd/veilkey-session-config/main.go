@@ -84,7 +84,7 @@ func (c *config) veilkeyLocalvaultURL() string {
 		c.Veilkey.LocalvaultURL,
 		os.Getenv("VEILKEY_LOCALVAULT_URL"),
 		os.Getenv("VEILKEY_API"),
-		"http://127.0.0.1:10180",
+		"https://127.0.0.1:10180",
 	)
 }
 

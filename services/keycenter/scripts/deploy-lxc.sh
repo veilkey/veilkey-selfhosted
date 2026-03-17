@@ -98,7 +98,7 @@ main() {
   port="${addr##*:}"
   [[ -n "$port" ]] || { echo "Error: could not parse VEILKEY_ADDR from $env_file" >&2; exit 1; }
 
-  lxc_exec "$vmid" "curl -sf http://127.0.0.1:${port}/api/status >/dev/null || curl -sf http://127.0.0.1:${port}/health >/dev/null"
+  lxc_exec "$vmid" "curl -sfk https://127.0.0.1:${port}/api/status >/dev/null || curl -sfk https://127.0.0.1:${port}/health >/dev/null || curl -sf http://127.0.0.1:${port}/api/status >/dev/null || curl -sf http://127.0.0.1:${port}/health >/dev/null"
   lxc_exec "$vmid" "systemctl is-active ${SERVICE_NAME} >/dev/null"
 
   echo "Deployed ${SERVICE_NAME} to LXC ${vmid} via ${exec_path}"

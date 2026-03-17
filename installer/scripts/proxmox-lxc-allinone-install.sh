@@ -77,7 +77,7 @@ resolve_passwords() {
 set_default_env() {
   export VEILKEY_KEYCENTER_ADDR="${VEILKEY_KEYCENTER_ADDR:-:10181}"
   export VEILKEY_LOCALVAULT_ADDR="${VEILKEY_LOCALVAULT_ADDR:-:10180}"
-  export VEILKEY_KEYCENTER_URL="${VEILKEY_KEYCENTER_URL:-http://127.0.0.1:10181}"
+  export VEILKEY_KEYCENTER_URL="${VEILKEY_KEYCENTER_URL:-https://127.0.0.1:10181}"
   export VEILKEY_LOCALVAULT_DB_PATH="${VEILKEY_LOCALVAULT_DB_PATH:-/opt/veilkey/localvault/data/veilkey.db}"
   export VEILKEY_KEYCENTER_DB_PATH="${VEILKEY_KEYCENTER_DB_PATH:-/opt/veilkey/keycenter/data/veilkey.db}"
   if [[ "${VEILKEY_ENABLE_PROXY:-0}" = "1" ]]; then

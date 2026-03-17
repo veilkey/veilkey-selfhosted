@@ -216,15 +216,15 @@ verify() {
     sleep 2
     local port="${ADDR#:}"
     [[ "$port" == "$ADDR" ]] && port="${ADDR##*:}"
-    local url="http://127.0.0.1:${port}/health"
+    local url="https://127.0.0.1:${port}/health"
     echo ""
     echo "Verifying..."
     local resp
-    resp=$(curl -sf "$url" 2>/dev/null || echo '{}')
+    resp=$(curl -sfk "$url" 2>/dev/null || echo '{}')
     if echo "$resp" | grep -q '"locked"'; then
         echo "  Health check: OK (locked — needs unlock)"
         echo ""
-        echo "  Unlock: curl -X POST http://127.0.0.1:${port}/api/unlock \\"
+        echo "  Unlock: curl -k -X POST https://127.0.0.1:${port}/api/unlock \\"
         echo "    -H 'Content-Type: application/json' \\"
         echo "    -d '{\"password\":\"your-password\"}'"
     elif echo "$resp" | grep -q '"ok"'; then

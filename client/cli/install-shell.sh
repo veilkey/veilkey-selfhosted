@@ -192,7 +192,7 @@ info "서비스 시작됨: $SERVICE_NAME"
 # --- Health check ---
 info "서버 준비 대기 (최대 15초)..."
 for i in $(seq 1 15); do
-    if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
+    if curl -sfk "https://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1 || curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
         break
     fi
     sleep 1
@@ -200,7 +200,7 @@ done
 
 # --- Verify ---
 echo ""
-if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
+if curl -sfk "https://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1 || curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
     info "VeilKey KeyCenter 설치 완료!"
     echo ""
     echo "  ╔══════════════════════════════════════════════════════╗"
@@ -216,7 +216,7 @@ if curl -sf "http://127.0.0.1:${VEILKEY_PORT}/health" >/dev/null 2>&1; then
     echo "  관리 명령어:"
     echo "    systemctl status $SERVICE_NAME"
     echo "    journalctl -u $SERVICE_NAME -f"
-    echo "    curl http://127.0.0.1:${VEILKEY_PORT}/api/status"
+    echo "    curl -k https://127.0.0.1:${VEILKEY_PORT}/api/status"
     echo ""
 else
     error "서버가 응답하지 않습니다. journalctl -u $SERVICE_NAME -n 20 으로 로그를 확인하세요."

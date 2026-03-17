@@ -46,7 +46,7 @@ for vmid in "${vmids[@]}"; do
   port="${addr##*:}"
   [[ -n "$port" ]] || port="10180"
 
-  status_json="$(timeout 20s pct exec "$vmid" -- bash -lc "curl -sf http://127.0.0.1:${port}/api/status" 2>/dev/null || true)"
+  status_json="$(timeout 20s pct exec "$vmid" -- bash -lc "curl -sfk https://127.0.0.1:${port}/api/status || curl -sf http://127.0.0.1:${port}/api/status" 2>/dev/null || true)"
   if [[ -z "$status_json" ]]; then
     echo "skip ${vmid}: status unavailable on :${port}" >&2
     skipped=$((skipped + 1))

@@ -91,7 +91,7 @@ for vmid in "${vmids[@]}"; do
     continue
   fi
 
-  if ! timeout 30s vibe_lxc_ops "$vmid" "curl -sf http://127.0.0.1:${port}/api/status >/dev/null || curl -sf http://127.0.0.1:${port}/health >/dev/null"; then
+  if ! timeout 30s vibe_lxc_ops "$vmid" "curl -sfk https://127.0.0.1:${port}/api/status >/dev/null || curl -sfk https://127.0.0.1:${port}/health >/dev/null || curl -sf http://127.0.0.1:${port}/api/status >/dev/null || curl -sf http://127.0.0.1:${port}/health >/dev/null"; then
     echo "Warning: health check failed for ${SERVICE_NAME} on ${vmid}" >&2
     failed_vmids+=("$vmid")
     continue

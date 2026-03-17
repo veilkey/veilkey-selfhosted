@@ -18,7 +18,7 @@ wait_for_http() {
   url="$1"
   retries="${2:-30}"
   while [ "$retries" -gt 0 ]; do
-    if curl -fsS "$url" >/dev/null 2>&1; then
+    if curl -fsSk "$url" >/dev/null 2>&1; then
       return 0
     fi
     retries=$((retries - 1))
@@ -32,7 +32,7 @@ seed_install_complete() {
     return 0
   fi
 
-  status="$(curl -fsS "http://127.0.0.1${ADDR}/api/install/state" 2>/dev/null || true)"
+  status="$(curl -fsSk "https://127.0.0.1${ADDR}/api/install/state" 2>/dev/null || curl -fsS "http://127.0.0.1${ADDR}/api/install/state" 2>/dev/null || true)"
   if printf '%s' "$status" | grep -q '"exists":true'; then
     if printf '%s' "$status" | grep -q '"last_stage":"final_smoke"'; then
       echo "Install flow already marked complete."
@@ -41,7 +41,7 @@ seed_install_complete() {
   fi
 
   echo "=== VeilKey Install Flow Seed (proof runtime) ==="
-  curl -fsS -X POST "http://127.0.0.1${ADDR}/api/install/session" \
+  curl -fsSk -X POST "https://127.0.0.1${ADDR}/api/install/session" \
     -H "Content-Type: application/json" \
     -d '{
       "session_id":"proof-runtime-install",
@@ -98,7 +98,7 @@ if [ "$AUTO_INSTALL_COMPLETE" = "1" ]; then
   server_pid="$!"
   trap 'kill "$server_pid" >/dev/null 2>&1 || true' EXIT INT TERM
 
-  wait_for_http "http://127.0.0.1${ADDR}/health" 30
+  wait_for_http "https://127.0.0.1${ADDR}/health" 30
   seed_install_complete
 
   kill "$server_pid"

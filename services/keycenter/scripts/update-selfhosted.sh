@@ -9,7 +9,7 @@ REPO_ROOT="${VEILKEY_UPDATE_REPO_ROOT:-/opt/veilkey-selfhosted-repo}"
 REMOTE_NAME="${VEILKEY_UPDATE_REMOTE:-origin}"
 BRANCH_NAME="${VEILKEY_UPDATE_BRANCH:-main}"
 SERVICE_NAME="${VEILKEY_UPDATE_SERVICE_NAME:-veilkey-keycenter.service}"
-HEALTH_URL="${VEILKEY_UPDATE_HEALTH_URL:-http://127.0.0.1:10181/health}"
+HEALTH_URL="${VEILKEY_UPDATE_HEALTH_URL:-https://127.0.0.1:10181/health}"
 INSTALL_BIN="${VEILKEY_UPDATE_INSTALL_BIN:-/usr/local/bin/veilkey-keycenter}"
 BUILD_WORKDIR="${REPO_ROOT}/services/keycenter"
 TARGET_VERSION="${VEILKEY_UPDATE_TARGET_VERSION:-}"
@@ -91,7 +91,7 @@ check_health() {
   local sleep_seconds=2
   local i
   for ((i=1; i<=attempts; i++)); do
-    if curl -fsS "${HEALTH_URL}" >/dev/null 2>&1; then
+    if curl -fsSk "${HEALTH_URL}" >/dev/null 2>&1; then
       return 0
     fi
     sleep "${sleep_seconds}"

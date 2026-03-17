@@ -534,7 +534,7 @@ func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation inst
 	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", installScript); err != nil {
 		return logOutput.String(), err
 	}
-	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", "curl -fsS http://127.0.0.1:10181/health && echo && curl -fsS http://127.0.0.1:10180/health && echo"); err != nil {
+	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", "curl -fsSk https://127.0.0.1:10181/health && echo && curl -fsSk https://127.0.0.1:10180/health && echo"); err != nil {
 		return logOutput.String(), err
 	}
 	if cfg.HostCompanion {
