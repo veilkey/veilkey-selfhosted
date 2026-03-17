@@ -1,0 +1,124 @@
+#!/bin/bash
+# vk — Encrypt a value with VeilKey and output VK:ref token
+#
+# Usage:
+#   vk                           Hidden input (typing not visible)
+#   echo "secret" | vk          Read from stdin
+#
+# Inside vk_wrap shell:
+#   🔒VK $ vk
+#   Enter secret value: (typing not visible)
+#   VK:a1b2c3d4
+
+set -euo pipefail
+
+resolve_veilkey_url() {
+  if [[ -n "${VEILKEY_LOCALVAULT_URL:-}" ]]; then
+    echo "$VEILKEY_LOCALVAULT_URL"
+    return
+  fi
+  if [[ -n "${VEILKEY_API:-}" ]]; then
+    echo "$VEILKEY_API"
+    return
+  fi
+  if [[ -n "${VEILKEY_HUB_URL:-}" ]]; then
+    echo "$VEILKEY_HUB_URL"
+    return
+  fi
+  if [[ -n "${VK_BASH_API:-}" ]]; then
+    echo "$VK_BASH_API"
+    return
+  fi
+  echo ""
+}
+
+export VEILKEY_API="$(resolve_veilkey_url)"
+if [[ -z "$VEILKEY_API" ]]; then
+  echo "Error: VEILKEY_LOCALVAULT_URL, VEILKEY_API, VEILKEY_HUB_URL, or VK_BASH_API not set" >&2
+  exit 1
+fi
+
+STATE_DIR="${VEILKEY_STATE_DIR:-${TMPDIR:-/tmp}/veilkey-cli}"
+
+_cli_pause() {
+    [[ -f "$STATE_DIR/guard.pid" ]] && kill -USR2 "$(cat "$STATE_DIR/guard.pid")" 2>/dev/null || true
+}
+_cli_resume() {
+    [[ -f "$STATE_DIR/guard.pid" ]] && kill -USR1 "$(cat "$STATE_DIR/guard.pid")" 2>/dev/null || true
+}
+trap '_cli_resume' EXIT
+_cli_pause
+
+usage() {
+    cat <<'EOF'
+vk — Encrypt a value with VeilKey
+
+Usage:
+  vk                  Hidden input (recommended)
+  echo "secret" | vk  Read from stdin
+
+Output: VK:ref (encrypted, stored in agent)
+
+Options:
+  -h, --help    Show this help
+EOF
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help)  usage ;;
+        -*)         echo "Error: unknown option $1" >&2; exit 1 ;;
+        *)          echo "Error: passing secret as argument exposes it in terminal history." >&2
+                    echo "  Run vk without arguments (hidden input)." >&2
+                    exit 1 ;;
+    esac
+done
+
+if [[ ! -t 0 ]]; then
+    VALUE=$(cat)
+elif [[ -e /dev/tty ]]; then
+    read -rsp "Enter secret value: " VALUE </dev/tty
+    echo >&2
+    read -rsp "Confirm secret value: " VALUE2 </dev/tty
+    echo >&2
+    if [[ "$VALUE" != "$VALUE2" ]]; then
+        echo "Error: values do not match." >&2
+        exit 1
+    fi
+else
+    read -rsp "Enter secret value: " VALUE
+    echo >&2
+    read -rsp "Confirm secret value: " VALUE2
+    echo >&2
+    if [[ "$VALUE" != "$VALUE2" ]]; then
+        echo "Error: values do not match." >&2
+        exit 1
+    fi
+fi
+
+if [[ -z "$VALUE" ]]; then
+    echo "Error: value is empty." >&2
+    exit 1
+fi
+
+PAYLOAD=$(jq -nc --arg v "$VALUE" '{plaintext:$v}')
+
+RESP=$(curl -sf -X POST "${VEILKEY_API}/api/encrypt" \
+    -H 'Content-Type: application/json' \
+    -d "$PAYLOAD" 2>/dev/null) || {
+    echo "Error: VeilKey encrypt failed" >&2
+    exit 1
+}
+
+TOKEN=$(echo "$RESP" | jq -r '.token // .ciphertext // empty')
+if [[ -n "$TOKEN" ]]; then
+    mkdir -p "$STATE_DIR"
+    grep -qF "$VALUE" "$STATE_DIR/watchlist" 2>/dev/null || \
+        printf '%s\t%s\n' "$VALUE" "$TOKEN" >> "$STATE_DIR/watchlist"
+    echo "$TOKEN"
+else
+    echo "Error: token not found in response." >&2
+    echo "$RESP" >&2
+    exit 1
+fi
