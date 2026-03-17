@@ -25,33 +25,7 @@ cp -a ../services/proxy/. "$proxy_root/"
 tar -czf "$proxy_artifact" -C "$tmp_artifact_dir" veilkey-proxy-local
 
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh init >/dev/null
-python3 - "$tmp_manifest" "$cli_artifact" "$proxy_artifact" <<'PY'
-from pathlib import Path
-import sys
-
-manifest = Path(sys.argv[1])
-cli_artifact = Path(sys.argv[2]).resolve()
-proxy_artifact = Path(sys.argv[3]).resolve()
-text = manifest.read_text()
-
-text = text.replace('ref = "RELEASE_OR_COMMIT"', 'ref = "local-test"', 1)
-text = text.replace(
-    'artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-selfhosted/packages/generic/veilkey-cli/RELEASE_OR_COMMIT/veilkey-cli.tar.gz"',
-    f'artifact_url = "file://{cli_artifact}"',
-    1,
-)
-text = text.replace(
-    'artifact_url = "https://your-gitlab-host/api/v4/projects/veilkey%2Fveilkey-proxy/repository/archive.tar.gz?sha=670d1e33736adab35149275428ed3aa75b4e787b"',
-    f'artifact_url = "file://{proxy_artifact}"',
-    1,
-)
-text = text.replace(
-    'artifact_filename = "veilkey-proxy-670d1e33736adab35149275428ed3aa75b4e787b.tar.gz"',
-    'artifact_filename = "veilkey-proxy-local.tar.gz"',
-    1,
-)
-manifest.write_text(text)
-PY
+go run ./tests/rewrite_manifest_urls.go "$tmp_manifest" "$cli_artifact" "$proxy_artifact"
 
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh validate >/dev/null
 plan="$(VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh plan proxmox-host-cli)"
