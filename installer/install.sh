@@ -528,6 +528,98 @@ plan_field() {
   return 1
 }
 
+version_ge() {
+  local actual="$1"
+  local required="$2"
+  [[ -n "${actual}" && -n "${required}" ]] || return 1
+  [[ "${actual}" == "${required}" ]] && return 0
+  [[ "$(printf '%s\n%s\n' "${required}" "${actual}" | sort -V | head -n1)" == "${required}" ]]
+}
+
+binary_glibc_requirement() {
+  local binary_path="$1"
+  command -v strings >/dev/null 2>&1 || return 1
+  strings -a "${binary_path}" 2>/dev/null \
+    | grep -Eo 'GLIBC_[0-9]+\.[0-9]+' \
+    | sed 's/^GLIBC_//' \
+    | sort -V \
+    | tail -n1
+}
+
+component_glibc_requirement() {
+  local component_src="$1"
+  local binary_path="$2"
+  local metadata_path="${component_src}/artifact-runtime.env"
+
+  if [[ -f "${metadata_path}" ]]; then
+    # shellcheck disable=SC1090
+    . "${metadata_path}"
+    if [[ -n "${VEILKEY_RUNTIME_GLIBC_MIN:-}" ]]; then
+      printf '%s\n' "${VEILKEY_RUNTIME_GLIBC_MIN}"
+      return 0
+    fi
+  fi
+
+  binary_glibc_requirement "${binary_path}" || true
+}
+
+target_glibc_version() {
+  local root="${1:-/}"
+  local version=""
+
+  if [[ -n "${VEILKEY_INSTALLER_TARGET_GLIBC_VERSION:-}" ]]; then
+    printf '%s\n' "${VEILKEY_INSTALLER_TARGET_GLIBC_VERSION}"
+    return 0
+  fi
+
+  if [[ "${root}" != "/" ]]; then
+    :
+  fi
+
+  if command -v getconf >/dev/null 2>&1; then
+    version="$(getconf GNU_LIBC_VERSION 2>/dev/null | awk '{print $2}')"
+  fi
+  if [[ -z "${version}" ]] && command -v ldd >/dev/null 2>&1; then
+    version="$(ldd --version 2>/dev/null | awk 'NR == 1 {for (i = NF; i >= 1; i--) if ($i ~ /^[0-9]+\.[0-9]+$/) {print $i; exit}}')"
+  fi
+  [[ -n "${version}" ]] && printf '%s\n' "${version}"
+}
+
+enforce_component_runtime_compat() {
+  local component="$1"
+  local extract_root="$2"
+  local root="$3"
+  local component_src binary_path required_glibc target_glibc
+
+  case "${component}" in
+    keycenter)
+      component_src="$(component_source_dir "${component}" "${extract_root}")"
+      binary_path="${component_src}/veilkey-keycenter"
+      ;;
+    localvault)
+      component_src="$(component_source_dir "${component}" "${extract_root}")"
+      binary_path="${component_src}/veilkey-localvault"
+      ;;
+    *)
+      return 0
+      ;;
+  esac
+
+  [[ -f "${binary_path}" ]] || return 0
+
+  required_glibc="$(component_glibc_requirement "${component_src}" "${binary_path}")"
+  [[ -n "${required_glibc}" ]] || return 0
+
+  target_glibc="$(target_glibc_version "${root}")"
+  [[ -n "${target_glibc}" ]] || return 0
+
+  if ! version_ge "${target_glibc}" "${required_glibc}"; then
+    echo "Error: component ${component} requires glibc ${required_glibc}, but target runtime provides ${target_glibc}." >&2
+    echo "Rebuild the artifact against an older glibc baseline or install on a newer runtime." >&2
+    exit 1
+  fi
+}
+
 first_existing_path() {
   local path
   for path in "$@"; do
@@ -1033,6 +1125,7 @@ cmd_install() {
     component="$(plan_field "${line}" component)"
     artifact_filename="$(plan_field "${line}" artifact_filename)"
     extract_component "${component}" "${artifact_filename}" "${bundle_root}" "${extract_root}"
+    enforce_component_runtime_compat "${component}" "${extract_root}" "${root}"
     install_component_payload "${component}" "${extract_root}" "${root}"
   done < "${install_plan}"
 

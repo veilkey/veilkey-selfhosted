@@ -205,6 +205,8 @@ If downloads fail, verify:
 - internal routing to the GitLab artifact source
 - `VEILKEY_INSTALLER_GITLAB_API_BASE` is set to the active GitLab API base
 
+If install stops with a glibc compatibility error, the packaged runtime artifact was built against a newer libc than the target provides. Rebuild against an older baseline or move to a newer target runtime.
+
 ### Existing bundle reuse
 
 If a bundle already exists, `install-profile` reuses it instead of forcing a redownload.

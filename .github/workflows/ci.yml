@@ -185,6 +185,7 @@ jobs:
           ./install.sh doctor
       - name: Shell tests
         run: |
+          bash tests/test_glibc_runtime_guard.sh
           bash tests/test_placeholder_artifact_guard.sh
           bash tests/test_install_profile_command.sh
           bash tests/test_proxmox_wrapper_commands.sh
