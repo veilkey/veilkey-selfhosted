@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+veilroot_shell="${VEILKEY_VEILROOT_SHELL_BIN:-/usr/local/bin/veilroot-shell}"
+
+if [[ ! -x "${veilroot_shell}" ]]; then
+  echo "veil: required session entrypoint not found: ${veilroot_shell}" >&2
+  echo "veil: install the Veil host boundary first or set VEILKEY_VEILROOT_SHELL_BIN" >&2
+  exit 1
+fi
+
+exec "${veilroot_shell}" open "$@"

@@ -672,6 +672,8 @@ install_component_payload() {
         "${component_src}/veilkey-cli"
       install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-session-config" 0755 \
         "${component_src}/veilkey-session-config"
+      install_optional_asset "${VEILKEY_OS_BIN_DIR}/veil" 0755 \
+        "${component_src}/veil"
       install_optional_asset "${VEILKEY_OS_BIN_DIR}/vk" 0755 \
         "${component_src}/vk"
       install_optional_asset "${root%/}/etc/veilkey/session-tools.toml.example" 0644 \

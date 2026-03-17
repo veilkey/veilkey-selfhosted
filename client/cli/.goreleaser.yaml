@@ -49,6 +49,8 @@ archives:
     files:
       - src: scripts/vk
         dst: vk
+      - src: deploy/host/veil
+        dst: veil
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
 nfpms:
@@ -66,6 +68,10 @@ nfpms:
         dst: /usr/local/bin/vk
         file_info:
           mode: 0755
+      - src: deploy/host/veil
+        dst: /usr/local/bin/veil
+        file_info:
+          mode: 0755
       - src: deploy/host/session-tools.toml.example
         dst: /etc/veilkey/session-tools.toml.example
         type: config|noreplace
@@ -75,6 +81,7 @@ nfpms:
     description: |-
       VeilKey operator CLI package.
       Includes the veilkey-cli binary, veilkey-session-config, the vk helper,
+      the veil entrypoint,
       and example session-tools configuration for host boundary setup.
     license: MIT
     bindir: /usr/local/bin

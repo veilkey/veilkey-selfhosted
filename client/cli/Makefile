@@ -72,7 +72,8 @@ package: build-all
 		cp "bin/veilkey-cli-$$p" "$$tmpdir/veilkey-cli"; \
 		cp "bin/veilkey-session-config-$$p" "$$tmpdir/veilkey-session-config"; \
 		cp scripts/vk "$$tmpdir/vk"; \
-		tar -czf "dist/manual/veilkey-cli-$(VERSION)-$$p.tar.gz" -C "$$tmpdir" veilkey-cli veilkey-session-config vk; \
+		cp deploy/host/veil "$$tmpdir/veil"; \
+		tar -czf "dist/manual/veilkey-cli-$(VERSION)-$$p.tar.gz" -C "$$tmpdir" veilkey-cli veilkey-session-config vk veil; \
 		rm -rf "$$tmpdir"; \
 	done
 	@if command -v zip >/dev/null 2>&1; then \
