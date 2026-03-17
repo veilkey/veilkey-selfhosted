@@ -29,9 +29,10 @@ if [[ ! -x ../client/cli/bin/veilkey-session-config-linux-amd64 ]]; then
 fi
 cp ../client/cli/bin/veilkey-cli-linux-amd64 "$cli_root/veilkey-cli"
 cp ../client/cli/bin/veilkey-session-config-linux-amd64 "$cli_root/veilkey-session-config"
+cp ../client/cli/deploy/host/veil "$cli_root/veil"
 cp ../client/cli/scripts/vk "$cli_root/vk"
 cp ../client/cli/deploy/host/session-tools.toml.example "$cli_root/session-tools.toml.example"
-tar -czf "$cli_artifact" -C "$cli_root" veilkey-cli veilkey-session-config vk session-tools.toml.example
+tar -czf "$cli_artifact" -C "$cli_root" veilkey-cli veilkey-session-config veil vk session-tools.toml.example
 
 cp -a ../services/proxy/. "$proxy_root/"
 tar -czf "$proxy_artifact" -C "$tmp_artifact_dir" veilkey-proxy-local
@@ -49,6 +50,7 @@ VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh install proxmox-host-cli
 
 test -x "$tmp_root/usr/local/bin/veilkey-cli"
 test -x "$tmp_root/usr/local/bin/veilkey-session-config"
+test -x "$tmp_root/usr/local/bin/veil"
 test -x "$tmp_root/usr/local/bin/vk"
 test -f "$tmp_root/etc/veilkey/session-tools.toml.example"
 test -x "$tmp_root/usr/local/bin/veilroot-shell"

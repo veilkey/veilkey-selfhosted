@@ -89,6 +89,7 @@ install_binary() {
         chmod +x "$bindir/veilkey-cli"
         # Install helpers (Linux/macOS)
         [[ -f "$tmpdir/vk" ]] && mv "$tmpdir/vk" "$bindir/vk" && chmod +x "$bindir/vk"
+        [[ -f "$tmpdir/veil" ]] && mv "$tmpdir/veil" "$bindir/veil" && chmod +x "$bindir/veil"
         [[ -f "$tmpdir/veilkey-session-config" ]] && mv "$tmpdir/veilkey-session-config" "$bindir/veilkey-session-config" && chmod +x "$bindir/veilkey-session-config"
         rm -rf "$tmpdir"
     fi
@@ -173,6 +174,10 @@ install_from_source() {
     if [ -f "$INSTALL_DIR/scripts/vk" ]; then
         ln -sf "$INSTALL_DIR/scripts/vk" /usr/local/bin/vk
         echo "  linked: /usr/local/bin/vk"
+    fi
+    if [ -f "$INSTALL_DIR/deploy/host/veil" ]; then
+        ln -sf "$INSTALL_DIR/deploy/host/veil" /usr/local/bin/veil
+        echo "  linked: /usr/local/bin/veil"
     fi
 }
 

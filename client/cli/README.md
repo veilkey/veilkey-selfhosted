@@ -30,6 +30,8 @@ This component owns:
 
 ## Core Surfaces
 
+- `veil`
+  - canonical user-facing session entrypoint
 - `vk`
   - CLI entrypoint
 - `veilkey-cli wrap-pty`
@@ -91,13 +93,14 @@ veilkey-cli exec env DATABASE_URL="postgres://user:VK:b2c3d4e5@db:5432/app" ./mi
 ## Installation
 
 ```bash
-# Script install (binary + session config + vk helper)
+# Script install (binary + session config + veil/vk helpers)
 bash install/install.sh
 
 # Or build directly
 make build
 go build -o bin/veilkey-session-config ./cmd/veilkey-session-config
 cp bin/veilkey-cli bin/veilkey-session-config /usr/local/bin/
+cp deploy/host/veil /usr/local/bin/
 cp scripts/vk /usr/local/bin/
 ```
 
@@ -174,6 +177,9 @@ kubectl get secret -o yaml | veilkey-cli filter
 veilkey-cli scan --exit-code --format sarif src/
 
 # Enter the secure terminal
+veil
+
+# Or call the lower-level PTY wrapper directly
 veilkey-cli wrap-pty
 
 # Encrypt a value
