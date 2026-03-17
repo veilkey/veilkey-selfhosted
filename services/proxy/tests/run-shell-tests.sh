@@ -17,6 +17,7 @@ tests=(
   tests/test_cleanup_proxy_logs.sh
   tests/test_check_proxy_audit.sh
   tests/test_install_user_boundary.sh
+  tests/test_session_launch_fail_closed.sh
   tests/test_veilroot_session.sh
   tests/test_veilroot_egress_guard.sh
   tests/test_veilroot_shell_hook.sh
