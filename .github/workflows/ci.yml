@@ -163,14 +163,23 @@ jobs:
           version: "v2.1"
       - name: Test
         run: go test ./... -race -count=1
+      - name: Check release config
+        run: |
+          go install github.com/goreleaser/goreleaser/v2@v2.12.7
+          "$HOME/go/bin/goreleaser" check
       - name: Build
-        run: CGO_ENABLED=0 go build -o veilkey-cli .
+        run: |
+          CGO_ENABLED=0 go build -o veilkey-cli .
+          CGO_ENABLED=0 go build -o veilkey-session-config ./cmd/veilkey-session-config
+      - name: Package snapshot
+        run: |
+          "$HOME/go/bin/goreleaser" release --clean --snapshot --skip=publish
       - name: Upload artifact
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: actions/upload-artifact@v4
         with:
-          name: veilkey-cli-linux-amd64
-          path: client/cli/veilkey-cli
+          name: veilkey-cli-release-artifacts
+          path: client/cli/dist/
 
   # ── Installer (shell tests) ──────────────────────────────────
   installer:
@@ -195,6 +204,7 @@ jobs:
         run: |
           bash tests/test_glibc_runtime_guard.sh
           bash tests/test_placeholder_artifact_guard.sh
+          bash tests/test_cli_component.sh
           bash tests/test_install_profile_command.sh
           bash tests/test_proxmox_wrapper_commands.sh
           bash tests/test_rulebook_format.sh
