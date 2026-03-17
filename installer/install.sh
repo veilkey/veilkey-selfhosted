@@ -99,7 +99,7 @@ PY
     if command -v apt-get >/dev/null 2>&1; then
       export DEBIAN_FRONTEND=noninteractive
       apt-get update >/dev/null
-      apt-get install -y golang-go >/dev/null
+      apt-get install -y golang-go libsqlcipher1 >/dev/null
     elif command -v dnf >/dev/null 2>&1; then
       dnf install -y golang >/dev/null
     elif command -v yum >/dev/null 2>&1; then
@@ -743,6 +743,8 @@ write_component_env_templates() {
 VEILKEY_PASSWORD_FILE=/etc/veilkey/keycenter.password
 VEILKEY_ADDR=:10181
 VEILKEY_DB_PATH=/opt/veilkey/keycenter/data/veilkey.db
+# VEILKEY_DB_KEY: SQLCipher DB 암호화 키 (미설정 시 평문 SQLite)
+VEILKEY_DB_KEY=
 VEILKEY_TLS_CERT=
 VEILKEY_TLS_KEY=
 VEILKEY_TLS_CA=
@@ -754,6 +756,8 @@ EOF
 VEILKEY_PASSWORD_FILE=/etc/veilkey/localvault.password
 VEILKEY_ADDR=:10180
 VEILKEY_DB_PATH=/opt/veilkey/localvault/data/veilkey.db
+# VEILKEY_DB_KEY: SQLCipher DB 암호화 키 (미설정 시 평문 SQLite)
+VEILKEY_DB_KEY=
 VEILKEY_KEYCENTER_URL=
 VEILKEY_TLS_CERT=
 VEILKEY_TLS_KEY=
