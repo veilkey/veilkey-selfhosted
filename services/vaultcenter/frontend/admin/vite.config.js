@@ -10,7 +10,8 @@ export default defineConfig({
     rollupOptions: {
       input: {
         admin: resolve(__dirname, 'index.html'),
-        install: resolve(__dirname, 'install.html')
+        install: resolve(__dirname, 'install.html'),
+        setup: resolve(__dirname, 'setup.html')
       }
     }
   }

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed ui_dist/index.html ui_dist/install.html ui_dist/favicon.svg ui_dist/assets
+//go:embed ui_dist/index.html ui_dist/install.html ui_dist/setup.html ui_dist/favicon.svg ui_dist/assets
 var embeddedUIFS embed.FS
 
 // EmbeddedUIIndex returns the content of ui_dist/index.html.
@@ -23,6 +23,15 @@ func EmbeddedUIIndex() ([]byte, bool) {
 // EmbeddedUIInstallFile returns the content of ui_dist/install.html.
 func EmbeddedUIInstallFile() ([]byte, bool) {
 	body, err := fs.ReadFile(embeddedUIFS, "ui_dist/install.html")
+	if err != nil {
+		return nil, false
+	}
+	return body, true
+}
+
+// EmbeddedUISetupFile returns the content of ui_dist/setup.html.
+func EmbeddedUISetupFile() ([]byte, bool) {
+	body, err := fs.ReadFile(embeddedUIFS, "ui_dist/setup.html")
 	if err != nil {
 		return nil, false
 	}

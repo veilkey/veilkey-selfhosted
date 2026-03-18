@@ -24,9 +24,14 @@ func RunServer() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
+	if _, err := os.Stat(saltFile); os.IsNotExist(err) {
+		runSetupServer(dbPath, dataDir)
+		return
+	}
+
 	salt, err := os.ReadFile(saltFile)
 	if err != nil {
-		log.Fatal("Salt file not found. Run with 'init --root' first.")
+		log.Fatalf("Failed to read salt file: %v", err)
 	}
 
 	database, err := db.New(dbPath)

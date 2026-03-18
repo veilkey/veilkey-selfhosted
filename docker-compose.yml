@@ -11,17 +11,14 @@ services:
     environment:
       VEILKEY_ADDR: ":10181"
       VEILKEY_DB_PATH: /data/veilkey.db
-      VEILKEY_PASSWORD_FILE: /run/secrets/vaultcenter_password
       VEILKEY_MODE: root
       VEILKEY_AUTO_COMPLETE_INSTALL_FLOW: "${VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW:-0}"
       VEILKEY_BULK_APPLY_DIR: /data/bulk-apply
       VEILKEY_FUNCTION_DIR: /data/functions
       VEILKEY_AGENT_SCHEME: "${VEILKEY_AGENT_SCHEME}"
       VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
-    secrets:
-      - vaultcenter_password
     volumes:
-      - vaultcenter-data:/data
+      - ${VAULTCENTER_DATA_DIR:-./data/vaultcenter}:/data
     healthcheck:
       test: ["CMD", "curl", "-fs", "http://localhost:10181/health"]
       interval: 5s
@@ -41,26 +38,13 @@ services:
     environment:
       VEILKEY_ADDR: ":10180"
       VEILKEY_DB_PATH: /data/veilkey.db
-      VEILKEY_PASSWORD_FILE: /run/secrets/localvault_password
       VEILKEY_MODE: child
       VEILKEY_PARENT_URL: "http://vaultcenter:10181"
       VEILKEY_LABEL: "${LOCALVAULT_LABEL:-localvault-01}"
       VEILKEY_VAULTCENTER_URL: "http://vaultcenter:10181"
       VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
-    secrets:
-      - localvault_password
     volumes:
-      - localvault-data:/data
+      - ${LOCALVAULT_DATA_DIR:-./data/localvault}:/data
     depends_on:
       vaultcenter:
         condition: service_healthy
-
-secrets:
-  vaultcenter_password:
-    file: ./secrets/vaultcenter_password
-  localvault_password:
-    file: ./secrets/localvault_password
-
-volumes:
-  vaultcenter-data:
-  localvault-data:

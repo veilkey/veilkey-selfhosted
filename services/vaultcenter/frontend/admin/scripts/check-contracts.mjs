@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const appVue = fs.readFileSync(path.join(root, 'src', 'App.vue'), 'utf8');
 const useAdminApp = fs.readFileSync(path.join(root, 'src', 'useAdminApp.js'), 'utf8');
 const adminConfig = fs.readFileSync(path.join(root, 'src', 'adminConfig.js'), 'utf8');
