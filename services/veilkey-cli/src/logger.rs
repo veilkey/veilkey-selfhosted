@@ -21,7 +21,9 @@ impl SessionLogger {
         if let Some(dir) = Path::new(path).parent() {
             let _ = fs::create_dir_all(dir);
         }
-        Self { path: path.to_string() }
+        Self {
+            path: path.to_string(),
+        }
     }
 
     pub fn log(&self, veilkey: &str, pattern: &str, confidence: i32, preview: &str) {
@@ -34,7 +36,11 @@ impl SessionLogger {
         };
 
         if let Ok(data) = serde_json::to_string(&entry) {
-            if let Ok(mut f) = OpenOptions::new().append(true).create(true).open(&self.path) {
+            if let Ok(mut f) = OpenOptions::new()
+                .append(true)
+                .create(true)
+                .open(&self.path)
+            {
                 let _ = writeln!(f, "{}", data);
             }
         }

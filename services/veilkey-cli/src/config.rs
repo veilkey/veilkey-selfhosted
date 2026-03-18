@@ -28,7 +28,9 @@ pub const DEFAULT_ENTROPY_THRESHOLD: f64 = 3.5;
 pub const DEFAULT_ENTROPY_CONFIDENCE_BOOST: i32 = 20;
 pub const DEFAULT_SENSITIVE_BOOST: i32 = 15;
 
-fn default_confidence() -> i32 { DEFAULT_PATTERN_CONFIDENCE }
+fn default_confidence() -> i32 {
+    DEFAULT_PATTERN_CONFIDENCE
+}
 
 #[derive(Debug, Deserialize, Default)]
 pub struct EntropyConfig {
@@ -40,9 +42,15 @@ pub struct EntropyConfig {
     pub confidence_boost: i32,
 }
 
-fn default_min_length() -> usize { DEFAULT_ENTROPY_MIN_LENGTH }
-fn default_threshold() -> f64 { DEFAULT_ENTROPY_THRESHOLD }
-fn default_confidence_boost() -> i32 { DEFAULT_ENTROPY_CONFIDENCE_BOOST }
+fn default_min_length() -> usize {
+    DEFAULT_ENTROPY_MIN_LENGTH
+}
+fn default_threshold() -> f64 {
+    DEFAULT_ENTROPY_THRESHOLD
+}
+fn default_confidence_boost() -> i32 {
+    DEFAULT_ENTROPY_CONFIDENCE_BOOST
+}
 
 #[derive(Debug, Deserialize, Default)]
 pub struct SensitiveContext {
@@ -52,7 +60,9 @@ pub struct SensitiveContext {
     pub confidence_boost: i32,
 }
 
-fn default_sensitive_boost() -> i32 { DEFAULT_SENSITIVE_BOOST }
+fn default_sensitive_boost() -> i32 {
+    DEFAULT_SENSITIVE_BOOST
+}
 
 #[derive(Debug, Deserialize)]
 struct RawConfig {
@@ -83,13 +93,14 @@ pub struct CompiledConfig {
 
 pub fn load_config(path: Option<&str>) -> Result<CompiledConfig, String> {
     let data = match path {
-        Some(p) => fs::read_to_string(p)
-            .map_err(|e| format!("cannot read patterns file: {}", e))?,
+        Some(p) => {
+            fs::read_to_string(p).map_err(|e| format!("cannot read patterns file: {}", e))?
+        }
         None => EMBEDDED_PATTERNS.to_string(),
     };
 
-    let raw: RawConfig = serde_yaml::from_str(&data)
-        .map_err(|e| format!("cannot parse patterns: {}", e))?;
+    let raw: RawConfig =
+        serde_yaml::from_str(&data).map_err(|e| format!("cannot parse patterns: {}", e))?;
 
     let mut compiled = CompiledConfig {
         patterns: Vec::new(),
@@ -99,10 +110,18 @@ pub fn load_config(path: Option<&str>) -> Result<CompiledConfig, String> {
         sensitive_boost: raw.sensitive_context.confidence_boost,
     };
 
-    if compiled.entropy.min_length == 0 { compiled.entropy.min_length = DEFAULT_ENTROPY_MIN_LENGTH; }
-    if compiled.entropy.threshold == 0.0 { compiled.entropy.threshold = DEFAULT_ENTROPY_THRESHOLD; }
-    if compiled.entropy.confidence_boost == 0 { compiled.entropy.confidence_boost = DEFAULT_ENTROPY_CONFIDENCE_BOOST; }
-    if compiled.sensitive_boost == 0 { compiled.sensitive_boost = DEFAULT_SENSITIVE_BOOST; }
+    if compiled.entropy.min_length == 0 {
+        compiled.entropy.min_length = DEFAULT_ENTROPY_MIN_LENGTH;
+    }
+    if compiled.entropy.threshold == 0.0 {
+        compiled.entropy.threshold = DEFAULT_ENTROPY_THRESHOLD;
+    }
+    if compiled.entropy.confidence_boost == 0 {
+        compiled.entropy.confidence_boost = DEFAULT_ENTROPY_CONFIDENCE_BOOST;
+    }
+    if compiled.sensitive_boost == 0 {
+        compiled.sensitive_boost = DEFAULT_SENSITIVE_BOOST;
+    }
 
     let size_limit = regex_size_limit();
     for p in raw.patterns {

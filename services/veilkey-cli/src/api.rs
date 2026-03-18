@@ -1,6 +1,6 @@
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use serde::Deserialize;
 
 #[derive(Clone)]
 pub struct VeilKeyClient {
@@ -41,14 +41,19 @@ impl VeilKeyClient {
             .send_json(&body)
             .map_err(|e| format!("API request failed: {}", e))?;
 
-        let result: serde_json::Value = resp.into_json()
+        let result: serde_json::Value = resp
+            .into_json()
             .map_err(|e| format!("API response decode failed: {}", e))?;
 
-        let token = result["token"].as_str()
+        let token = result["token"]
+            .as_str()
             .ok_or("missing token in response")?
             .to_string();
 
-        self.cache.lock().unwrap().insert(value.to_string(), token.clone());
+        self.cache
+            .lock()
+            .unwrap()
+            .insert(value.to_string(), token.clone());
         Ok(token)
     }
 
@@ -65,16 +70,21 @@ impl VeilKeyClient {
     }
 
     fn resolve_once(&self, r#ref: &str) -> Result<String, String> {
-        let url = format!("{}/api/resolve/{}", self.base_url,
-            urlencoding::encode(r#ref));
+        let url = format!(
+            "{}/api/resolve/{}",
+            self.base_url,
+            urlencoding::encode(r#ref)
+        );
         let resp = ureq::get(&url)
             .call()
             .map_err(|e| format!("resolve request failed: {}", e))?;
 
-        let result: serde_json::Value = resp.into_json()
+        let result: serde_json::Value = resp
+            .into_json()
             .map_err(|e| format!("resolve decode failed: {}", e))?;
 
-        result["value"].as_str()
+        result["value"]
+            .as_str()
             .map(|s| s.to_string())
             .ok_or_else(|| "missing value in response".to_string())
     }
@@ -87,10 +97,12 @@ impl VeilKeyClient {
             .send_json(&body)
             .map_err(|e| format!("lookup request failed: {}", e))?;
 
-        let result: serde_json::Value = resp.into_json()
+        let result: serde_json::Value = resp
+            .into_json()
             .map_err(|e| format!("lookup decode failed: {}", e))?;
 
-        let matches = result["matches"].as_array()
+        let matches = result["matches"]
+            .as_array()
             .ok_or("missing matches in response")?;
 
         let mut out = Vec::new();
