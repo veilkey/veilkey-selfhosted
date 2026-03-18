@@ -8,7 +8,12 @@ if [[ ! -f "$default_config_src" ]]; then
   default_config_src="$(dirname "$0")/session-tools.toml.example"
 fi
 config_src="${2:-$default_config_src}"
-config_dst="/etc/veilkey/session-tools.toml"
+config_dst="${VEILKEY_SESSION_CONFIG_DST:-/etc/veilkey/session-tools.toml}"
+session_config_bin="${VEILKEY_SESSION_CONFIG_INSTALL_BIN:-/usr/local/bin/veilkey-session-config}"
+session_launch_bin="${VEILKEY_SESSION_LAUNCH_BIN:-/usr/local/bin/veilkey-session-launch}"
+veilkey_bin="${VEILKEY_BIN:-/usr/local/bin/veilkey}"
+profile_dir="${VEILKEY_PROFILE_DIR:-/etc/profile.d}"
+log_dir="${VEILKEY_PROXY_LOG_DIR:-/var/log/veilkey-proxy}"
 
 if [[ -z "$user_name" ]]; then
   echo "usage: $(basename "$0") <user> [config-src]" >&2
@@ -71,20 +76,21 @@ fi
 ensure_go
 session_config_tmp="$(mktemp)"
 go build -o "$session_config_tmp" "$repo_root/cmd/veilkey-session-config"
-install -m 0755 "$session_config_tmp" /usr/local/bin/veilkey-session-config
+install -m 0755 "$session_config_tmp" "$session_config_bin"
 rm -f "$session_config_tmp"
 ensure_tmux
 
-cat >/usr/local/bin/veilkey-session-launch <<'SCRIPT'
+cat >"$session_launch_bin" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
+session_config_bin="${VEILKEY_SESSION_CONFIG_BIN:-/usr/local/bin/veilkey-session-config}"
 if [[ $# -lt 1 ]]; then
   echo "usage: veilkey-session-launch <tool> [args...]" >&2
   exit 2
 fi
 tool="$1"
 shift
-real_bin="$(/usr/local/bin/veilkey-session-config tool-bin "$tool")" || {
+real_bin="$("$session_config_bin" tool-bin "$tool")" || {
   echo "unknown or invalid tool mapping: ${tool}" >&2
   exit 2
 }
@@ -103,11 +109,18 @@ done < <(/usr/local/bin/veilkey-session-config tool-shell-exports "$tool")
 if [[ "${VEILKEY_VERIFIED_SESSION:-}" == "1" || "${VEILKEY_VEILROOT:-}" == "1" || "${VEILKEY_ACTIVE:-}" == "1" ]]; then
   exec "$real_bin" "$@"
 fi
-exec /usr/local/bin/veilkey session "$real_bin" "$@"
+if [[ "${VEILKEY_ACTIVE:-}" == "1" ]]; then
+  echo "veilkey-session-launch: refusing direct exec without a verified Veil session boundary" >&2
+  echo "veilkey-session-launch: start a session with 'veil' first" >&2
+  exit 1
+fi
+echo "veilkey-session-launch: no verified Veil session is active" >&2
+echo "veilkey-session-launch: start a session with 'veil' first" >&2
+exit 1
 SCRIPT
-chmod 0755 /usr/local/bin/veilkey-session-launch
+chmod 0755 "$session_launch_bin"
 
-cat >/etc/profile.d/${user_name}-veilkey-proxy.sh <<SCRIPT
+cat >"$profile_dir/${user_name}-veilkey-proxy.sh" <<SCRIPT
 [ "\${USER:-}" = "$user_name" ] || return 0
 while IFS='=' read -r _vk_key _vk_val; do
   _vk_key="\${_vk_key#export }"
@@ -116,16 +129,16 @@ while IFS='=' read -r _vk_key _vk_val; do
   _vk_quote="\$(printf "\\047")"
   _vk_val="\${_vk_val//\$_vk_quote/}"
   export "\${_vk_key}=\${_vk_val}"
-done < <(/usr/local/bin/veilkey-session-config shell-exports)
+done < <("$session_config_bin" shell-exports)
 export VEILKEY_PROXY_STATE=active
 SCRIPT
-chmod 0644 /etc/profile.d/${user_name}-veilkey-proxy.sh
+chmod 0644 "$profile_dir/${user_name}-veilkey-proxy.sh"
 
 for tool in codex claude opencode; do
   cat >"$home_dir/.local/bin/${tool}" <<SCRIPT
 #!/usr/bin/env bash
 set -euo pipefail
-exec /usr/local/bin/veilkey-session-launch ${tool} "\$@"
+exec "$session_launch_bin" ${tool} "\$@"
 SCRIPT
   chmod 0755 "$home_dir/.local/bin/${tool}"
 done
@@ -140,7 +153,7 @@ while IFS='=' read -r _vk_key _vk_val; do
   _vk_quote="\$(printf "\\047")"
   _vk_val="\${_vk_val//\$_vk_quote/}"
   export "\${_vk_key}=\${_vk_val}"
-done < <(/usr/local/bin/veilkey-session-config shell-exports)
+done < <("$session_config_bin" shell-exports)
 alias codex="\$HOME/.local/bin/codex"
 alias claude="\$HOME/.local/bin/claude"
 alias opencode="\$HOME/.local/bin/opencode"
@@ -148,5 +161,7 @@ SCRIPT
 
 chown -R "${user_name}:${user_name}" "$home_dir/.config" "$home_dir/.local" "$home_dir/.bash_profile"
 systemctl daemon-reload
-su - "$user_name" -c "tmux has-session -t main >/dev/null 2>&1 || tmux new-session -d -s main" >/dev/null 2>&1 || true
+if [[ "${VEILKEY_SKIP_SESSION_PRIME:-0}" != "1" ]]; then
+  su - "$user_name" -c "tmux has-session -t main >/dev/null 2>&1 || tmux new-session -d -s main" >/dev/null 2>&1 || true
+fi
 echo "installed veilkey boundary for ${user_name}"
