@@ -208,8 +208,13 @@ func sendInstallMail(to, subject, body string) error {
 	return sendInstallSendmail(from, to, subject, body)
 }
 
+const defaultSendmailBin = "/usr/sbin/sendmail" // standard Unix sendmail path
+
 func sendInstallSendmail(from, to, subject, body string) error {
-	sendmailBin := envDefault("VEILKEY_OTP_SENDMAIL", "/usr/sbin/sendmail")
+	sendmailBin := os.Getenv("VEILKEY_OTP_SENDMAIL")
+	if sendmailBin == "" {
+		sendmailBin = defaultSendmailBin
+	}
 	if _, err := os.Stat(sendmailBin); err != nil {
 		return fmt.Errorf("sendmail binary not found: %s", sendmailBin)
 	}
@@ -222,13 +227,25 @@ func sendInstallSendmail(from, to, subject, body string) error {
 	return nil
 }
 
+const defaultSMTPPort = 587   // IANA submission port (RFC 6409)
+const defaultSTARTTLS  = true // secure-by-default
+
 func sendInstallSMTP(from, to, subject, body string) error {
 	host := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_HOST"))
-	portStr := envDefault("VEILKEY_OTP_SMTP_PORT", "587")
-	port, _ := strconv.Atoi(portStr)
+	portStr := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_PORT"))
+	port := defaultSMTPPort
+	if portStr != "" {
+		if p, err := strconv.Atoi(portStr); err == nil {
+			port = p
+		}
+	}
 	username := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_USERNAME"))
 	password := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_PASSWORD"))
-	startTLS := strings.ToLower(envDefault("VEILKEY_OTP_SMTP_STARTTLS", "true")) != "false"
+	startTLSStr := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_STARTTLS"))
+	startTLS := defaultSTARTTLS
+	if startTLSStr != "" {
+		startTLS = strings.ToLower(startTLSStr) != "false"
+	}
 
 	m := mail.NewMsg()
 	if err := m.From(from); err != nil {
@@ -260,12 +277,6 @@ func formatInstallMail(from, to, subject, body string) string {
 	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s", from, to, subject, body)
 }
 
-func envDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-		return value
-	}
-	return fallback
-}
 
 const installCustodyHTML = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>VeilKey Install Custody</title>
