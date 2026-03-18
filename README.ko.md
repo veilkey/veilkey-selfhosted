@@ -176,3 +176,16 @@ rebind prepared with key_version=9
 기여 규칙은 여기서 시작합니다.
 
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+
+## 라이선스
+
+이 저장소는 GNU Affero General Public License v3.0 (AGPL-3.0)으로 배포됩니다.
+
+[`LICENSE`](./LICENSE)를 참조하세요.
+
+## 보안 고지
+
+VeilKey는 시크릿과 암호화 자료를 다루는 보안 민감 도구입니다.
+이 소프트웨어는 어떠한 보증도 없이 제공됩니다. 프로덕션 사용 전에
+자체 보안 감사를 수행하세요. 보안 이슈를 발견하면 공개 이슈 대신
+GitHub Security Advisories를 통해 비공개로 보고해주세요.

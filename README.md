@@ -5,7 +5,7 @@
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
     <a href="https://veil-key.com"><img src="https://img.shields.io/badge/home-veil--key.com-0f766e?logo=googlechrome&logoColor=white" alt="Website"></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT License"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2563eb.svg" alt="AGPL-3.0"></a>
   </p>
 </div>
 
@@ -316,6 +316,16 @@ Short version:
 
 ## License
 
-This repository is licensed under the MIT License.
+This repository is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
 See [`LICENSE`](./LICENSE).
+
+## Security Disclaimer
+
+VeilKey is a security-sensitive tool that handles secrets and cryptographic material.
+This software is provided WITHOUT WARRANTY. Before using VeilKey in production,
+conduct your own security audit and review. The contributors do not guarantee
+the absence of vulnerabilities. Use at your own risk.
+
+If you discover a security issue, please report it privately via GitHub Security Advisories
+instead of opening a public issue.
