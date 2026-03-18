@@ -1,61 +1,54 @@
 [proxy.default]
-listen = "127.0.0.1:18080"
-url = "http://127.0.0.1:18080"
-no_proxy = "127.0.0.1,localhost,.internal.example,.vhost.example"
+listen = ""
+url = ""
+no_proxy = ""
 plaintext_action = "issue-temp-and-block"
 allow_hosts_enabled = false
 allow_hosts = []
 
 [proxy.tools.codex]
-listen = "127.0.0.1:18081"
-url = "http://127.0.0.1:18081"
+listen = ""
+url = ""
 plaintext_action = "issue-temp-and-block"
 plaintext_resolve_hosts = []
 allow_hosts_enabled = false
 allow_hosts = []
 
 [proxy.tools.claude]
-listen = "127.0.0.1:18082"
-url = "http://127.0.0.1:18082"
+listen = ""
+url = ""
 plaintext_action = "issue-temp-and-block"
 plaintext_resolve_hosts = []
 allow_hosts_enabled = false
 allow_hosts = []
 
 [proxy.tools.opencode]
-listen = "127.0.0.1:18083"
-url = "http://127.0.0.1:18083"
+listen = ""
+url = ""
 plaintext_action = "issue-temp-and-block"
 plaintext_resolve_hosts = []
 allow_hosts_enabled = false
 allow_hosts = []
 
-# Example:
-# keep the global default as block, but let one profile resolve-only for a
-# tightly scoped host during a migration window.
-#
-# [proxy.tools.codex]
-# plaintext_resolve_hosts = ["api.openai.com"]
-
 [tools.codex]
 bin = "/usr/bin/codex"
-proxy = "codex"
+proxy = "default"
 
 [tools.claude]
 bin = "/root/.local/bin/claude"
-proxy = "claude"
+proxy = "default"
 
 [tools.opencode]
 bin = "/root/.opencode/bin/opencode"
-proxy = "opencode"
+proxy = "default"
 
 [veilroot]
 default_profile = "codex"
 unit_prefix = "veilroot"
 
 [veilkey]
-localvault_url = "http://127.0.0.1:10180"
-keycenter_url = "http://hub.veilkey.example:10180"
+localvault_url = ""
+keycenter_url = ""
 
 # Environment examples:
 #   export VEILKEY_LOCALE=ko

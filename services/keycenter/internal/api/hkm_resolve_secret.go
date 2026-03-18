@@ -216,6 +216,10 @@ func (s *Server) resolveTrackedRef(w http.ResponseWriter, ref string, tracked *d
 
 	// Temp encrypt refs: ciphertext stored directly in token_refs
 	if tracked.RefScope == "TEMP" && tracked.Ciphertext != "" && tracked.AgentHash == "" {
+		if tracked.ExpiresAt != nil && time.Now().UTC().After(*tracked.ExpiresAt) {
+			s.respondError(w, http.StatusGone, "temp ref expired: "+ref)
+			return true
+		}
 		if resolved, err := s.resolveTempRef(tracked); err == nil {
 			s.respondJSON(w, http.StatusOK, map[string]interface{}{
 				"ref":   ref,

@@ -131,6 +131,7 @@ open_session() {
       session_config_bin="$2"
       veilkey_bin="$3"
       eval "$("$session_config_bin" tool-shell-exports "$profile")"
+      export VEILKEY_VERIFIED_SESSION=1
       export VEILKEY_VEILROOT=1
       export VEILKEY_VEILROOT_PROFILE="$profile"
       exec "$veilkey_bin" wrap-pty bash -li
@@ -144,7 +145,7 @@ open_session() {
   fi
 
   print_status_banner
-  exec su -s /bin/bash - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; veilkey_bin=\"\$3\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec \"\$veilkey_bin\" wrap-pty bash -li' _ '$profile' '$session_config_bin' '$veilkey_bin'"
+  exec su -s /bin/bash - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; veilkey_bin=\"\$3\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; export VEILKEY_VERIFIED_SESSION=1; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec \"\$veilkey_bin\" wrap-pty bash -li' _ '$profile' '$session_config_bin' '$veilkey_bin'"
 }
 
 proxy_status() {

@@ -108,10 +108,11 @@ RESP=$(curl -sf -X POST "${VEILKEY_API}/api/encrypt" \
 }
 
 TOKEN=$(echo "$RESP" | jq -r '.token // .ciphertext // empty')
+EXPIRES=$(echo "$RESP" | jq -r '.expires_at // empty')
 if [[ -n "$TOKEN" ]]; then
     mkdir -p "$STATE_DIR"
     grep -qF "$VALUE" "$STATE_DIR/watchlist" 2>/dev/null || \
-        printf '%s\t%s\n' "$VALUE" "$TOKEN" >> "$STATE_DIR/watchlist"
+        printf '%s\t%s\t%s\n' "$VALUE" "$TOKEN" "${EXPIRES:-}" >> "$STATE_DIR/watchlist"
     echo "$TOKEN"
 else
     echo "Error: token not found in response." >&2

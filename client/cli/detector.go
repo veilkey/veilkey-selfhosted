@@ -8,9 +8,10 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 )
 
-var veilkeyRE = regexp.MustCompile(`VK:[0-9a-f]{8}`)
+var veilkeyRE = regexp.MustCompile(`VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})`)
 
 type Detection struct {
 	Value      string
@@ -54,7 +55,8 @@ func NewSecretDetector(config *CompiledConfig, client *VeilKeyClient, logger *Se
 	return d
 }
 
-// loadWatchlist reads $VEILKEY_STATE_DIR/watchlist (tsv: value\tVK:hash)
+// loadWatchlist reads $VEILKEY_STATE_DIR/watchlist (tsv: value\tVK:hash[\texpires_at])
+// Entries with an expires_at in the past are skipped; the file is rewritten without them.
 func (d *SecretDetector) loadWatchlist() {
 	stateDir := os.Getenv("VEILKEY_STATE_DIR")
 	if stateDir == "" {
@@ -66,13 +68,35 @@ func (d *SecretDetector) loadWatchlist() {
 		return
 	}
 	defer f.Close()
+
+	now := time.Now().UTC()
+	var kept []string
+	pruned := false
+
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := scanner.Text()
-		parts := strings.SplitN(line, "\t", 2)
-		if len(parts) == 2 && len(parts[0]) >= 1 && len(parts[1]) >= 1 {
-			d.watchlist = append(d.watchlist, WatchEntry{Value: parts[0], VK: parts[1]})
+		parts := strings.SplitN(line, "\t", 3)
+		if len(parts) < 2 || len(parts[0]) < 1 || len(parts[1]) < 1 {
+			continue
 		}
+		// Check expiration if present
+		if len(parts) == 3 && parts[2] != "" {
+			if exp, err := time.Parse(time.RFC3339, parts[2]); err == nil && now.After(exp) {
+				pruned = true
+				continue
+			}
+		}
+		d.watchlist = append(d.watchlist, WatchEntry{Value: parts[0], VK: parts[1]})
+		kept = append(kept, line)
+	}
+
+	if pruned {
+		content := strings.Join(kept, "\n")
+		if len(kept) > 0 {
+			content += "\n"
+		}
+		os.WriteFile(path, []byte(content), 0644)
 	}
 }
 

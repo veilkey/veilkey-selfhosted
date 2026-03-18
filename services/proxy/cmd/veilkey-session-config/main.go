@@ -72,6 +72,7 @@ func loadConfig(path string) (*config, error) {
 
 func getenvFirst(values ...string) string {
 	for _, value := range values {
+		value = strings.TrimSpace(value)
 		if value != "" {
 			return value
 		}
@@ -79,19 +80,32 @@ func getenvFirst(values ...string) string {
 	return ""
 }
 
+func (c *config) proxyURL(configured string) string {
+	return getenvFirst(
+		os.Getenv("VEILKEY_PROXY_URL"),
+		configured,
+	)
+}
+
+func (c *config) proxyListen(configured string) string {
+	return getenvFirst(
+		os.Getenv("VEILKEY_PROXY_LISTEN"),
+		configured,
+	)
+}
+
 func (c *config) veilkeyLocalvaultURL() string {
 	return getenvFirst(
-		c.Veilkey.LocalvaultURL,
 		os.Getenv("VEILKEY_LOCALVAULT_URL"),
 		os.Getenv("VEILKEY_API"),
-		"https://127.0.0.1:10180",
+		c.Veilkey.LocalvaultURL,
 	)
 }
 
 func (c *config) veilkeyKeycenterURL() string {
 	return getenvFirst(
-		c.Veilkey.KeycenterURL,
 		os.Getenv("VEILKEY_KEYCENTER_URL"),
+		c.Veilkey.KeycenterURL,
 	)
 }
 
@@ -102,12 +116,15 @@ func (c *config) toolProxy(name string) (proxyTarget, error) {
 	}
 	proxyName := toolCfg.Proxy
 	if proxyName == "" || proxyName == "default" {
-		return c.Proxy.Default, nil
+		target := c.Proxy.Default
+		target.URL = c.proxyURL(target.URL)
+		return target, nil
 	}
 	cfg, ok := c.Proxy.Tools[proxyName]
 	if !ok {
 		return proxyTarget{}, fmt.Errorf("unknown proxy mapping: %s", proxyName)
 	}
+	cfg.URL = c.proxyURL(cfg.URL)
 	return cfg, nil
 }
 
@@ -149,6 +166,9 @@ func shellQuote(v string) string {
 
 func printExports(values [][2]string) {
 	for _, item := range values {
+		if item[1] == "" {
+			continue
+		}
 		fmt.Printf("export %s=%s\n", item[0], shellQuote(item[1]))
 	}
 }
@@ -162,6 +182,15 @@ func chooseProfileValue(primary, secondary, field string) (string, error) {
 		return "", fmt.Errorf("%s is not configured", field)
 	}
 	return value, nil
+}
+
+func requireConfiguredValue(value, field string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		fmt.Fprintf(os.Stderr, "%s is not configured\n", field)
+		os.Exit(1)
+	}
+	return value
 }
 
 func main() {
@@ -209,14 +238,14 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		fmt.Println(target.URL)
+		fmt.Println(requireConfiguredValue(target.URL, fmt.Sprintf("proxy url for tool %s", cmdArgs[0])))
 	case "proxy-listen":
 		key := "default"
 		if len(cmdArgs) > 0 {
 			key = cmdArgs[0]
 		}
 		if key == "default" {
-			fmt.Println(cfg.Proxy.Default.Listen)
+			fmt.Println(requireConfiguredValue(cfg.proxyListen(cfg.Proxy.Default.Listen), "proxy listen for profile default"))
 			return
 		}
 		target, ok := cfg.Proxy.Tools[key]
@@ -224,7 +253,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "unknown proxy profile: %s\n", key)
 			os.Exit(1)
 		}
-		fmt.Println(target.Listen)
+		fmt.Println(requireConfiguredValue(cfg.proxyListen(target.Listen), fmt.Sprintf("proxy listen for profile %s", key)))
 	case "proxy-no-proxy":
 		key := "default"
 		if len(cmdArgs) > 0 {
@@ -290,10 +319,7 @@ func main() {
 		if len(cmdArgs) > 0 {
 			key = cmdArgs[0]
 		}
-		value := cfg.Rewrite.PlaintextAction
-		if value == "" {
-			value = "issue-temp-and-resolve"
-		}
+		value := strings.TrimSpace(cfg.Rewrite.PlaintextAction)
 		if key == "default" {
 			if cfg.Proxy.Default.PlaintextAction != "" {
 				value = cfg.Proxy.Default.PlaintextAction
@@ -329,11 +355,12 @@ func main() {
 			fmt.Println(host)
 		}
 	case "shell-exports":
+		proxyURL := requireConfiguredValue(cfg.proxyURL(cfg.Proxy.Default.URL), "proxy url for profile default")
 		printExports([][2]string{
-			{"VEILKEY_PROXY_URL", cfg.Proxy.Default.URL},
-			{"HTTP_PROXY", cfg.Proxy.Default.URL},
-			{"HTTPS_PROXY", cfg.Proxy.Default.URL},
-			{"ALL_PROXY", cfg.Proxy.Default.URL},
+			{"VEILKEY_PROXY_URL", proxyURL},
+			{"HTTP_PROXY", proxyURL},
+			{"HTTPS_PROXY", proxyURL},
+			{"ALL_PROXY", proxyURL},
 			{"NO_PROXY", cfg.mergedNoProxy(cfg.Proxy.Default.NoProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyKeycenterURL()},
@@ -348,15 +375,16 @@ func main() {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
+		proxyURL := requireConfiguredValue(target.URL, fmt.Sprintf("proxy url for tool %s", cmdArgs[0]))
 		noProxy := target.NoProxy
 		if noProxy == "" {
 			noProxy = cfg.Proxy.Default.NoProxy
 		}
 		printExports([][2]string{
-			{"VEILKEY_PROXY_URL", target.URL},
-			{"HTTP_PROXY", target.URL},
-			{"HTTPS_PROXY", target.URL},
-			{"ALL_PROXY", target.URL},
+			{"VEILKEY_PROXY_URL", proxyURL},
+			{"HTTP_PROXY", proxyURL},
+			{"HTTPS_PROXY", proxyURL},
+			{"ALL_PROXY", proxyURL},
 			{"NO_PROXY", cfg.mergedNoProxy(noProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyKeycenterURL()},

@@ -5,7 +5,7 @@
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
     <a href="https://veil-key.com"><img src="https://img.shields.io/badge/home-veil--key.com-0f766e?logo=googlechrome&logoColor=white" alt="Website"></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT License"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2563eb.svg" alt="AGPL-3.0"></a>
   </p>
 </div>
 
@@ -33,6 +33,15 @@ The active runtime model is:
   - outbound enforcement layer
 - `installer`
   - installation and verification layer
+
+For operator entrypoints, the current split is:
+
+- `veil`
+  - protected session entrypoint
+- `veilkey`
+  - state, crypto, and policy control surface inside or alongside that session
+- `veilkey-cli`
+  - lower-level implementation binary used by wrappers and install/runtime scripts
 
 ## Core Logic
 
@@ -218,6 +227,26 @@ The outbound enforcement edge is where `services/proxy` belongs. The intended sp
   - central policy, registration, audit, bulk operations
 - `LocalVault`
   - node-local runtime, ciphertext/context, execution boundary
+
+## Veil Session UX
+
+The intended CLI UX is:
+
+```bash
+veil
+claude
+codex
+```
+
+With management commands handled by `veilkey`:
+
+```bash
+veilkey status
+veilkey paste-mode on
+veilkey resolve VK:LOCAL:example
+```
+
+This keeps `veil` focused on entering the protected environment and `veilkey` focused on crypto and policy actions.
 - `proxy`
   - outbound enforcement surface when runtime traffic must be mediated
 
@@ -316,6 +345,16 @@ Short version:
 
 ## License
 
-This repository is licensed under the MIT License.
+This repository is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0).
 
 See [`LICENSE`](./LICENSE).
+
+## Security Disclaimer
+
+VeilKey is a security-sensitive tool that handles secrets and cryptographic material.
+This software is provided WITHOUT WARRANTY. Before using VeilKey in production,
+conduct your own security audit and review. The contributors do not guarantee
+the absence of vulnerabilities. Use at your own risk.
+
+If you discover a security issue, please report it privately via GitHub Security Advisories
+instead of opening a public issue.

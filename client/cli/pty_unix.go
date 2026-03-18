@@ -17,6 +17,89 @@ import (
 	"golang.org/x/term"
 )
 
+var shellBuiltins = map[string]struct{}{
+	".": {}, ":": {}, "[": {}, "alias": {}, "bg": {}, "bind": {}, "break": {}, "builtin": {},
+	"cd": {}, "command": {}, "compgen": {}, "complete": {}, "continue": {}, "declare": {},
+	"dirs": {}, "disown": {}, "echo": {}, "enable": {}, "eval": {}, "exec": {}, "exit": {},
+	"export": {}, "false": {}, "fc": {}, "fg": {}, "getopts": {}, "hash": {}, "help": {},
+	"history": {}, "jobs": {}, "kill": {}, "let": {}, "local": {}, "logout": {}, "mapfile": {},
+	"popd": {}, "printf": {}, "pushd": {}, "pwd": {}, "read": {}, "readonly": {}, "return": {},
+	"set": {}, "shift": {}, "shopt": {}, "source": {}, "suspend": {}, "test": {}, "times": {},
+	"trap": {}, "true": {}, "type": {}, "typeset": {}, "ulimit": {}, "umask": {}, "unalias": {},
+	"unset": {}, "wait": {},
+}
+
+func looksLikeTerminalControlSequence(raw string) bool {
+	if raw == "" {
+		return false
+	}
+	if raw[0] == 0x1b {
+		return true
+	}
+	return strings.Contains(raw, "\x1b[") ||
+		strings.Contains(raw, "\x1b]") ||
+		strings.Contains(raw, "\x1bP") ||
+		strings.Contains(raw, "\x9b") ||
+		strings.Contains(raw, "\x90")
+}
+
+func shouldIssuePastedChunk(detector *SecretDetector, raw string) bool {
+	if strings.Contains(raw, "VK:") || strings.Contains(raw, "VE:") {
+		return false
+	}
+	if looksLikeTerminalControlSequence(raw) {
+		return false
+	}
+	core := strings.TrimSpace(strings.TrimRight(raw, "\r\n"))
+	if core == "" {
+		return false
+	}
+	fields := strings.Fields(core)
+	if len(fields) == 0 {
+		return false
+	}
+	if _, ok := shellBuiltins[fields[0]]; ok {
+		return false
+	}
+	if _, err := exec.LookPath(fields[0]); err == nil {
+		return false
+	}
+	return detector.ProcessLine(raw) == raw
+}
+
+func transformPastedInput(detector *SecretDetector, data []byte) string {
+	raw := string(data)
+	action := os.Getenv("VEILKEY_PLAINTEXT_ACTION")
+	processed := detector.ProcessLine(raw)
+	if action == "" || !strings.HasPrefix(action, "issue-temp") || !pasteTempIssuanceEnabled() {
+		return processed
+	}
+	if processed != raw {
+		return processed
+	}
+	if !shouldIssuePastedChunk(detector, raw) {
+		return raw
+	}
+
+	core := strings.TrimRight(raw, "\r\n")
+	suffix := raw[len(core):]
+	vk := detector.issueVeilKey(core)
+	if vk == "" {
+		return raw
+	}
+	if detector.logger != nil {
+		preview := core
+		if len(preview) > 4 {
+			preview = preview[:4] + "***"
+		} else {
+			preview = "***"
+		}
+		detector.logger.Log(vk, "paste", 100, preview)
+	}
+	detector.Stats.Detections++
+	return vk + suffix
+}
+
 // processStreamPty — PTY output stream processor
 // Complete lines (\n) are immediately filtered; partial lines are buffered for 30ms then watchlist-matched
 // This ensures watchlist values are masked even in typing echo
@@ -160,8 +243,8 @@ func filterStdinToPty(detector *SecretDetector, stdin io.Reader, ptmx io.Writer)
 		inputBuf.Reset()
 
 		if len(data) > 4 {
-			// Paste — filter secrets then forward
-			processed := detector.ProcessLine(string(data))
+			// Paste — filter secrets and issue temp refs only for non-command payloads.
+			processed := transformPastedInput(detector, data)
 			ptmx.Write([]byte(processed))
 		} else {
 			// Single key input

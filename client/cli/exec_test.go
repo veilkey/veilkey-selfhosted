@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"strings"
 	"testing"
 )
@@ -34,7 +33,6 @@ func TestExecVKHashResolution(t *testing.T) {
 	defer server.Close()
 
 	client := NewVeilKeyClient(server.URL)
-	vkRE := regexp.MustCompile(`VK:[0-9a-f]{8}`)
 
 	// Test argument resolution
 	args := []string{
@@ -45,7 +43,7 @@ func TestExecVKHashResolution(t *testing.T) {
 
 	resolved := make([]string, len(args))
 	for i, arg := range args {
-		resolved[i] = vkRE.ReplaceAllStringFunc(arg, func(hash string) string {
+		resolved[i] = veilkeyRE.ReplaceAllStringFunc(arg, func(hash string) string {
 			val, err := client.Resolve(hash)
 			if err != nil {
 				return hash
@@ -69,7 +67,6 @@ func TestExecVKHashResolution(t *testing.T) {
 }
 
 func TestExecVKHashRegex(t *testing.T) {
-	vkRE := regexp.MustCompile(`VK:[0-9a-f]{8}`)
 
 	tests := []struct {
 		input   string
@@ -80,12 +77,16 @@ func TestExecVKHashRegex(t *testing.T) {
 		{"prefix VK:aabbccdd suffix", []string{"VK:aabbccdd"}},
 		{"no match here", nil},
 		{"VK:a1b2c3d4 and VK:e5f6a7b8", []string{"VK:a1b2c3d4", "VK:e5f6a7b8"}},
-		{"VK:short", nil},   // too short, not 8 hex chars
-		{"VK:AABBCCDD", nil}, // uppercase hex doesn't match
+		{"VK:short", nil}, // too short, not 8 hex chars
+		// Scoped VK tokens
+		{"VK:TEMP:abcd1234", []string{"VK:TEMP:abcd1234"}},
+		{"VK:LOCAL:a1b2c3d4", []string{"VK:LOCAL:a1b2c3d4"}},
+		{"VK:EXTERNAL:abcd1234abcd1234", []string{"VK:EXTERNAL:abcd1234abcd1234"}},
+		{"token=VK:TEMP:AABB1234 end", []string{"VK:TEMP:AABB1234"}},
 	}
 
 	for _, tt := range tests {
-		matches := vkRE.FindAllString(tt.input, -1)
+		matches := veilkeyRE.FindAllString(tt.input, -1)
 		if len(matches) != len(tt.matches) {
 			t.Errorf("input %q: expected %d matches, got %d (%v)", tt.input, len(tt.matches), len(matches), matches)
 			continue
@@ -107,10 +108,9 @@ func TestExecResolutionFailureKeepsOriginal(t *testing.T) {
 	defer server.Close()
 
 	client := NewVeilKeyClient(server.URL)
-	vkRE := regexp.MustCompile(`VK:[0-9a-f]{8}`)
 
 	arg := "token=VK:deadbeef"
-	resolved := vkRE.ReplaceAllStringFunc(arg, func(hash string) string {
+	resolved := veilkeyRE.ReplaceAllStringFunc(arg, func(hash string) string {
 		val, err := client.Resolve(hash)
 		if err != nil {
 			return hash // Keep original on failure

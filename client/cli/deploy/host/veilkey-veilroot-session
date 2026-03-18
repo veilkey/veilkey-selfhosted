@@ -30,10 +30,10 @@ for line in "${exports[@]}"; do
   kv="${line#export }"
   args+=(--setenv "$kv")
 done
-args+=(--setenv "VEILKEY_VEILROOT=1" --setenv "VEILKEY_VEILROOT_PROFILE=$profile")
+args+=(--setenv "VEILKEY_VERIFIED_SESSION=1" --setenv "VEILKEY_VEILROOT=1" --setenv "VEILKEY_VEILROOT_PROFILE=$profile")
 
 if [[ $# -eq 0 ]]; then
-  args+=("$shell_bin" -lc 'env | grep -E "^(VEILKEY_PROXY_URL|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|VEILKEY_VEILROOT|VEILKEY_VEILROOT_PROFILE)=" | sort; echo ---; cat /proc/self/cgroup')
+  args+=("$shell_bin" -lc 'env | grep -E "^(VEILKEY_PROXY_URL|HTTP_PROXY|HTTPS_PROXY|ALL_PROXY|NO_PROXY|VEILKEY_VERIFIED_SESSION|VEILKEY_VEILROOT|VEILKEY_VEILROOT_PROFILE)=" | sort; echo ---; cat /proc/self/cgroup')
 else
   args+=("$@")
 fi

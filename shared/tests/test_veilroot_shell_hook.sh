@@ -27,6 +27,35 @@ out="$(run_hook "_vk_veilroot_preexec_impl 'cat .env' ''; printf 'rc=%s\n' \$?")
 printf '%s\n' "$out" | grep -q 'blocked sensitive path access'
 printf '%s\n' "$out" | grep -q 'rc=1'
 
+mockbin="$tmp/mockbin"
+mkdir -p "$mockbin" "$tmp/profile.d"
+
+cat >"$mockbin/veilkey" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == "resolve" ]]; then
+  case "${2:-}" in
+    VK:LOCAL:testref) printf '%s' 'demo secret value' ;;
+    VE:LOCAL:testenv) printf '%s' 'resolved env value' ;;
+    *) exit 1 ;;
+  esac
+  exit 0
+fi
+exit 1
+EOF
+chmod +x "$mockbin/veilkey"
+
+rewritten="$(PATH="$mockbin:$PATH" BASH_ENV=/dev/null VEILKEY_LOCALE_LIB="$locale_lib" bash -c "source '$hook'; _vk_veilroot_rewrite_command 'printf %s VK:LOCAL:testref'")"
+printf '%s\n' "$rewritten" | grep -q "printf %s demo\\\\ secret\\\\ value"
+
+out="$(PATH="$mockbin:$PATH" BASH_ENV=/dev/null VEILKEY_LOCALE_LIB="$locale_lib" bash -c "source '$hook'; _vk_veilroot_preexec_impl 'printf \"%s\\n\" VK:LOCAL:testref' ''; printf 'rc=%s\n' \$?" 2>&1)"
+printf '%s\n' "$out" | grep -q '^demo secret value$'
+printf '%s\n' "$out" | grep -q 'rc=1'
+
+out="$(PATH="$mockbin:$PATH" BASH_ENV=/dev/null VEILKEY_LOCALE_LIB="$locale_lib" bash -c "source '$hook'; _vk_veilroot_preexec_impl 'VAR=VE:LOCAL:testenv env | grep ^VAR=' ''; printf 'rc=%s\n' \$?" 2>&1)"
+printf '%s\n' "$out" | grep -q '^VAR=resolved env value$'
+printf '%s\n' "$out" | grep -q 'rc=1'
+
 TEST_GITLAB_HOST="gitlab.test.internal"
 
 out="$(run_hook "_vk_veilroot_preexec_impl 'printf protocol=https\\nhost=${TEST_GITLAB_HOST}\\n\\n | git credential fill' ''; printf 'rc=%s\n' \$?")"
@@ -60,8 +89,6 @@ printf '%s\n' "$out" | grep -vq '/root is not a valid working directory'
 
 echo "ok: veilroot shell snippet"
 
-mockbin="$tmp/mockbin"
-mkdir -p "$mockbin" "$tmp/profile.d"
 cat >"$mockbin/systemctl" <<'EOF'
 #!/usr/bin/env bash
 case "$*" in

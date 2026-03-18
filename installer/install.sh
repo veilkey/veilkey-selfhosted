@@ -667,15 +667,19 @@ install_component_payload() {
 
   case "${component}" in
     cli)
-      mkdir -p "${root%/}/etc/veilkey"
+      mkdir -p "${root%/}/etc/veilkey" "${root%/}/etc/profile.d"
       install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-cli" 0755 \
         "${component_src}/veilkey-cli"
       install_required_asset "${VEILKEY_OS_BIN_DIR}/veilkey-session-config" 0755 \
         "${component_src}/veilkey-session-config"
       install_optional_asset "${VEILKEY_OS_BIN_DIR}/veil" 0755 \
         "${component_src}/veil"
+      install_optional_asset "${VEILKEY_OS_BIN_DIR}/veilkey" 0755 \
+        "${component_src}/veilkey"
       install_optional_asset "${VEILKEY_OS_BIN_DIR}/vk" 0755 \
         "${component_src}/vk"
+      install_optional_asset "${root%/}/etc/profile.d/veilkey-veil-prompt.sh" 0644 \
+        "${component_src}/veil-prompt.sh"
       install_optional_asset "${root%/}/etc/veilkey/session-tools.toml.example" 0644 \
         "${component_src}/session-tools.toml.example"
       ;;

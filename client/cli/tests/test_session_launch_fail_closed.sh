@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
-mkdir -p "$tmp/fakebin" "$tmp/home" "$tmp/etc"
+mkdir -p "$tmp/fakebin" "$tmp/home" "$tmp/etc/veilkey"
 
 cat >"$tmp/session-tools.toml" <<'SCRIPT'
 version = 1
@@ -91,6 +91,9 @@ cp "$tmp/stub-session-config" "$tmp/fakebin/veilkey-session-config"
 
 out="$(VEILKEY_SESSION_CONFIG_BIN="$tmp/fakebin/veilkey-session-config" VEILKEY_ACTIVE=1 VEILKEY_REAL_TOOL="$tmp/real-tool" "$tmp/fakebin/veilkey-session-launch" codex 2>&1 || true)"
 assert_contains "$out" "refusing direct exec without a verified Veil session boundary"
+
+out="$(VEILKEY_SESSION_CONFIG_BIN="$tmp/fakebin/veilkey-session-config" VEILKEY_VERIFIED_SESSION=1 VEILKEY_REAL_TOOL="$tmp/real-tool" "$tmp/fakebin/veilkey-session-launch" codex hello)"
+assert_contains "$out" "real-tool:hello"
 
 out="$(VEILKEY_SESSION_CONFIG_BIN="$tmp/fakebin/veilkey-session-config" VEILKEY_VEILROOT=1 VEILKEY_REAL_TOOL="$tmp/real-tool" "$tmp/fakebin/veilkey-session-launch" codex hello)"
 assert_contains "$out" "real-tool:hello"

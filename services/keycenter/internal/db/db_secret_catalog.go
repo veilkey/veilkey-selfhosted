@@ -30,9 +30,9 @@ func (d *DB) UpsertSecretCatalogFromTrackedRef(ref *TokenRef) error {
 		return nil
 	}
 
-	agent, err := d.GetAgentByHash(ref.AgentHash)
-	if err != nil {
-		return err
+	agent, _ := d.GetAgentByHash(ref.AgentHash)
+	if agent == nil {
+		return nil // agent not registered yet — skip catalog sync
 	}
 
 	bindingCount, err := d.CountBindingsForRef(ref.RefCanonical)

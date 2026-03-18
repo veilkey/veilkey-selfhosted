@@ -233,7 +233,7 @@ func (s *Server) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request)
 	ctx, cancel := context.WithTimeout(r.Context(), timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "bash", "-lc", rendered)
+	cmd := exec.CommandContext(ctx, "bash", "-c", rendered)
 	cmd.Env = env
 	if stdin != "" {
 		cmd.Stdin = strings.NewReader(stdin)
