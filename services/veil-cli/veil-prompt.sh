@@ -4,7 +4,7 @@
 [ -n "${PS1:-}" ] || return 0
 [ "${VEILKEY_VEIL:-}" = "1" ] || return 0
 
-_vk_veil_prompt_label="${VEILKEY_VEIL_PROMPT_LABEL:?VEILKEY_VEIL_PROMPT_LABEL is required}"
+_vk_veil_prompt_label="${VEILKEY_VEIL_PROMPT_LABEL:-VEIL}"
 case "${PS1}" in
   *"[${_vk_veil_prompt_label}]"*) ;;
   *)

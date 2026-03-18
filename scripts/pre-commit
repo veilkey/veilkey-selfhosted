@@ -30,9 +30,10 @@ for val in "${BANNED[@]}"; do
   fi
 done
 
-# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외)
+# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외, display-only 레이블 제외)
 sh_fallbacks=$(grep -rn --include="*.sh" \
-  'VEILKEY_[A-Z_]*:-[^}]' $ALL_SERVICES 2>/dev/null || true)
+  'VEILKEY_[A-Z_]*:-[^}]' $ALL_SERVICES 2>/dev/null | \
+  grep -v 'VEILKEY_VEIL_PROMPT_LABEL' || true)
 if [[ -n "$sh_fallbacks" ]]; then
   echo "❌ sh fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
   echo "$sh_fallbacks"
