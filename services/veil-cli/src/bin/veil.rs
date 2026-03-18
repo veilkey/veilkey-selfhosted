@@ -5,10 +5,14 @@ use veil_cli_rs::{
 };
 
 fn main() {
-    let session_config_bin = env::var("VEILKEY_SESSION_CONFIG_BIN")
-        .unwrap_or_else(|_| "/usr/local/bin/veilkey-session-config".to_string());
-    let veilkey_bin = env::var("VEILKEY_BIN")
-        .unwrap_or_else(|_| "/usr/local/bin/veilkey".to_string());
+    let session_config_bin = env::var("VEILKEY_SESSION_CONFIG_BIN").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_SESSION_CONFIG_BIN is required");
+        std::process::exit(1);
+    });
+    let veilkey_bin = env::var("VEILKEY_BIN").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_BIN is required");
+        std::process::exit(1);
+    });
 
     check_executable(&session_config_bin, "veil");
     check_executable(&veilkey_bin, "veil");

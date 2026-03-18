@@ -359,13 +359,17 @@ mod proxy {
     }
 
     fn default_https_port() -> String {
-        std::env::var("VEILKEY_PROXY_DEFAULT_HTTPS_PORT")
-            .unwrap_or_else(|_| "443".to_string())
+        std::env::var("VEILKEY_PROXY_DEFAULT_HTTPS_PORT").unwrap_or_else(|_| {
+            eprintln!("error: VEILKEY_PROXY_DEFAULT_HTTPS_PORT is required");
+            std::process::exit(1);
+        })
     }
 
     fn default_http_port() -> String {
-        std::env::var("VEILKEY_PROXY_DEFAULT_HTTP_PORT")
-            .unwrap_or_else(|_| "80".to_string())
+        std::env::var("VEILKEY_PROXY_DEFAULT_HTTP_PORT").unwrap_or_else(|_| {
+            eprintln!("error: VEILKEY_PROXY_DEFAULT_HTTP_PORT is required");
+            std::process::exit(1);
+        })
     }
 
     pub fn run(listen: &str, allow_hosts: Vec<String>) {

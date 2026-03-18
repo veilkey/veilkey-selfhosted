@@ -26,12 +26,18 @@ fn print_usage() {
 }
 
 fn main() {
-    let veilkey_cli_bin = env::var("VEILKEY_CLI_BIN")
-        .unwrap_or_else(|_| "/usr/local/bin/veilkey-cli".to_string());
-    let vk_bin = env::var("VEILKEY_VK_BIN")
-        .unwrap_or_else(|_| "/usr/local/bin/vk".to_string());
-    let session_config_bin = env::var("VEILKEY_SESSION_CONFIG_BIN")
-        .unwrap_or_else(|_| "/usr/local/bin/veilkey-session-config".to_string());
+    let veilkey_cli_bin = env::var("VEILKEY_CLI_BIN").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_CLI_BIN is required");
+        std::process::exit(1);
+    });
+    let vk_bin = env::var("VEILKEY_VK_BIN").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_VK_BIN is required");
+        std::process::exit(1);
+    });
+    let session_config_bin = env::var("VEILKEY_SESSION_CONFIG_BIN").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_SESSION_CONFIG_BIN is required");
+        std::process::exit(1);
+    });
 
     check_executable(&veilkey_cli_bin, "veilkey");
 

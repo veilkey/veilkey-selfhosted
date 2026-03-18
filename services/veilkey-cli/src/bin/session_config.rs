@@ -213,8 +213,10 @@ impl Config {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 fn main() {
-    let default_config = std::env::var("VEILKEY_SESSION_TOOLS_TOML")
-        .unwrap_or_else(|_| "/etc/veilkey/session-tools.toml".to_string());
+    let default_config = std::env::var("VEILKEY_SESSION_TOOLS_TOML").unwrap_or_else(|_| {
+        eprintln!("error: VEILKEY_SESSION_TOOLS_TOML is required");
+        std::process::exit(1);
+    });
 
     let mut config_path = default_config.clone();
     let raw_args: Vec<String> = std::env::args().collect();
