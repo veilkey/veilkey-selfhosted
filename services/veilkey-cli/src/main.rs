@@ -145,11 +145,13 @@ fn cmd_exec(args: &[String], api_url: &str) {
         .iter()
         .map(|arg| {
             vk_re
-                .replace_all(arg, |caps: &regex::Captures| match client.resolve(&caps[0]) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        eprintln!("WARNING: resolve {} failed: {}", &caps[0], e);
-                        caps[0].to_string()
+                .replace_all(arg, |caps: &regex::Captures| {
+                    match client.resolve(&caps[0]) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            eprintln!("WARNING: resolve {} failed: {}", &caps[0], e);
+                            caps[0].to_string()
+                        }
                     }
                 })
                 .to_string()
@@ -402,10 +404,7 @@ mod proxy {
         allow_set.is_empty() || allow_set.contains(&host.to_lowercase())
     }
 
-    fn handle_connection(
-        mut stream: TcpStream,
-        allow_set: &HashSet<String>,
-    ) -> io::Result<()> {
+    fn handle_connection(mut stream: TcpStream, allow_set: &HashSet<String>) -> io::Result<()> {
         stream.set_read_timeout(Some(proxy_timeout()))?;
 
         // Read HTTP request headers
@@ -561,8 +560,11 @@ fn cmd_proxy(args: &[String]) {
 
 #[cfg(unix)]
 mod pty_wrap {
-    use crate::{api::VeilKeyClient, config, detector::SecretDetector, logger::SessionLogger, state::state_dir};
-    use portable_pty::{CommandBuilder, PtySize, native_pty_system};
+    use crate::{
+        api::VeilKeyClient, config, detector::SecretDetector, logger::SessionLogger,
+        state::state_dir,
+    };
+    use portable_pty::{native_pty_system, CommandBuilder, PtySize};
     use std::io::{self, BufRead, Write};
 
     pub fn cmd_wrap_pty(
@@ -595,8 +597,14 @@ mod pty_wrap {
         let _ = std::fs::write(&pid_path, format!("{}", std::process::id()));
 
         let pty_system = native_pty_system();
-        let pty_rows = std::env::var("LINES").ok().and_then(|v| v.parse::<u16>().ok()).unwrap_or(24);
-        let pty_cols = std::env::var("COLUMNS").ok().and_then(|v| v.parse::<u16>().ok()).unwrap_or(80);
+        let pty_rows = std::env::var("LINES")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(24);
+        let pty_cols = std::env::var("COLUMNS")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .unwrap_or(80);
         let pair = match pty_system.openpty(PtySize {
             rows: pty_rows,
             cols: pty_cols,
@@ -689,7 +697,15 @@ fn main() {
 
     // Commands that don't need an API endpoint
     const NO_API: &[&str] = &[
-        "version", "help", "-h", "--help", "scan", "list", "clear", "status", "proxy",
+        "version",
+        "help",
+        "-h",
+        "--help",
+        "scan",
+        "list",
+        "clear",
+        "status",
+        "proxy",
         "paste-mode",
     ];
 

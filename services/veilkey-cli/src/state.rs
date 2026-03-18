@@ -3,7 +3,8 @@ use std::fs;
 use std::path::PathBuf;
 
 pub fn default_state_dir() -> PathBuf {
-    let tmp = env::var("TMPDIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
+    let tmp =
+        env::var("TMPDIR").unwrap_or_else(|_| std::env::temp_dir().to_string_lossy().into_owned());
     PathBuf::from(tmp).join("veilkey-cli")
 }
 
@@ -21,7 +22,11 @@ pub fn paste_mode_path() -> PathBuf {
 pub fn current_paste_mode() -> &'static str {
     match fs::read_to_string(paste_mode_path()) {
         Ok(data) => {
-            if data.trim().to_lowercase() == "off" { "off" } else { "on" }
+            if data.trim().to_lowercase() == "off" {
+                "off"
+            } else {
+                "on"
+            }
         }
         Err(_) => "on",
     }

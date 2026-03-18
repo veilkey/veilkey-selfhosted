@@ -2,14 +2,12 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::fs;
 
-
 use crate::api::VeilKeyClient;
 use crate::config::CompiledConfig;
 use crate::logger::SessionLogger;
 use crate::state::state_dir;
 
-pub const VEILKEY_RE_STR: &str =
-    r"VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})";
+pub const VEILKEY_RE_STR: &str = r"VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})";
 
 const MIN_SECRET_LEN: usize = 6;
 const PREVIEW_LEN: usize = 4;
@@ -130,19 +128,29 @@ impl<'a> SecretDetector<'a> {
 
     fn has_sensitive_context(&self, line: &str) -> bool {
         let lower = line.to_lowercase();
-        self.config.sensitive_keywords.iter().any(|kw| lower.contains(kw.as_str()))
+        self.config
+            .sensitive_keywords
+            .iter()
+            .any(|kw| lower.contains(kw.as_str()))
     }
 
     fn shannon_entropy(s: &str) -> f64 {
-        if s.is_empty() { return 0.0; }
+        if s.is_empty() {
+            return 0.0;
+        }
         let chars: Vec<char> = s.chars().collect();
         let len = chars.len() as f64;
         let mut counts: HashMap<char, usize> = HashMap::new();
-        for c in &chars { *counts.entry(*c).or_insert(0) += 1; }
-        counts.values().map(|&c| {
-            let p = c as f64 / len;
-            -p * p.log2()
-        }).sum()
+        for c in &chars {
+            *counts.entry(*c).or_insert(0) += 1;
+        }
+        counts
+            .values()
+            .map(|&c| {
+                let p = c as f64 / len;
+                -p * p.log2()
+            })
+            .sum()
     }
 
     fn issue_veilkey(&mut self, value: &str) -> Option<String> {
@@ -150,7 +158,8 @@ impl<'a> SecretDetector<'a> {
             return Some(vk.clone());
         }
         if self.scan_only {
-            self.cache.insert(value.to_string(), SCAN_ONLY_PLACEHOLDER.to_string());
+            self.cache
+                .insert(value.to_string(), SCAN_ONLY_PLACEHOLDER.to_string());
             return Some(SCAN_ONLY_PLACEHOLDER.to_string());
         }
         match self.client.issue(value) {
@@ -175,7 +184,8 @@ impl<'a> SecretDetector<'a> {
             for m in pat.regex.find_iter(line) {
                 let full_match = m.as_str().to_string();
                 let value = if pat.group > 0 {
-                    pat.regex.captures(m.as_str())
+                    pat.regex
+                        .captures(m.as_str())
                         .and_then(|c| c.get(pat.group))
                         .map(|g| g.as_str().to_string())
                         .unwrap_or_else(|| full_match.clone())
@@ -183,11 +193,17 @@ impl<'a> SecretDetector<'a> {
                     full_match.clone()
                 };
 
-                if value.len() < MIN_SECRET_LEN { continue; }
-                if self.is_excluded(&value) { continue; }
+                if value.len() < MIN_SECRET_LEN {
+                    continue;
+                }
+                if self.is_excluded(&value) {
+                    continue;
+                }
 
                 let mut conf = pat.confidence;
-                if has_context { conf += self.config.sensitive_boost; }
+                if has_context {
+                    conf += self.config.sensitive_boost;
+                }
                 if value.chars().count() >= self.config.entropy.min_length {
                     let ent = Self::shannon_entropy(&value);
                     if ent > self.config.entropy.threshold {
@@ -196,7 +212,12 @@ impl<'a> SecretDetector<'a> {
                 }
 
                 if conf >= min_confidence() {
-                    results.push(Detection { value, full_match, pattern: pat.name.clone(), confidence: conf });
+                    results.push(Detection {
+                        value,
+                        full_match,
+                        pattern: pat.name.clone(),
+                        confidence: conf,
+                    });
                 }
             }
         }
@@ -208,7 +229,9 @@ impl<'a> SecretDetector<'a> {
         let mut line = line.to_string();
 
         // Protect existing VeilKeys
-        let vk_matches: Vec<_> = self.veilkey_re.find_iter(&line)
+        let vk_matches: Vec<_> = self
+            .veilkey_re
+            .find_iter(&line)
             .map(|m| (m.start(), m.end(), m.as_str().to_string()))
             .collect();
 
@@ -226,12 +249,17 @@ impl<'a> SecretDetector<'a> {
 
         let mut detections = self.detect_secrets(&line);
         if !detections.is_empty() {
-            detections.sort_by(|a, b| b.confidence.cmp(&a.confidence)
-                .then(b.full_match.len().cmp(&a.full_match.len())));
+            detections.sort_by(|a, b| {
+                b.confidence
+                    .cmp(&a.confidence)
+                    .then(b.full_match.len().cmp(&a.full_match.len()))
+            });
 
             let mut replaced: HashMap<String, bool> = HashMap::new();
             for det in detections {
-                if replaced.contains_key(&det.value) { continue; }
+                if replaced.contains_key(&det.value) {
+                    continue;
+                }
                 if let Some(vk) = self.issue_veilkey(&det.value) {
                     if det.value != det.full_match {
                         let new_match = det.full_match.replacen(&det.value, &vk, 1);
@@ -243,7 +271,9 @@ impl<'a> SecretDetector<'a> {
                     self.stats.detections += 1;
                     let preview = if det.value.len() > PREVIEW_LEN {
                         format!("{}***", &det.value[..PREVIEW_LEN])
-                    } else { "***".to_string() };
+                    } else {
+                        "***".to_string()
+                    };
                     self.logger.log(&vk, &det.pattern, det.confidence, &preview);
                 }
             }
@@ -251,7 +281,9 @@ impl<'a> SecretDetector<'a> {
 
         // Watchlist (skip if paused)
         if !self.paused {
-            let watchlist: Vec<(String, String)> = self.watchlist.iter()
+            let watchlist: Vec<(String, String)> = self
+                .watchlist
+                .iter()
                 .map(|w| (w.value.clone(), w.vk.clone()))
                 .collect();
             for (value, vk) in watchlist {
@@ -260,8 +292,11 @@ impl<'a> SecretDetector<'a> {
                     self.stats.detections += 1;
                     let preview = if value.len() > PREVIEW_LEN {
                         format!("{}***", &value[..PREVIEW_LEN])
-                    } else { "***".to_string() };
-                    self.logger.log(&vk, "watchlist", WATCHLIST_CONFIDENCE, &preview);
+                    } else {
+                        "***".to_string()
+                    };
+                    self.logger
+                        .log(&vk, "watchlist", WATCHLIST_CONFIDENCE, &preview);
                 }
             }
         }

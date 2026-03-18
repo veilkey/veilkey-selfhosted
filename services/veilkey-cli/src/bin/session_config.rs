@@ -127,7 +127,11 @@ fn require_value(value: &str, field: &str) -> String {
 }
 
 fn choose_profile_value(primary: &str, secondary: &str, field: &str) -> String {
-    let v = if !primary.is_empty() { primary } else { secondary };
+    let v = if !primary.is_empty() {
+        primary
+    } else {
+        secondary
+    };
     if v.is_empty() {
         eprintln!("{} is not configured", field);
         process::exit(1);
@@ -429,10 +433,8 @@ fn main() {
                 eprintln!("{}", e);
                 process::exit(1);
             });
-            let proxy_url = require_value(
-                &target.url,
-                &format!("proxy url for tool {}", cmd_args[0]),
-            );
+            let proxy_url =
+                require_value(&target.url, &format!("proxy url for tool {}", cmd_args[0]));
             let no_proxy = if !target.no_proxy.is_empty() {
                 target.no_proxy.clone()
             } else {

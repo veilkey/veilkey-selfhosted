@@ -61,15 +61,22 @@ struct SarifRegion {
 
 impl<W: Write> Formatter<W> {
     pub fn new(format: &str, writer: W) -> Self {
-        Self { format: format.to_string(), writer, buf: Vec::new() }
+        Self {
+            format: format.to_string(),
+            writer,
+            buf: Vec::new(),
+        }
     }
 
     pub fn header(&mut self) {
         match self.format.as_str() {
             "json" | "sarif" => {} // written in footer once we have all items
             _ => {
-                let _ = writeln!(self.writer, "\x1b[0;36m{:<20} {:<6} {:<25} {:<8} MATCH\x1b[0m",
-                    "FILE", "LINE", "PATTERN", "CONF");
+                let _ = writeln!(
+                    self.writer,
+                    "\x1b[0;36m{:<20} {:<6} {:<25} {:<8} MATCH\x1b[0m",
+                    "FILE", "LINE", "PATTERN", "CONF"
+                );
                 let _ = writeln!(self.writer, "{}", "─".repeat(80));
             }
         }
@@ -79,8 +86,11 @@ impl<W: Write> Formatter<W> {
         match self.format.as_str() {
             "json" => {
                 let j = JsonFinding {
-                    file: &f.file, line: f.line,
-                    pattern: &f.pattern, confidence: f.confidence, r#match: &f.r#match,
+                    file: &f.file,
+                    line: f.line,
+                    pattern: &f.pattern,
+                    confidence: f.confidence,
+                    r#match: &f.r#match,
                 };
                 if let Ok(s) = serde_json::to_string(&j) {
                     self.buf.push(format!("  {}", s));
@@ -102,8 +112,11 @@ impl<W: Write> Formatter<W> {
                 }
             }
             _ => {
-                let _ = writeln!(self.writer, "\x1b[0;33m{:<20}\x1b[0m {:<6} {:<25} {:<8} {}",
-                    f.file, f.line, f.pattern, f.confidence, f.r#match);
+                let _ = writeln!(
+                    self.writer,
+                    "\x1b[0;33m{:<20}\x1b[0m {:<6} {:<25} {:<8} {}",
+                    f.file, f.line, f.pattern, f.confidence, f.r#match
+                );
             }
         }
     }
@@ -127,7 +140,8 @@ impl<W: Write> Formatter<W> {
                 let _ = writeln!(self.writer, "]");
             }
             "sarif" => {
-                let _ = write!(self.writer,
+                let _ = write!(
+                    self.writer,
                     r#"{{"version":"2.1.0","runs":[{{"results":[{}]}}]}}"#,
                     self.buf.join(",")
                 );

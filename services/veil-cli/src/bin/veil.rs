@@ -29,11 +29,7 @@ fn main() {
     if args.is_empty() {
         exec_replace(
             &veilkey_bin,
-            &[
-                "session".to_string(),
-                "bash".to_string(),
-                "-li".to_string(),
-            ],
+            &["session".to_string(), "bash".to_string(), "-li".to_string()],
         );
     }
 
