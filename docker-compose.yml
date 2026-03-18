@@ -16,8 +16,8 @@ services:
       VEILKEY_AUTO_COMPLETE_INSTALL_FLOW: "${VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW:-0}"
       VEILKEY_BULK_APPLY_DIR: /data/bulk-apply
       VEILKEY_FUNCTION_DIR: /data/functions
-      VEILKEY_AGENT_SCHEME: "${VEILKEY_AGENT_SCHEME:-http}"
-      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
+      VEILKEY_AGENT_SCHEME: "${VEILKEY_AGENT_SCHEME}"
+      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
     secrets:
       - vaultcenter_password
     volumes:
@@ -46,7 +46,7 @@ services:
       VEILKEY_PARENT_URL: "http://vaultcenter:10181"
       VEILKEY_LABEL: "${LOCALVAULT_LABEL:-localvault-01}"
       VEILKEY_VAULTCENTER_URL: "http://vaultcenter:10181"
-      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
+      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
     secrets:
       - localvault_password
     volumes:

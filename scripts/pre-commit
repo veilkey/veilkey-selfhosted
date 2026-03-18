@@ -65,14 +65,15 @@ if [[ -n "$rs_fallbacks" || -n "$rs_multiline" ]]; then
   found=1
 fi
 
-# 5. .env.example에 없는 VEILKEY_* 변수 차단 (Go)
+# 5. .env.example에 없는 VEILKEY_* 변수 차단 (Go + sh)
 check_env_documented() {
   local service="$1"
   local env_example="services/${service}/.env.example"
 
   [[ -f "$env_example" ]] || return 0
 
-  used=$(grep -roh 'VEILKEY_[A-Z_]*' "services/${service}" --include="*.go" 2>/dev/null \
+  used=$(grep -roh 'VEILKEY_[A-Z_]*' "services/${service}" \
+    --include="*.go" --include="*.sh" 2>/dev/null \
     | sed 's/.*://' | sort -u)
 
   documented=$(grep -oh 'VEILKEY_[A-Z_]*' "$env_example" 2>/dev/null | sort -u)
@@ -85,6 +86,15 @@ check_env_documented() {
     fi
   done <<< "$used"
 }
+
+# 6. docker-compose.yml VEILKEY_* 기본값 차단 (${VEILKEY_FOO:-value} 패턴)
+compose_fallbacks=$(grep -n \
+  'VEILKEY_[A-Z_]*:-[^}]' docker-compose.yml 2>/dev/null || true)
+if [[ -n "$compose_fallbacks" ]]; then
+  echo "❌ docker-compose fallback 금지: VEILKEY_* 기본값을 .env.example에 넣고 여기서는 \${VAR} 또는 \${VAR:-}만 사용하세요"
+  echo "$compose_fallbacks"
+  found=1
+fi
 
 check_env_documented "localvault"
 check_env_documented "vaultcenter"
