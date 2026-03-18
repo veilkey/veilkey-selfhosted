@@ -14,6 +14,9 @@ import (
 	"time"
 )
 
+// ErrRotationRequired is returned by SendHeartbeatOnce when the hub requires a key rotation.
+var ErrRotationRequired = errors.New("rotation_required")
+
 func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Duration) {
 	if hubURL == "" {
 		log.Println("VEILKEY_VAULTCENTER_URL not set, heartbeat disabled")
@@ -105,7 +108,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 				if s.identity != nil {
 					s.identity.Version = payload.ExpectedKeyVersion
 				}
-				return errors.New("rotation_required")
+				return ErrRotationRequired
 			}
 		}
 		return fmt.Errorf("heartbeat rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))

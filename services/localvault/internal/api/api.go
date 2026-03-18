@@ -34,6 +34,8 @@ type Server struct {
 
 const vaultcenterOnlyDecryptMessage = "localvault direct plaintext handling is disabled; use vaultcenter"
 
+func (s *Server) Close() { s.db.Close() }
+
 func (s *Server) SetIdentity(identity *NodeIdentity) {
 	s.identity = identity
 }
