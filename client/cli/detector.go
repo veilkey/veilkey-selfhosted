@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-var veilkeyRE = regexp.MustCompile(`VK:[0-9a-f]{8}`)
+var veilkeyRE = regexp.MustCompile(`VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})`)
 
 type Detection struct {
 	Value      string
