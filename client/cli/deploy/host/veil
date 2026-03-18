@@ -1,12 +1,68 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-veilroot_shell="${VEILKEY_VEILROOT_SHELL_BIN:-/usr/local/bin/veilroot-shell}"
+session_config_bin="${VEILKEY_SESSION_CONFIG_BIN:-/usr/local/bin/veilkey-session-config}"
+veilkey_bin="${VEILKEY_BIN:-/usr/local/bin/veilkey}"
 
-if [[ ! -x "${veilroot_shell}" ]]; then
-  echo "veil: required session entrypoint not found: ${veilroot_shell}" >&2
-  echo "veil: install the Veil host boundary first or set VEILKEY_VEILROOT_SHELL_BIN" >&2
+clear_proxy_overrides() {
+  unset VEILKEY_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY http_proxy https_proxy all_proxy
+}
+
+trim_wrapping_quotes() {
+  local value="$1"
+  while [[ "${value}" == \"*\" && "${value}" == *\" ]]; do
+    value="${value#\"}"
+    value="${value%\"}"
+  done
+  while [[ "${value}" == \'*\' && "${value}" == *\' ]]; do
+    value="${value#\'}"
+    value="${value%\'}"
+  done
+  printf '%s' "${value}"
+}
+
+sanitize_exported_env() {
+  local key value
+  for key in VEILKEY_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY VEILKEY_LOCALVAULT_URL VEILKEY_KEYCENTER_URL VEILKEY_API VEILKEY_PLAINTEXT_ACTION; do
+    value="${!key-}"
+    [[ -n "${value}" ]] || continue
+    value="$(trim_wrapping_quotes "${value}")"
+    export "${key}=${value}"
+  done
+}
+
+if [[ ! -x "${session_config_bin}" ]]; then
+  echo "veil: required session config binary not found: ${session_config_bin}" >&2
   exit 1
 fi
 
-exec "${veilroot_shell}" open "$@"
+if [[ ! -x "${veilkey_bin}" ]]; then
+  echo "veil: required veilkey binary not found: ${veilkey_bin}" >&2
+  exit 1
+fi
+
+clear_proxy_overrides
+eval "$("${session_config_bin}" shell-exports)"
+sanitize_exported_env
+export VEILKEY_VEIL=1
+export VEILKEY_VERIFIED_SESSION=1
+
+if [[ "$#" -ge 1 ]]; then
+  case "$1" in
+    status)
+      shift
+      exec "${veilkey_bin}" status "$@"
+      ;;
+    paste-mode)
+      shift
+      exec "${veilkey_bin}" paste-mode "$@"
+      ;;
+    *)
+      echo "veil: direct app launch is not supported; enter veil shell first and run the tool inside it." >&2
+      echo "usage: veil [status|paste-mode [on|off|status]]" >&2
+      exit 1
+      ;;
+  esac
+fi
+
+exec "${veilkey_bin}" session bash -li

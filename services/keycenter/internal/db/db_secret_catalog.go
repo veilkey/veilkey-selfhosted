@@ -30,8 +30,8 @@ func (d *DB) UpsertSecretCatalogFromTrackedRef(ref *TokenRef) error {
 		return nil
 	}
 
-	agent, agentErr := d.GetAgentByHash(ref.AgentHash)
-	if agentErr != nil {
+	agent, _ := d.GetAgentByHash(ref.AgentHash)
+	if agent == nil {
 		return nil // agent not registered yet — skip catalog sync
 	}
 

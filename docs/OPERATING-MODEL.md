@@ -17,6 +17,15 @@ Canonical home: `https://veil-key.com`
 - `proxy`
   - outbound enforcement layer when runtime traffic should be mediated
 
+For operator entrypoints, the current split is:
+
+- `veil`
+  - protected session entrypoint
+- `veilkey`
+  - state, policy, and crypto control surface
+- `veilkey-cli`
+  - lower-level implementation binary used by wrappers and runtime scripts
+
 ## End-To-End Shape
 
 ```text
@@ -45,6 +54,12 @@ The practical meaning is:
 4. register and inspect node identity
 5. apply rotation or rebind from the center
 6. verify heartbeat and updated runtime state
+
+For CLI-driven local operator work, the intended flow is:
+
+1. enter `veil`
+2. run `claude`, `codex`, or other wrapped tools inside that session
+3. use `veilkey status`, `veilkey paste-mode`, or `veilkey resolve` for session and crypto control
 
 ## What Success Looks Like
 

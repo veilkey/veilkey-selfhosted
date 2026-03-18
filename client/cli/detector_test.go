@@ -97,6 +97,31 @@ func TestDoubleSubstitutionPrevention(t *testing.T) {
 	}
 }
 
+func TestScopedVKTokenProtection(t *testing.T) {
+	d := testDetector()
+
+	tests := []struct {
+		name  string
+		token string
+	}{
+		{"TEMP token", "VK:TEMP:abcd1234ef567890"},
+		{"LOCAL token", "VK:LOCAL:a1b2c3d4"},
+		{"EXTERNAL token", "VK:EXTERNAL:abcd1234abcd1234"},
+	}
+
+	for _, tt := range tests {
+		line := tt.token + " ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789a"
+		processed := d.ProcessLine(line)
+
+		if !strings.Contains(processed, tt.token) {
+			t.Errorf("%s: scoped VK token %s should be preserved, got: %s", tt.name, tt.token, processed)
+		}
+		if strings.Contains(processed, "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789a") {
+			t.Errorf("%s: new secret next to scoped token should still be detected", tt.name)
+		}
+	}
+}
+
 func TestMultipleSecretsPerLine(t *testing.T) {
 	d := testDetector()
 	line := "ghp_aBcDeFgHiJkLmNoPqRsTuVwXyZ123456789a glpat-AbCdEfGhIjKlMnOpQrSt1234"

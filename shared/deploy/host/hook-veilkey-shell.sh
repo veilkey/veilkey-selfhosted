@@ -18,6 +18,60 @@ _vk_veilroot_msg() {
   fi
 }
 
+_vk_veilroot_veilkey_bin() {
+  if [[ -n "${VEILKEY_BIN:-}" ]]; then
+    printf '%s' "${VEILKEY_BIN}"
+    return 0
+  fi
+  if command -v veilkey >/dev/null 2>&1; then
+    command -v veilkey
+    return 0
+  fi
+  if command -v veilkey-cli >/dev/null 2>&1; then
+    command -v veilkey-cli
+    return 0
+  fi
+  return 1
+}
+
+_vk_veilroot_has_ref() {
+  local command="$1"
+  [[ "${command}" =~ (VK|VE):[A-Za-z0-9._-]+:[A-Za-z0-9._=+/-]+ ]]
+}
+
+_vk_veilroot_resolve_ref() {
+  local ref="$1"
+  local veilkey_bin
+  veilkey_bin="$(_vk_veilroot_veilkey_bin)" || return 1
+  "$veilkey_bin" resolve "$ref"
+}
+
+_vk_veilroot_quote() {
+  local value="$1"
+  printf '%q' "$value"
+}
+
+_vk_veilroot_rewrite_command() {
+  local command="$1"
+  local ref resolved quoted
+  local refs
+
+  refs="$(printf '%s\n' "$command" | grep -oE '(VK|VE):[A-Za-z0-9._-]+:[A-Za-z0-9._=+/-]+' | awk '!seen[$0]++' || true)"
+  if [[ -z "${refs}" ]]; then
+    printf '%s' "$command"
+    return 0
+  fi
+
+  while IFS= read -r ref; do
+    [[ -n "${ref}" ]] || continue
+    resolved="$(_vk_veilroot_resolve_ref "$ref")" || return 1
+    quoted="$(_vk_veilroot_quote "$resolved")"
+    command="${command//"$ref"/$quoted}"
+  done <<< "${refs}"
+
+  printf '%s' "$command"
+}
+
 _vk_veilroot_should_skip_preexec() {
   local command="$1"
   local prompt_command="${2:-}"
@@ -64,9 +118,22 @@ _vk_veilroot_has_sensitive_api_pattern() {
 _vk_veilroot_preexec_impl() {
   local command="$1"
   local prompt_command="${2:-}"
+  local rewritten=""
 
   _vk_veilroot_should_skip_preexec "${command}" "${prompt_command}" && return 0
   [[ "${VEILKEY_VEILROOT_GUARD_RUNNING:-0}" == "1" ]] && return 0
+
+  if _vk_veilroot_has_ref "${command}"; then
+    rewritten="$(_vk_veilroot_rewrite_command "${command}")" || {
+      echo "$(_vk_veilroot_msg resolve_failed_1 "failed to resolve VeilKey refs in command: ${command}" "${command}")" >&2
+      echo "$(_vk_veilroot_msg resolve_failed_2 'check the VeilKey endpoint and ref validity before retrying.')" >&2
+      return 1
+    }
+    if [[ "${rewritten}" != "${command}" ]]; then
+      VEILKEY_VEILROOT_GUARD_RUNNING=1 builtin eval -- "${rewritten}"
+      return 1
+    fi
+  fi
 
   if _vk_veilroot_is_sensitive_path "${command}"; then
     echo "$(_vk_veilroot_msg blocked_sensitive_path_1 "blocked sensitive path access: ${command}" "${command}")" >&2
@@ -93,7 +160,7 @@ _vk_veilroot_preexec_impl() {
 }
 
 _vk_veilroot_preexec() {
-  local command="$1"
+  local command="${1:-$BASH_COMMAND}"
   local prompt_command="${PROMPT_COMMAND:-}"
   VEILKEY_VEILROOT_GUARD_RUNNING=1 _vk_veilroot_preexec_impl "${command}" "${prompt_command}"
 }
@@ -129,5 +196,5 @@ alias git-credential='_vk_veilroot_git_credential_wrapper'
 
 if [[ $- == *i* ]]; then
   shopt -s extdebug
-  trap '_vk_veilroot_preexec "$BASH_COMMAND"' DEBUG
+  trap '_vk_veilroot_preexec' DEBUG
 fi

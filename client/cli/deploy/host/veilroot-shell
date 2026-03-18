@@ -25,6 +25,17 @@ _vk_msg() {
   fi
 }
 
+sanitize_exported_urls() {
+  local key value
+  for key in VEILKEY_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY VEILKEY_LOCALVAULT_URL VEILKEY_KEYCENTER_URL VEILKEY_API; do
+    value="${!key-}"
+    [[ -n "${value}" ]] || continue
+    value="${value#\'}"
+    value="${value%\'}"
+    export "${key}=${value}"
+  done
+}
+
 usage() {
   cat <<'EOF'
 usage:
@@ -130,7 +141,15 @@ open_session() {
       profile="$1"
       session_config_bin="$2"
       veilkey_bin="$3"
+      quote="$(printf "\\047")"
       eval "$("$session_config_bin" tool-shell-exports "$profile")"
+      for key in VEILKEY_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY VEILKEY_LOCALVAULT_URL VEILKEY_KEYCENTER_URL VEILKEY_API; do
+        value="${!key-}"
+        [[ -n "$value" ]] || continue
+        value="${value//$quote/}"
+        export "${key}=${value}"
+      done
+      export VEILKEY_VERIFIED_SESSION=1
       export VEILKEY_VEILROOT=1
       export VEILKEY_VEILROOT_PROFILE="$profile"
       exec "$veilkey_bin" wrap-pty bash -li
@@ -144,7 +163,7 @@ open_session() {
   fi
 
   print_status_banner
-  exec su -s /bin/bash - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; veilkey_bin=\"\$3\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec \"\$veilkey_bin\" wrap-pty bash -li' _ '$profile' '$session_config_bin' '$veilkey_bin'"
+  exec su -s /bin/bash - "$user_name" -c "exec bash -lc 'profile=\"\$1\"; session_config_bin=\"\$2\"; veilkey_bin=\"\$3\"; quote=\"\$(printf \"\\\\047\")\"; eval \"\$(\"\$session_config_bin\" tool-shell-exports \"\$profile\")\"; for key in VEILKEY_PROXY_URL HTTP_PROXY HTTPS_PROXY ALL_PROXY NO_PROXY VEILKEY_LOCALVAULT_URL VEILKEY_KEYCENTER_URL VEILKEY_API; do value=\"\${!key-}\"; [[ -n \"\$value\" ]] || continue; value=\"\${value//\$quote/}\"; export \"\${key}=\$value\"; done; export VEILKEY_VERIFIED_SESSION=1; export VEILKEY_VEILROOT=1; export VEILKEY_VEILROOT_PROFILE=\"\$profile\"; exec \"\$veilkey_bin\" wrap-pty bash -li' _ '$profile' '$session_config_bin' '$veilkey_bin'"
 }
 
 proxy_status() {

@@ -1,7 +1,9 @@
 package api
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -24,6 +26,25 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Plaintext == "" {
 		s.respondError(w, http.StatusBadRequest, "plaintext is required")
+		return
+	}
+
+	// Check for existing active temp ref with same plaintext
+	hash := sha256.Sum256([]byte(req.Plaintext))
+	plaintextHash := hex.EncodeToString(hash[:])
+
+	if existing, err := s.db.FindActiveTempRefByHash(plaintextHash); err == nil && existing != nil {
+		resp := map[string]any{
+			"ref":   existing.RefCanonical,
+			"token": existing.RefCanonical,
+		}
+		if existing.ExpiresAt != nil {
+			resp["expires_at"] = existing.ExpiresAt.Format(time.RFC3339)
+		}
+		if existing.SecretName != "" && existing.SecretName != existing.RefID {
+			resp["name"] = existing.SecretName
+		}
+		s.respondJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -56,7 +77,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimSpace(req.Name)
-	if err := s.db.SaveRefWithExpiry(parts, encoded, nodeInfo.Version, "temp", expiresAt, name); err != nil {
+	if err := s.db.SaveRefWithExpiryAndHash(parts, encoded, nodeInfo.Version, "temp", expiresAt, name, plaintextHash); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to save temp ref")
 		return
 	}

@@ -17,6 +17,7 @@ VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh post-install-health "$tm
 
 test -x "$tmp_root/usr/local/bin/veilkey-keycenter"
 test -x "$tmp_root/usr/local/bin/veilkey-localvault"
+test -x "$tmp_root/usr/local/bin/veilkey-cli"
 test -x "$tmp_root/usr/local/bin/veilkey-session-config"
 test -x "$tmp_root/usr/local/bin/veilkey-proxy-launch"
 test -x "$tmp_root/usr/local/lib/veilkey-proxy/verify-proxy-lxc.sh"

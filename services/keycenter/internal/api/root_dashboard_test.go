@@ -44,8 +44,8 @@ func TestRootServesLockedLandingWhenLocked(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "Unlock first to enter the operator console.") {
-		t.Fatalf("expected locked landing HTML, got %q", body)
+	if !strings.Contains(body, "VeilKey Install Wizard") || !strings.Contains(body, "install-app") {
+		t.Fatalf("expected install wizard SPA, got %q", body)
 	}
 }
 
@@ -69,32 +69,11 @@ func TestRootServesInstallGateWhenInstallIncomplete(t *testing.T) {
 		t.Fatalf("expected 200, got %d", w.Code)
 	}
 	body := w.Body.String()
-	if !strings.Contains(body, "VeilKey 첫 설치 시작") {
-		t.Fatalf("expected install gate HTML, got %q", body)
+	if !strings.Contains(body, "VeilKey Install Wizard") || !strings.Contains(body, "install-app") {
+		t.Fatalf("expected install wizard SPA, got %q", body)
 	}
-	if !strings.Contains(body, "Guided First Install") {
-		t.Fatalf("expected first-install wizard copy, got %q", body)
-	}
-	if !strings.Contains(body, "/api/install/runtime-config") {
-		t.Fatalf("expected runtime config wiring in install gate")
-	}
-	if !strings.Contains(body, "빠른 설치 저장") {
-		t.Fatalf("expected quick install actions in install gate")
-	}
-	if !strings.Contains(body, "일반 Linux 서버") {
-		t.Fatalf("expected linux host path selection in install gate")
-	}
-	if !strings.Contains(body, "Proxmox LXC 올인원") {
-		t.Fatalf("expected proxmox lxc path selection in install gate")
-	}
-	if !strings.Contains(body, "LXC VMID") {
-		t.Fatalf("expected lxc target metadata inputs in install gate")
-	}
-	if !strings.Contains(body, "proxmox-host-cli") {
-		t.Fatalf("expected host companion guidance in install gate")
-	}
-	if strings.Contains(body, "VeilKey KeyCenter") {
-		t.Fatalf("expected install gate instead of dashboard")
+	if strings.Contains(body, "Operations Console") {
+		t.Fatalf("expected install wizard instead of dashboard")
 	}
 }
 

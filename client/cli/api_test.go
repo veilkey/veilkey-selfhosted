@@ -169,6 +169,67 @@ func TestVeilKeyClientResolveError(t *testing.T) {
 	}
 }
 
+func TestVeilKeyClientExactLookup(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/api/lookup/exact" {
+			t.Fatalf("unexpected path: %s", r.URL.Path)
+		}
+		if r.Method != "POST" {
+			t.Fatalf("expected POST, got %s", r.Method)
+		}
+
+		var req map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if req["plaintext"] != "already-managed" {
+			t.Fatalf("plaintext = %q, want already-managed", req["plaintext"])
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"matches": []map[string]string{
+				{
+					"ref":         "VK:LOCAL:deadbeef",
+					"family":      "VK",
+					"scope":       "LOCAL",
+					"id":          "deadbeef",
+					"secret_name": "OPENAI_API_KEY",
+					"status":      "active",
+				},
+			},
+			"count": 1,
+		})
+	}))
+	defer server.Close()
+
+	client := NewVeilKeyClient(server.URL)
+	matches, err := client.ExactLookup("already-managed")
+	if err != nil {
+		t.Fatalf("ExactLookup failed: %v", err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("len(matches) = %d, want 1", len(matches))
+	}
+	if matches[0].Ref != "VK:LOCAL:deadbeef" {
+		t.Fatalf("ref = %q, want VK:LOCAL:deadbeef", matches[0].Ref)
+	}
+}
+
+func TestVeilKeyClientExactLookupError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte("access denied"))
+	}))
+	defer server.Close()
+
+	client := NewVeilKeyClient(server.URL)
+	_, err := client.ExactLookup("already-managed")
+	if err == nil {
+		t.Fatal("expected error on non-200 exact lookup response")
+	}
+}
+
 func TestVeilKeyClientResolveURLEncoding(t *testing.T) {
 	var receivedRawPath string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

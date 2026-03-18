@@ -23,6 +23,7 @@ type TokenRef struct {
 	RefID        string    `gorm:"column:ref_id;size:64;not null;index" json:"ref_id"`
 	SecretName   string    `gorm:"column:secret_name;size:255;not null;default:'';index" json:"secret_name"`
 	AgentHash    string    `gorm:"column:agent_hash;size:16;index" json:"agent_hash"`
+	PlaintextHash string   `gorm:"column:plaintext_hash;size:64;index" json:"plaintext_hash,omitempty"`
 	Ciphertext   string    `gorm:"column:ciphertext;not null" json:"ciphertext"`
 	Version      int       `gorm:"column:version;not null" json:"version"`
 	Status    string     `gorm:"column:status;default:temp" json:"status"`

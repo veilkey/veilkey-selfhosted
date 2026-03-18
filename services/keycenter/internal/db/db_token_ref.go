@@ -265,7 +265,20 @@ func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) err
 	}).Error
 }
 
+func (d *DB) FindActiveTempRefByHash(plaintextHash string) (*TokenRef, error) {
+	var ref TokenRef
+	err := d.conn.Where("plaintext_hash = ? AND ref_scope = 'TEMP' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)", plaintextHash).First(&ref).Error
+	if err != nil {
+		return nil, err
+	}
+	return &ref, nil
+}
+
 func (d *DB) SaveRefWithExpiry(parts RefParts, ciphertext string, version int, status string, expiresAt time.Time, secretName string) error {
+	return d.SaveRefWithExpiryAndHash(parts, ciphertext, version, status, expiresAt, secretName, "")
+}
+
+func (d *DB) SaveRefWithExpiryAndHash(parts RefParts, ciphertext string, version int, status string, expiresAt time.Time, secretName string, plaintextHash string) error {
 	if err := parts.Validate(); err != nil {
 		return err
 	}
@@ -278,15 +291,16 @@ func (d *DB) SaveRefWithExpiry(parts RefParts, ciphertext string, version int, s
 	}
 	return d.conn.Exec(`
 INSERT INTO token_refs (
-	ref_canonical, ref_family, ref_scope, ref_id, secret_name, agent_hash, ciphertext, version, status, expires_at, created_at
-) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, CURRENT_TIMESTAMP)
+	ref_canonical, ref_family, ref_scope, ref_id, secret_name, agent_hash, plaintext_hash, ciphertext, version, status, expires_at, created_at
+) VALUES (?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 ON CONFLICT(ref_canonical) DO UPDATE SET
 	ciphertext = excluded.ciphertext,
 	version = excluded.version,
 	status = excluded.status,
 	expires_at = excluded.expires_at,
-	secret_name = excluded.secret_name
-`, parts.Canonical(), parts.Family, parts.Scope, parts.ID, secretName, ciphertext, version, status, expiresAt).Error
+	secret_name = excluded.secret_name,
+	plaintext_hash = excluded.plaintext_hash
+`, parts.Canonical(), parts.Family, parts.Scope, parts.ID, secretName, plaintextHash, ciphertext, version, status, expiresAt).Error
 }
 
 func (d *DB) DeleteExpiredTempRefs() (int64, error) {
@@ -308,3 +322,4 @@ WHERE rowid NOT IN (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_token_refs_ref_canonical
 ON token_refs(ref_canonical)`).Error
 }
+

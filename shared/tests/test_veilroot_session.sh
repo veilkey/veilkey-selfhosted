@@ -104,6 +104,7 @@ if [[ "${1:-}" == "-lc" ]]; then
   printf '%s\n' "HTTPS_PROXY=${HTTPS_PROXY}"
   printf '%s\n' "ALL_PROXY=${ALL_PROXY}"
   printf '%s\n' "NO_PROXY=${NO_PROXY}"
+  printf '%s\n' "VEILKEY_VERIFIED_SESSION=${VEILKEY_VERIFIED_SESSION}"
   printf '%s\n' "VEILKEY_VEILROOT=${VEILKEY_VEILROOT}"
   printf '%s\n' "VEILKEY_VEILROOT_PROFILE=${VEILKEY_VEILROOT_PROFILE}"
   echo ---
@@ -122,6 +123,7 @@ install_codex_script="$PWD/deploy/host/install-veilroot-codex.sh"
 
 out="$(HOME="$tmp/home" TMPDIR="$tmp" VEILKEY_SESSION_CONFIG_BIN="$tmp/session-config" SYSTEMD_RUN_BIN="$tmp/systemd-run" SHELL_BIN="$tmp/cgroup-cat" VEILKEY_VEILROOT_SCOPE='veilroot-codex.scope' "$launcher" codex)"
 printf '%s\n' "$out" | grep -q "^VEILKEY_PROXY_URL=http://${TEST_PROXY_HOST}:18081$"
+printf '%s\n' "$out" | grep -q '^VEILKEY_VERIFIED_SESSION=1$'
 printf '%s\n' "$out" | grep -q '^VEILKEY_VEILROOT=1$'
 printf '%s\n' "$out" | grep -q '^VEILKEY_VEILROOT_PROFILE=codex$'
 grep -q -- '--unit' "$tmp/systemd-run.args"

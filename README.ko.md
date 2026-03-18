@@ -19,6 +19,15 @@
 - `installer`
   - 설치 및 검증 계층
 
+운영자 진입점은 현재 이렇게 나뉩니다.
+
+- `veil`
+  - 보호된 세션 진입점
+- `veilkey`
+  - 그 세션 안팎에서 상태, 암복호화, 정책을 다루는 명령
+- `veilkey-cli`
+  - 래퍼와 설치 스크립트가 사용하는 하위 구현 바이너리
+
 ## 핵심 로직
 
 가장 짧게 이해하면 이렇습니다.
@@ -150,6 +159,26 @@ rotation applied and heartbeat sent
 rebind prepared with key_version=9
 ```
 
+## Veil 세션 사용 모델
+
+의도한 CLI 사용 흐름은 이렇습니다.
+
+```bash
+veil
+claude
+codex
+```
+
+관리 명령은 `veilkey`로 처리합니다.
+
+```bash
+veilkey status
+veilkey paste-mode on
+veilkey resolve VK:LOCAL:example
+```
+
+즉 `veil`은 보호된 환경에 들어가는 명령이고, `veilkey`는 그 안에서 정책과 키 동작을 다루는 명령입니다.
+
 ## 이게 아닌 것
 
 - hosted SaaS 비밀관리 서비스
@@ -176,3 +205,16 @@ rebind prepared with key_version=9
 기여 규칙은 여기서 시작합니다.
 
 - [`CONTRIBUTING.md`](./CONTRIBUTING.md)
+
+## 라이선스
+
+이 저장소는 GNU Affero General Public License v3.0 (AGPL-3.0)으로 배포됩니다.
+
+[`LICENSE`](./LICENSE)를 참조하세요.
+
+## 보안 고지
+
+VeilKey는 시크릿과 암호화 자료를 다루는 보안 민감 도구입니다.
+이 소프트웨어는 어떠한 보증도 없이 제공됩니다. 프로덕션 사용 전에
+자체 보안 감사를 수행하세요. 보안 이슈를 발견하면 공개 이슈 대신
+GitHub Security Advisories를 통해 비공개로 보고해주세요.
