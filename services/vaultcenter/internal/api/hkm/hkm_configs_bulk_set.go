@@ -78,7 +78,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 		checkWg.Add(1)
 		go func(ai *agentInfo) {
 			defer checkWg.Done()
-			httpReq, err := http.NewRequestWithContext(ctx, "GET", ai.URL()+"/api/configs/"+req.Key, nil)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.URL()+"/api/configs/"+req.Key, nil)
 			if err != nil {
 				checkMu.Lock()
 				checks = append(checks, bulkSetCheck{ai: ai, found: false})
@@ -189,7 +189,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				results[idx] = applyResult{ai: ai, err: marshalErr}
 				return
 			}
-			httpReq, err := http.NewRequestWithContext(ctx, "POST", ai.URL()+"/api/configs", bytes.NewReader(body))
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, ai.URL()+"/api/configs", bytes.NewReader(body))
 			if err != nil {
 				results[idx] = applyResult{ai: ai, err: err}
 				return
@@ -268,7 +268,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 				if marshalErr != nil {
 					return
 				}
-				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ai.URL()+"/api/configs", bytes.NewReader(body))
+				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")
 					resp, err := h.deps.HTTPClient().Do(httpReq)
@@ -281,7 +281,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 			// Key didn't exist before → delete it
 			go func(ai *agentInfo) {
 				defer wg.Done()
-				httpReq, _ := http.NewRequestWithContext(ctx, "DELETE", ai.URL()+"/api/configs/"+key, nil)
+				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete, ai.URL()+"/api/configs/"+key, nil)
 				if httpReq != nil {
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {

@@ -40,7 +40,7 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	req, _ := http.NewRequestWithContext(r.Context(), "PUT", agent.URL()+"/api/configs/bulk", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPut, agent.URL()+"/api/configs/bulk", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {

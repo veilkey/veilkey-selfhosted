@@ -15,7 +15,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, _ := http.NewRequestWithContext(r.Context(), "GET", agent.URL()+"/api/configs", nil)
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, agent.URL()+"/api/configs", nil)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())

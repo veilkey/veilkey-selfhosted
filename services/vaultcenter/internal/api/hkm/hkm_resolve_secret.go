@@ -93,7 +93,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				case <-ctx.Done():
 					return
 				}
-				req, err := http.NewRequestWithContext(ctx, "GET", childURL+"/api/resolve/"+url.PathEscape(ref), nil)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, childURL+"/api/resolve/"+url.PathEscape(ref), nil)
 				if err != nil {
 					log.Printf("resolve: failed to create request for %s: %v", childURL, err)
 					return
@@ -136,7 +136,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 	// Parent resolve
 	if info, err := h.deps.DB().GetNodeInfo(); err == nil && info.ParentURL != "" {
 		client := &http.Client{Timeout: h.deps.ParentForwardTimeout()}
-		req, err := http.NewRequest("GET", info.ParentURL+"/api/resolve/"+url.PathEscape(ref), nil)
+		req, err := http.NewRequest(http.MethodGet, info.ParentURL+"/api/resolve/"+url.PathEscape(ref), nil)
 		if err != nil {
 			log.Printf("resolve: failed to create parent request: %v", err)
 			respondError(w, http.StatusNotFound, "ref not found: "+ref)

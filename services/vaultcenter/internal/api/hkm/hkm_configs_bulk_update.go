@@ -68,7 +68,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 		wg.Add(1)
 		go func(ai *agentInfo) {
 			defer wg.Done()
-			httpReq, err := http.NewRequestWithContext(ctx, "GET", ai.URL()+"/api/configs/"+req.Key, nil)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.URL()+"/api/configs/"+req.Key, nil)
 			if err != nil {
 				return
 			}
@@ -159,7 +159,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				results[idx] = applyResult{ac: ac, err: marshalErr}
 				return
 			}
-			httpReq, err := http.NewRequestWithContext(ctx, "POST", ac.ai.URL()+"/api/configs", bytes.NewReader(body))
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, ac.ai.URL()+"/api/configs", bytes.NewReader(body))
 			if err != nil {
 				results[idx] = applyResult{ac: ac, err: err}
 				return
@@ -207,7 +207,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				if marshalErr != nil {
 					return
 				}
-				httpReq, _ := http.NewRequestWithContext(ctx, "POST", ac.ai.URL()+"/api/configs", bytes.NewReader(body))
+				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ac.ai.URL()+"/api/configs", bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", "application/json")
 					resp, err := h.deps.HTTPClient().Do(httpReq)
