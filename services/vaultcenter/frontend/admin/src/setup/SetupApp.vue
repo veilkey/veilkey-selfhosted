@@ -45,6 +45,40 @@
             </span>
           </div>
 
+          <div class="form-divider"></div>
+
+          <div class="form-group">
+            <label class="form-label">{{ t.adminPassword }}</label>
+            <p class="form-hint">{{ t.adminPasswordDesc }}</p>
+            <input
+              class="form-input"
+              type="password"
+              v-model="adminPassword"
+              :placeholder="t.passwordPh"
+              autocomplete="new-password"
+              required
+              minlength="8"
+            />
+            <span v-if="adminPassword && adminPassword.length < 8" class="field-hint error">
+              {{ t.minChars }}
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">{{ t.adminPasswordConfirm }}</label>
+            <input
+              class="form-input"
+              type="password"
+              v-model="adminPasswordConfirm"
+              :placeholder="t.passwordConfirmPh"
+              autocomplete="new-password"
+              required
+            />
+            <span v-if="adminPasswordConfirm && adminPassword !== adminPasswordConfirm" class="field-hint error">
+              {{ t.mismatch }}
+            </span>
+          </div>
+
           <button
             type="submit"
             class="btn-primary"
@@ -66,8 +100,19 @@
           <div class="ref-label">{{ t.tempRefLabel }}</div>
           <div class="ref-value">
             <code>{{ tempRef }}</code>
-            <button class="copy-btn" @click="copyRef" :title="t.copy">
-              {{ copied ? '✓' : t.copy }}
+            <button class="copy-btn" @click="copyRef('master')" :title="t.copy">
+              {{ copiedKey === 'master' ? '✓' : t.copy }}
+            </button>
+          </div>
+          <div class="ref-expiry">{{ t.expiresAt }}: {{ expiresAt }}</div>
+        </div>
+
+        <div class="ref-box" v-if="adminTempRef">
+          <div class="ref-label">{{ t.adminTempRefLabel }}</div>
+          <div class="ref-value">
+            <code>{{ adminTempRef }}</code>
+            <button class="copy-btn" @click="copyRef('admin')" :title="t.copy">
+              {{ copiedKey === 'admin' ? '✓' : t.copy }}
             </button>
           </div>
           <div class="ref-expiry">{{ t.expiresAt }}: {{ expiresAt }}</div>
@@ -101,11 +146,14 @@ import { ref, computed } from 'vue'
 const phase = ref('form')
 const password = ref('')
 const passwordConfirm = ref('')
+const adminPassword = ref('')
+const adminPasswordConfirm = ref('')
 const loading = ref(false)
 const error = ref(null)
 const tempRef = ref('')
+const adminTempRef = ref('')
 const expiresAt = ref('')
-const copied = ref(false)
+const copiedKey = ref('')
 const restarting = ref(false)
 const ready = ref(false)
 const origin = window.location.origin
@@ -126,10 +174,14 @@ const i18n = {
     initializing: '초기화 중...',
     successHeading: '초기화 완료',
     successDesc: '비밀번호가 VK:TEMP ref로 저장되었습니다. 아래 ref는 1시간 후 만료됩니다.',
-    tempRefLabel: '임시 비밀번호 참조 (VK:TEMP Ref)',
+    tempRefLabel: '마스터 비밀번호 임시 참조 (VK:TEMP)',
+    adminTempRefLabel: '관리자 비밀번호 임시 참조 (VK:TEMP)',
     copy: '복사',
     expiresAt: '만료',
     retrieveLabel: '비밀번호 조회 명령어',
+    adminPassword: '관리자 비밀번호',
+    adminPasswordDesc: '웹 관리 콘솔 로그인에 사용됩니다. 마스터 비밀번호와 달리 변경 가능합니다.',
+    adminPasswordConfirm: '관리자 비밀번호 확인',
     warningTitle: '⚠️ 중요',
     warningBody: '이 ref는 1시간 후 영구 삭제됩니다. 비밀번호를 반드시 안전한 곳에 보관하세요. 비밀번호를 잃으면 모든 데이터가 복구 불가능합니다.',
     restarting: '서비스 재시작 중...',
@@ -149,10 +201,14 @@ const i18n = {
     initializing: 'Initializing...',
     successHeading: 'Initialization Complete',
     successDesc: 'Your password has been stored as a VK:TEMP ref. This ref expires in 1 hour.',
-    tempRefLabel: 'Temporary Password Ref (VK:TEMP)',
+    tempRefLabel: 'Master Password Ref (VK:TEMP)',
+    adminTempRefLabel: 'Admin Password Ref (VK:TEMP)',
     copy: 'Copy',
     expiresAt: 'Expires',
     retrieveLabel: 'Retrieve password command',
+    adminPassword: 'Admin Password',
+    adminPasswordDesc: 'Used to log in to the web admin console. Can be changed later, unlike the master password.',
+    adminPasswordConfirm: 'Confirm Admin Password',
     warningTitle: '⚠️ Important',
     warningBody: 'This ref will be permanently deleted in 1 hour. Store your password in a secure location (e.g. password manager). If you lose your password, all data is unrecoverable.',
     restarting: 'Service restarting...',
@@ -164,7 +220,10 @@ const i18n = {
 const t = computed(() => i18n[lang] || i18n.ko)
 
 const canSubmit = computed(() =>
-  password.value.length >= 8 && password.value === passwordConfirm.value
+  password.value.length >= 8 &&
+  password.value === passwordConfirm.value &&
+  adminPassword.value.length >= 8 &&
+  adminPassword.value === adminPasswordConfirm.value
 )
 
 async function handleSubmit() {
@@ -176,7 +235,7 @@ async function handleSubmit() {
     const res = await fetch('/api/setup/init', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: password.value })
+      body: JSON.stringify({ password: password.value, admin_password: adminPassword.value })
     })
     const data = await res.json()
     if (!res.ok) {
@@ -184,6 +243,7 @@ async function handleSubmit() {
       return
     }
     tempRef.value = data.temp_ref || ''
+    adminTempRef.value = data.admin_temp_ref || ''
     expiresAt.value = data.expires_at ? new Date(data.expires_at).toLocaleString() : ''
     phase.value = 'done'
     pollRestart()
@@ -194,11 +254,12 @@ async function handleSubmit() {
   }
 }
 
-async function copyRef() {
+async function copyRef(key) {
+  const val = key === 'admin' ? adminTempRef.value : tempRef.value
   try {
-    await navigator.clipboard.writeText(tempRef.value)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 2000)
+    await navigator.clipboard.writeText(val)
+    copiedKey.value = key
+    setTimeout(() => { copiedKey.value = '' }, 2000)
   } catch {}
 }
 
@@ -298,6 +359,9 @@ async function pollRestart() {
 }
 
 .setup-form { display: flex; flex-direction: column; gap: 18px; }
+
+.form-divider { border: none; border-top: 1px solid #23263a; margin: 4px 0; }
+.form-hint { font-size: 0.8rem; color: #8a8fa8; margin: 0 0 4px; line-height: 1.4; }
 
 .form-group { display: flex; flex-direction: column; gap: 6px; }
 .form-label { font-size: 0.85rem; font-weight: 500; color: #b0b5cc; }

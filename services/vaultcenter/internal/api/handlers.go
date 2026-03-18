@@ -43,6 +43,7 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 		"/audit",
 		"/settings/ui",
 		"/settings/admin",
+		"/keycenter",
 	} {
 		mux.HandleFunc("GET "+path, s.handleOperatorShellEntry)
 	}
@@ -54,6 +55,10 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/encrypt", s.requireTrustedIP(s.requireUnlocked(s.handleTempEncrypt)))
 	mux.HandleFunc("POST /api/lookup/exact", s.requireTrustedIP(s.requireReadyForOps(s.handleExactLookup)))
 	mux.HandleFunc("GET /api/status", s.handleStatus)
+	mux.HandleFunc("GET /api/keycenter/temp-refs", s.requireUnlocked(s.handleKeycenterTempRefs))
+	mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
+	mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
+	mux.HandleFunc("GET /api/admin/check", s.handleAdminCheck)
 	mux.HandleFunc("GET /api/configs", s.requireUnlocked(s.handleListConfigs))
 	mux.HandleFunc("GET /api/configs/{key}", s.requireUnlocked(s.handleGetConfig))
 	mux.HandleFunc("POST /api/configs", s.requireTrustedIP(s.requireUnlocked(s.handleSaveConfig)))

@@ -252,6 +252,7 @@ func (ApprovalTokenChallenge) TableName() string { return "approval_token_challe
 
 type AdminAuthConfig struct {
 	ConfigID                string     `gorm:"primaryKey;column:config_id" json:"config_id"`
+	PasswordHash            string     `gorm:"column:password_hash;not null;default:''" json:"password_hash"`
 	TOTPEnabled             bool       `gorm:"column:totp_enabled;not null;default:false" json:"totp_enabled"`
 	EnrolledAt              *time.Time `gorm:"column:enrolled_at" json:"enrolled_at"`
 	TOTPSecretCiphertext    []byte     `gorm:"column:totp_secret_ciphertext" json:"totp_secret_ciphertext"`

@@ -28,6 +28,7 @@ export function useAdminApp() {
 const state = reactive({
     activePage: 'vaults',
     activeTabByPage: {
+        keycenter: 'TEMP_REFS',
         vaults: 'ALL_VAULTS',
         functions: 'FUNCTION_LIST',
         audit: 'AUDIT_LOG',
@@ -78,6 +79,8 @@ const state = reactive({
     auditCountByVault: {},
     trackedRefAudit: null,
     adminAuditRows: [],
+    keycenterTempRefs: [],
+    selectedTempRef: null,
     busy: {},
     ui: {
         sidebarHTML: '',
@@ -90,6 +93,8 @@ const state = reactive({
         centerHTML: '',
         rightHTML: '',
         twoPane: false,
+        adminRequired: false,
+        adminLoginError: '',
         locked: false,
         unlockError: ''
     }
@@ -148,6 +153,7 @@ function activeTab() {
 
 function tabLabelKey(tab) {
     return {
+        TEMP_REFS: 'tab_temp_refs',
         ALL_VAULTS: 'tab_all_vaults',
         VAULT_ITEMS: 'tab_vault_items',
         BULK_APPLY: 'tab_bulk_apply',
@@ -236,6 +242,7 @@ function matchesQuery(text) {
 }
 
 function navCount(page) {
+    if (page === 'keycenter') return state.keycenterTempRefs.length || '';
     if (page === 'vaults') return state.vaults.length;
     if (page === 'functions') return state.functions.length;
     if (page === 'audit') return auditTotalCount();
@@ -352,6 +359,7 @@ function configRelationsByScope() {
 
 function renderSidebar() {
     const sections = [
+        { page: 'keycenter', label: pageLabel('keycenter') },
         { page: 'vaults', label: pageLabel('vaults') },
         { page: 'functions', label: pageLabel('functions') },
         { page: 'audit', label: pageLabel('audit') },
@@ -408,6 +416,7 @@ function renderTopbarStatus() {
 }
 
 function pageContextText() {
+    if (state.activePage === 'keycenter') return t('tab_temp_refs');
     if (state.activePage === 'vaults') return t('vault_inventory');
     if (state.activePage === 'functions') return t('function_list');
     if (state.activePage === 'audit') return t('tab_audit_log');
@@ -1506,8 +1515,102 @@ function render() {
         renderAuditPage();
         return;
     }
+    if (state.activePage === 'keycenter') {
+        renderKeycenterPage();
+        return;
+    }
     renderSecondarySidebar();
     if (state.activePage === 'configs') renderConfigs();
+}
+
+function renderKeycenterPage() {
+    state.ui.leftHTML = '';
+    state.ui.leftVisible = false;
+    state.ui.twoPane = true;
+    state.ui.secondarySidebarHidden = true;
+
+    const refs = state.keycenterTempRefs;
+    const selected = state.selectedTempRef;
+    const fmt = (iso) => {
+        if (!iso) return '-';
+        try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    };
+
+    // Center: list
+    state.ui.centerHTML = `
+        <div class="pane-header">
+            <div class="pane-title"><strong>${escapeHTML(t('keycenter_temp_refs_title'))}</strong></div>
+            <div class="toolbar"><span class="pill">${refs.length}</span></div>
+        </div>
+        <div class="pane-content">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>${escapeHTML(t('keycenter_secret_name'))}</th>
+                        <th>${escapeHTML(t('keycenter_ref'))}</th>
+                        <th>${escapeHTML(t('keycenter_expires_at'))}</th>
+                    </tr></thead>
+                    <tbody>
+                        ${refs.length ? refs.map((ref, i) => `
+                            <tr class="is-clickable${selected && selected.ref_canonical === ref.ref_canonical ? ' is-selected' : ''}"
+                                data-action="select-temp-ref" data-index="${i}">
+                                <td><strong>${escapeHTML(ref.secret_name || '-')}</strong></td>
+                                <td><code style="font-size:0.8rem">${escapeHTML(ref.ref_canonical)}</code></td>
+                                <td style="color:${ref.expires_at ? '#e0a040' : '#8a8fa8'}">${escapeHTML(fmt(ref.expires_at))}</td>
+                            </tr>
+                        `).join('') : `<tr><td colspan="3"><div class="empty">${escapeHTML(t('keycenter_no_temp_refs'))}</div></td></tr>`}
+                    </tbody>
+                </table>
+            </div>
+        </div>`;
+
+    // Right: detail
+    if (selected) {
+        const linkedVault = selected.agent_hash
+            ? state.vaults.find(v => v.vault_runtime_hash === selected.agent_hash)
+            : null;
+
+        state.ui.rightHTML = `
+            <div class="pane-header">
+                <div class="pane-title"><strong>${escapeHTML(selected.secret_name || selected.ref_canonical)}</strong></div>
+            </div>
+            <div class="pane-content">
+                <div class="card">
+                    <div class="card-title">${escapeHTML(t('keycenter_ref'))}</div>
+                    <div class="inline-grid">
+                        <div class="kv"><span class="label">ref</span><span class="value"><code style="font-size:0.82rem;word-break:break-all">${escapeHTML(selected.ref_canonical)}</code></span></div>
+                        <div class="kv"><span class="label">${escapeHTML(t('keycenter_secret_name'))}</span><span class="value">${escapeHTML(selected.secret_name || '-')}</span></div>
+                        <div class="kv"><span class="label">status</span><span class="value">${escapeHTML(selected.status || '-')}</span></div>
+                        <div class="kv"><span class="label">${escapeHTML(t('keycenter_expires_at'))}</span><span class="value" style="color:#e0a040">${escapeHTML(fmt(selected.expires_at))}</span></div>
+                        <div class="kv"><span class="label">${escapeHTML(t('keycenter_created_at'))}</span><span class="value">${escapeHTML(fmt(selected.created_at))}</span></div>
+                        ${selected.agent_hash ? `<div class="kv"><span class="label">agent_hash</span><span class="value"><code style="font-size:0.8rem">${escapeHTML(selected.agent_hash)}</code></span></div>` : ''}
+                    </div>
+                    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="action-btn" data-action="copy-temp-ref" data-ref="${escapeHTML(selected.ref_canonical)}">${escapeHTML(t('copy'))} Ref</button>
+                        ${linkedVault ? `
+                            <a href="/vaults/local/${encodeURIComponent(linkedVault.vault_runtime_hash)}"
+                               class="action-btn" data-action="set-page" data-page="vaults"
+                               style="text-decoration:none">
+                                ${escapeHTML(t('keycenter_goto_vault'))} →
+                            </a>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>`;
+    } else {
+        state.ui.rightHTML = `
+            <div class="pane-header"><div class="pane-title"><strong>${escapeHTML(t('keycenter_ref'))}</strong></div></div>
+            <div class="pane-content"><div class="empty">${escapeHTML(t('keycenter_select_ref'))}</div></div>`;
+    }
+}
+
+async function loadKeycenterTempRefs() {
+    try {
+        const data = await request('/api/keycenter/temp-refs');
+        state.keycenterTempRefs = data.refs || [];
+    } catch (err) {
+        state.keycenterTempRefs = [];
+    }
 }
 
 async function loadStatus() {
@@ -2007,7 +2110,9 @@ async function loadGroupedEntryDetail() {
 
 async function syncPageData() {
     try {
-        if (state.activePage === 'vaults') {
+        if (state.activePage === 'keycenter') {
+            await loadKeycenterTempRefs();
+        } else if (state.activePage === 'vaults') {
             if (!state.vaults.length) await loadVaults();
             if (state.selectedVault) {
                 await loadSelectedVaultDetail();
@@ -2534,6 +2639,16 @@ async function handleAction(action, dataset) {
             return syncPageData();
         }
         if (action === 'load-admin-audit') return loadAdminAudit().then(render);
+        if (action === 'select-temp-ref') {
+            const idx = parseInt(dataset.index, 10);
+            state.selectedTempRef = state.keycenterTempRefs[idx] || null;
+            render();
+            return;
+        }
+        if (action === 'copy-temp-ref') {
+            try { await navigator.clipboard.writeText(dataset.ref || ''); } catch {}
+            return;
+        }
     } catch (err) {
         setMessage('error', err.message);
         render();
@@ -2567,6 +2682,29 @@ async function handleAction(action, dataset) {
     syncPageData();
   }
 
+async function adminLogin(password) {
+    state.ui.adminLoginError = '';
+    try {
+        await request('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
+        state.ui.adminRequired = false;
+        await loadStatus();
+        if (state.status?.locked) {
+            state.ui.locked = true;
+            return;
+        }
+        await loadUIConfig();
+        await loadVaults();
+        await loadConfigsSummary();
+        await loadFunctions();
+        await loadTrackedRefAudit();
+        await loadKeycenterTempRefs();
+        await syncPageData();
+        render();
+    } catch (err) {
+        state.ui.adminLoginError = err.message || '비밀번호가 올바르지 않습니다.';
+    }
+}
+
 async function unlock(password) {
     state.ui.unlockError = '';
     try {
@@ -2577,6 +2715,7 @@ async function unlock(password) {
         await loadConfigsSummary();
         await loadFunctions();
         await loadTrackedRefAudit();
+        await loadKeycenterTempRefs();
         await syncPageData();
         render();
     } catch (err) {
@@ -2586,16 +2725,31 @@ async function unlock(password) {
 
 async function boot() {
     applyRoute(window.location.pathname, window.location.search);
+    // 1. Check admin auth
+    try {
+        const check = await request('/api/admin/check');
+        if (check && check.setup_required) {
+            state.ui.adminRequired = true;
+            return;
+        }
+    } catch (err) {
+        // 401 = not authenticated
+        state.ui.adminRequired = true;
+        return;
+    }
+    // 2. Check vault lock
     await loadStatus();
     if (state.status?.locked) {
         state.ui.locked = true;
         return;
     }
+    // 3. Load everything
     await loadUIConfig();
     await loadVaults();
     await loadConfigsSummary();
     await loadFunctions();
     await loadTrackedRefAudit();
+    await loadKeycenterTempRefs();
     await syncPageData();
     render();
 }
@@ -2618,6 +2772,7 @@ async function boot() {
 
 return {
                 state,
+                adminLogin,
                 unlock,
                 onGlobalSearchInput,
                 routePath,
