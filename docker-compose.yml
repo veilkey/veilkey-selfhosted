@@ -2,20 +2,22 @@ services:
   vaultcenter:
     build:
       context: services/vaultcenter
-    image: veilkey-vaultcenter:dev
+      args:
+        DOCKER_MIRROR: ${DOCKER_MIRROR:-}
+    image: veilkey-vaultcenter:${IMAGE_TAG:-dev}
     restart: unless-stopped
     ports:
-      - "11181:10181"
+      - "${VAULTCENTER_HOST_PORT:-11181}:10181"
     environment:
       VEILKEY_ADDR: ":10181"
       VEILKEY_DB_PATH: /data/veilkey.db
       VEILKEY_PASSWORD_FILE: /run/secrets/vaultcenter_password
       VEILKEY_MODE: root
-      VEILKEY_AUTO_COMPLETE_INSTALL_FLOW: "0"
+      VEILKEY_AUTO_COMPLETE_INSTALL_FLOW: "${VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW:-0}"
       VEILKEY_BULK_APPLY_DIR: /data/bulk-apply
       VEILKEY_FUNCTION_DIR: /data/functions
-      VEILKEY_AGENT_SCHEME: http
-      VEILKEY_TRUSTED_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
+      VEILKEY_AGENT_SCHEME: "${VEILKEY_AGENT_SCHEME:-http}"
+      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
     secrets:
       - vaultcenter_password
     volumes:
@@ -30,19 +32,21 @@ services:
   localvault:
     build:
       context: services/localvault
-    image: veilkey-localvault:dev
+      args:
+        DOCKER_MIRROR: ${DOCKER_MIRROR:-}
+    image: veilkey-localvault:${IMAGE_TAG:-dev}
     restart: unless-stopped
     ports:
-      - "11180:10180"
+      - "${LOCALVAULT_HOST_PORT:-11180}:10180"
     environment:
       VEILKEY_ADDR: ":10180"
       VEILKEY_DB_PATH: /data/veilkey.db
       VEILKEY_PASSWORD_FILE: /run/secrets/localvault_password
       VEILKEY_MODE: child
-      VEILKEY_PARENT_URL: http://vaultcenter:10181
-      VEILKEY_LABEL: localvault-01
-      VEILKEY_VAULTCENTER_URL: http://vaultcenter:10181
-      VEILKEY_TRUSTED_IPS: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1"
+      VEILKEY_PARENT_URL: "http://vaultcenter:10181"
+      VEILKEY_LABEL: "${LOCALVAULT_LABEL:-localvault-01}"
+      VEILKEY_VAULTCENTER_URL: "http://vaultcenter:10181"
+      VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS:-127.0.0.1}"
     secrets:
       - localvault_password
     volumes:

@@ -13,5 +13,5 @@ COPY --from=builder /build/veilkey-vaultcenter /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 VOLUME /data
-EXPOSE 10180
+EXPOSE 10181
 ENTRYPOINT ["docker-entrypoint.sh"]
