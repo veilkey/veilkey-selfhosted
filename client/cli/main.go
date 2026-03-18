@@ -86,7 +86,7 @@ func main() {
 			}
 		}
 		fmt.Fprintln(os.Stderr, "ERROR: VeilKey endpoint URL is required.")
-		fmt.Fprintln(os.Stderr, "  export VEILKEY_LOCALVAULT_URL=https://127.0.0.1:10180")
+		fmt.Fprintln(os.Stderr, "  export VEILKEY_LOCALVAULT_URL=<localvault-url>")
 		os.Exit(1)
 	}
 skipAPICheck:

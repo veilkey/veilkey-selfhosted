@@ -319,10 +319,7 @@ func main() {
 		if len(cmdArgs) > 0 {
 			key = cmdArgs[0]
 		}
-		value := cfg.Rewrite.PlaintextAction
-		if value == "" {
-			value = "issue-temp-and-resolve"
-		}
+		value := strings.TrimSpace(cfg.Rewrite.PlaintextAction)
 		if key == "default" {
 			if cfg.Proxy.Default.PlaintextAction != "" {
 				value = cfg.Proxy.Default.PlaintextAction

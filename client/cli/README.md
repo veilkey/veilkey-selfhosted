@@ -199,7 +199,7 @@ veilkey-cli scan .env
 veilkey-cli scan --format json --exit-code .env
 
 # Filter command output
-export VEILKEY_LOCALVAULT_URL=http://127.0.0.1:10180
+export VEILKEY_LOCALVAULT_URL=<localvault-url>
 kubectl get secret -o yaml | veilkey-cli filter
 
 # CI pre-commit hook (SARIF output)
