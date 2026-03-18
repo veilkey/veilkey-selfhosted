@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -343,14 +344,14 @@ func runCron() {
 		if hubURL == "" {
 			log.Fatal("VEILKEY_VAULTCENTER_URL is required for cron tick")
 		}
-		globalEndpoint := strings.TrimRight(hubURL, "/") + "/api/functions/global"
+		globalEndpoint, _ := url.JoinPath(hubURL, "/api/functions/global")
 		if upserted, removed, err := server.SyncGlobalFunctions(globalEndpoint); err != nil {
 			log.Fatalf("cron tick global function sync failed: %v", err)
 		} else if upserted > 0 || removed > 0 {
 			log.Printf("cron tick synced global functions: upserted=%d removed=%d", upserted, removed)
 		}
 		hostname, _ := os.Hostname()
-		endpoint := strings.TrimRight(hubURL, "/") + "/api/agents/heartbeat"
+		endpoint, _ := url.JoinPath(hubURL, "/api/agents/heartbeat")
 		if err := server.SendHeartbeatOnce(endpoint, hostname, listenPort); err != nil {
 			if errors.Is(err, api.ErrRotationRequired) {
 				if retryErr := server.SendHeartbeatOnce(endpoint, hostname, listenPort); retryErr != nil {
