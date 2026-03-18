@@ -7,10 +7,10 @@ cd "$(dirname "$0")/.."
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-script="$PWD/deploy/host/veil-work-container"
+script="$PWD/deploy/host/veilcontainer"
 
-out="$(PATH="$tmp:/usr/bin:/bin" VEIL_WORK_CONTAINER_DRY_RUN=1 USER=alice "$script" 2>&1 || true)"
-assert_contains "$out" "no supported container runtime found"
+out="$(PATH="$tmp" VEIL_WORK_CONTAINER_DRY_RUN=1 USER=alice /bin/bash "$script" 2>&1 || true)"
+assert_contains "$out" "veilcontainer: no supported container runtime found"
 
 cat >"$tmp/docker" <<'SCRIPT'
 #!/usr/bin/env bash
@@ -19,7 +19,7 @@ echo "docker $*"
 SCRIPT
 chmod +x "$tmp/docker"
 
-out="$(PATH="$tmp:$PATH" USER=alice VEIL_WORK_CONTAINER_DRY_RUN=1 VEIL_WORK_CONTAINER_WORKSPACE=/work/demo VEIL_WORK_CONTAINER_IMAGE=ghcr.io/example/veil:test "$script")"
+out="$(env -u VEIL_WORK_CONTAINER_SHELL PATH="$tmp:$PATH" USER=alice VEIL_WORK_CONTAINER_DRY_RUN=1 VEIL_WORK_CONTAINER_WORKSPACE=/work/demo VEIL_WORK_CONTAINER_IMAGE=ghcr.io/example/veil:test "$script")"
 assert_contains "$out" "runtime=docker"
 assert_contains "$out" "inspect=docker"
 assert_contains "$out" "inspect=veil-alice"
@@ -33,15 +33,15 @@ assert_contains "$out" "exec=docker"
 assert_contains "$out" "exec=veil-alice"
 assert_contains "$out" "exec=sh"
 assert_contains "$out" "exec=-lc"
-assert_contains "$out" "veil-work-tmux"
+assert_contains "$out" "veilcontainer-tmux"
 
-tmux_script="$PWD/deploy/host/veil-work-tmux"
+tmux_script="$PWD/deploy/host/veilcontainer-tmux"
 out="$(VEIL_WORK_TMUX_DRY_RUN=1 "$tmux_script")"
 assert_contains "$out" "tmux has-session -t main"
 assert_contains "$out" "tmux new-session -d -s main -n shell"
-assert_contains "$out" "veilkey-cli\\ wrap-pty\\ bash\\ -li"
-assert_contains "$out" "tmux new-window -t main -n claude veilkey-cli\\ wrap-pty\\ claude"
-assert_contains "$out" "tmux new-window -t main -n codex veilkey-cli\\ wrap-pty\\ codex"
+assert_contains "$out" "tmux new-session -d -s main -n shell veil"
+assert_contains "$out" "tmux new-window -t main -n claude veil"
+assert_contains "$out" "tmux new-window -t main -n codex veil"
 assert_contains "$out" "exec tmux attach -t main"
 
-echo "ok: veil work container"
+echo "ok: veilcontainer"

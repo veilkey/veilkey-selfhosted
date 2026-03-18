@@ -5,13 +5,16 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"strings"
 	"testing"
 )
 
 func TestProcessStreamWithMockAPI(t *testing.T) {
 	// Mock VeilKey server
+	var calls int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
 		var req map[string]string
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -56,6 +59,10 @@ func TestProcessStreamWithMockAPI(t *testing.T) {
 		t.Error("GitHub PAT should be replaced in filter output")
 	}
 
+	if !strings.Contains(output, "GITHUB_TOKEN=VK:a1b2c3d4") {
+		t.Error("assignment key should be preserved while secret value is replaced")
+	}
+
 	// VK token should appear
 	if !strings.Contains(output, "VK:a1b2c3d4") {
 		t.Error("output should contain VK token")
@@ -69,6 +76,10 @@ func TestProcessStreamWithMockAPI(t *testing.T) {
 	// Stats should reflect detection
 	if detector.Stats.Detections == origStdout.Detections {
 		t.Error("detections counter should increase")
+	}
+
+	if got := atomic.LoadInt32(&calls); got != 1 {
+		t.Errorf("expected 1 API issuance for one logical secret, got %d", got)
 	}
 }
 

@@ -149,6 +149,9 @@ func shellQuote(v string) string {
 
 func printExports(values [][2]string) {
 	for _, item := range values {
+		if item[1] == "" {
+			continue
+		}
 		fmt.Printf("export %s=%s\n", item[0], shellQuote(item[1]))
 	}
 }

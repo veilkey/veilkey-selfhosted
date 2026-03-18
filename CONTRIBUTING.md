@@ -17,6 +17,19 @@ Contributions are welcome, but changes should prove the exact path they touch.
 - installer operator path: [`installer/INSTALL.md`](./installer/INSTALL.md)
 - installer-specific guard rules: [`installer/CONTRIBUTING.md`](./installer/CONTRIBUTING.md)
 
+## Collaboration Surface
+
+Use GitHub as the collaboration surface for this repository.
+
+- issues
+  - describe the operator-visible problem first
+- pull requests
+  - describe what changed, why it changed, and how it was verified
+- branch and review discussion
+  - prefer GitHub-first wording in docs and change summaries
+
+Do not assume a GitLab issue or MR flow for current contribution guidance unless a document is explicitly about legacy CI or internal artifact plumbing.
+
 ## Common Contribution Areas
 
 - installation and Proxmox wrapper improvements

@@ -15,6 +15,7 @@ VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh install proxmox-host "$t
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh configure proxmox-host "$tmp_root" >/dev/null
 VEILKEY_INSTALLER_MANIFEST="$tmp_manifest" ./install.sh post-install-health "$tmp_root" >/dev/null
 
+test -x "$tmp_root/usr/local/bin/veilkey-cli"
 test -x "$tmp_root/usr/local/bin/veilkey-session-config"
 test -x "$tmp_root/usr/local/bin/veilkey-proxy-launch"
 test -x "$tmp_root/usr/local/bin/veilroot-shell"

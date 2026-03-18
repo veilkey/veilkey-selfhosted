@@ -71,8 +71,8 @@ description = "Proxmox host boundary CLI and proxy asset install"
 components = ["cli", "proxy"]
 
 [profiles.proxmox-host]
-description = "Proxmox host install with proxy boundary assets"
-components = ["proxy"]
+description = "Proxmox host install with CLI and proxy boundary assets"
+components = ["cli", "proxy"]
 
 [profiles.proxmox-host-localvault]
 description = "Proxmox host install with localvault only"
@@ -83,5 +83,5 @@ description = "Proxmox LXC runtime install without keycenter"
 components = ["localvault"]
 
 [profiles.proxmox-lxc-allinone]
-description = "Proxmox LXC all-in-one install with keycenter, localvault, and proxy"
-components = ["keycenter", "localvault", "proxy"]
+description = "Proxmox LXC all-in-one install with keycenter, localvault, CLI, and proxy"
+components = ["keycenter", "localvault", "cli", "proxy"]

@@ -19,6 +19,15 @@ type VeilKeyClient struct {
 	cache   sync.Map
 }
 
+type ExactLookupMatch struct {
+	Ref        string `json:"ref"`
+	Family     string `json:"family"`
+	Scope      string `json:"scope"`
+	ID         string `json:"id"`
+	SecretName string `json:"secret_name,omitempty"`
+	Status     string `json:"status,omitempty"`
+}
+
 func NewVeilKeyClient(baseURL string) *VeilKeyClient {
 	return &VeilKeyClient{
 		baseURL: strings.TrimRight(baseURL, "/"),
@@ -81,6 +90,39 @@ func (c *VeilKeyClient) Resolve(token string) (string, error) {
 		lastErr = errors.New("resolve failed: no candidates")
 	}
 	return "", lastErr
+}
+
+func (c *VeilKeyClient) ExactLookup(plaintext string) ([]ExactLookupMatch, error) {
+	body, err := json.Marshal(map[string]string{"plaintext": plaintext})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.client.Post(
+		c.baseURL+"/api/lookup/exact",
+		"application/json",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return nil, fmt.Errorf("exact lookup failed %d: (unreadable body)", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("exact lookup failed %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	var result struct {
+		Matches []ExactLookupMatch `json:"matches"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	return result.Matches, nil
 }
 
 func resolveCandidates(token string) []string {

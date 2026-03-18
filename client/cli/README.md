@@ -32,10 +32,12 @@ This component owns:
 
 - `veil`
   - canonical user-facing session entrypoint
+- `veilkey`
+  - operator-facing management and crypto wrapper
 - `vk`
-  - CLI entrypoint
-- `veilkey-cli wrap-pty`
-  - secure PTY wrapper
+  - plaintext-to-ref helper
+- `veilkey-cli`
+  - lower-level implementation binary
 - `veilroot`
   - host boundary shell and session tooling
 
@@ -48,20 +50,45 @@ This component owns:
 - `proxy`
   - outbound enforcement layer used by wrapped workloads
 
-## Masking Behavior
+## Operator Model
 
-When inside a `veilkey-cli wrap-pty` secure terminal session:
+The intended operator model is:
 
-1. On Enter: watchlist values in the current line are masked on screen
-2. Automatic VK:hash resolution: a DEBUG trap restores any `VK:xxxx` tokens to their original values before execution
+- `veil`
+  - enter the protected Veil session
+- `veilkey`
+  - inspect or control behavior inside that session
+- `veilkey-cli`
+  - internal or lower-level surface used by wrappers and install/runtime scripts
 
-The prompt displays as:
+In practice:
 
+```bash
+veil
+claude
+codex
 ```
-🔒VK $ cat .env
-DATABASE_PASSWORD=VK:a1b2c3d4    <- VK token shown instead of the actual password
-🔒VK $ curl -H "Auth: VK:a1b2c3d4"  <- automatically restored to the original value at execution
+
+And for management:
+
+```bash
+veilkey status
+veilkey paste-mode off
+veilkey resolve VK:LOCAL:example
 ```
+
+`veil` should feel like a protected shell, while `veilkey` is the command surface for state, policy, and crypto actions.
+
+## Session Behavior
+
+When inside a Veil session:
+
+1. session config exports proxy and API environment
+2. a PTY wrapper filters output and inspects pasted input
+3. watchlist hits are masked on screen
+4. `VK:*` refs are resolved only at execution boundaries
+
+The shell prompt displays a `[VEIL]` badge when the prompt helper is installed.
 
 ### vk -- Value Encryption (Watchlist Registration)
 
@@ -93,14 +120,14 @@ veilkey-cli exec env DATABASE_URL="postgres://user:VK:b2c3d4e5@db:5432/app" ./mi
 ## Installation
 
 ```bash
-# Script install (binary + session config + veil/vk helpers)
+# Script install (binary + session config + veil/veilkey/vk helpers)
 bash install/install.sh
 
 # Or build directly
 make build
 go build -o bin/veilkey-session-config ./cmd/veilkey-session-config
 cp bin/veilkey-cli bin/veilkey-session-config /usr/local/bin/
-cp deploy/host/veil /usr/local/bin/
+cp deploy/host/veil deploy/host/veilkey deploy/host/veil-prompt.sh /usr/local/bin/
 cp scripts/vk /usr/local/bin/
 ```
 
@@ -141,6 +168,7 @@ go build -o /usr/local/bin/veilkey-session-config ./cmd/veilkey-session-config
 
 | Command | Description |
 |---------|-------------|
+| `proxy [args...]` | Run the local egress proxy |
 | `scan [file\|-]` | Detect secrets in a file or stdin (detection only, no API required) |
 | `filter [file\|-]` | Replace secrets with VK tokens and write to stdout |
 | `wrap <command...>` | Execute a command with automatic stdout replacement |
@@ -149,6 +177,7 @@ go build -o /usr/local/bin/veilkey-session-config ./cmd/veilkey-session-config
 | `resolve <VK:token>` | Restore a VK token to its original value |
 | `function <subcommand...>` | Manage repo-tracked TOML function wrappers |
 | `list` | List detected VeilKey entries |
+| `paste-mode [on\|off\|status]` | Control standalone pasted temp issuance in `wrap-pty` sessions |
 | `clear` | Clear session logs |
 | `status` | Show current status |
 | `version` | Print version |
@@ -179,7 +208,12 @@ veilkey-cli scan --exit-code --format sarif src/
 # Enter the secure terminal
 veil
 
+# Manage session state
+veilkey status
+veilkey paste-mode off
+
 # Or call the lower-level PTY wrapper directly
+veilkey session
 veilkey-cli wrap-pty
 
 # Encrypt a value
@@ -188,6 +222,32 @@ echo "my-api-key" | vk
 # List functions
 VEILKEY_FUNCTION_DIR=/opt/veilkey/veilkey-cli/functions veilkey-cli function list
 ```
+
+## Paste Mode
+
+`paste-mode` controls standalone pasted temp issuance inside wrapped PTY sessions.
+
+- `on`
+  - non-command pasted payloads may be issued as temporary `VK:TEMP:*` refs
+- `off`
+  - standalone paste issuance is disabled
+  - existing watchlist and detection behavior still applies
+
+Examples:
+
+```bash
+veilkey paste-mode status
+veilkey paste-mode off
+veilkey paste-mode on
+```
+
+## Current Limitation
+
+Verified sessions now use `VEILKEY_VERIFIED_SESSION=1` as the canonical launcher contract.
+
+- `veil` sets `VEILKEY_VERIFIED_SESSION=1`
+- `veilroot` flows also set `VEILKEY_VERIFIED_SESSION=1`
+- `veilkey-session-launch` accepts the canonical flag and still honors `VEILKEY_VEILROOT=1` for compatibility during transition
 
 ## Function Catalog
 

@@ -19,6 +19,15 @@
 - `installer`
   - 설치 및 검증 계층
 
+운영자 진입점은 현재 이렇게 나뉩니다.
+
+- `veil`
+  - 보호된 세션 진입점
+- `veilkey`
+  - 그 세션 안팎에서 상태, 암복호화, 정책을 다루는 명령
+- `veilkey-cli`
+  - 래퍼와 설치 스크립트가 사용하는 하위 구현 바이너리
+
 ## 핵심 로직
 
 가장 짧게 이해하면 이렇습니다.
@@ -149,6 +158,26 @@ heartbeat sent
 rotation applied and heartbeat sent
 rebind prepared with key_version=9
 ```
+
+## Veil 세션 사용 모델
+
+의도한 CLI 사용 흐름은 이렇습니다.
+
+```bash
+veil
+claude
+codex
+```
+
+관리 명령은 `veilkey`로 처리합니다.
+
+```bash
+veilkey status
+veilkey paste-mode on
+veilkey resolve VK:LOCAL:example
+```
+
+즉 `veil`은 보호된 환경에 들어가는 명령이고, `veilkey`는 그 안에서 정책과 키 동작을 다루는 명령입니다.
 
 ## 이게 아닌 것
 

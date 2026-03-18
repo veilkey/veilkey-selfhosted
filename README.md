@@ -34,6 +34,15 @@ The active runtime model is:
 - `installer`
   - installation and verification layer
 
+For operator entrypoints, the current split is:
+
+- `veil`
+  - protected session entrypoint
+- `veilkey`
+  - state, crypto, and policy control surface inside or alongside that session
+- `veilkey-cli`
+  - lower-level implementation binary used by wrappers and install/runtime scripts
+
 ## Core Logic
 
 The shortest mental model is:
@@ -218,6 +227,26 @@ The outbound enforcement edge is where `services/proxy` belongs. The intended sp
   - central policy, registration, audit, bulk operations
 - `LocalVault`
   - node-local runtime, ciphertext/context, execution boundary
+
+## Veil Session UX
+
+The intended CLI UX is:
+
+```bash
+veil
+claude
+codex
+```
+
+With management commands handled by `veilkey`:
+
+```bash
+veilkey status
+veilkey paste-mode on
+veilkey resolve VK:LOCAL:example
+```
+
+This keeps `veil` focused on entering the protected environment and `veilkey` focused on crypto and policy actions.
 - `proxy`
   - outbound enforcement surface when runtime traffic must be mediated
 

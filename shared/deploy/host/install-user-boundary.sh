@@ -64,7 +64,7 @@ id "$user_name" >/dev/null 2>&1 || { echo "unknown user: $user_name" >&2; exit 1
 home_dir="$(getent passwd "$user_name" | cut -d: -f6)"
 uid="$(id -u "$user_name")"
 
-install -d /etc/veilkey /var/log/veilkey-proxy "$home_dir/.config/environment.d" "$home_dir/.local/bin"
+install -d /etc/veilkey /var/log/veilkey-proxy "$home_dir/.local/bin"
 if [[ "$config_src" != "$config_dst" ]]; then
   install -m 0644 "$config_src" "$config_dst"
 fi
@@ -98,7 +98,7 @@ while IFS='=' read -r _vk_key _vk_val; do
   _vk_val="${_vk_val%\"}" ; _vk_val="${_vk_val#\"}"
   export "${_vk_key}=${_vk_val}"
 done < <(/usr/local/bin/veilkey-session-config tool-shell-exports "$tool")
-if [[ "${VEILKEY_ACTIVE:-}" == "1" ]]; then
+if [[ "${VEILKEY_VERIFIED_SESSION:-}" == "1" || "${VEILKEY_VEILROOT:-}" == "1" || "${VEILKEY_ACTIVE:-}" == "1" ]]; then
   exec "$real_bin" "$@"
 fi
 exec /usr/local/bin/veilkey session "$real_bin" "$@"
@@ -117,7 +117,6 @@ export VEILKEY_PROXY_STATE=active
 SCRIPT
 chmod 0644 /etc/profile.d/${user_name}-veilkey-proxy.sh
 
-/usr/local/bin/veilkey-session-config shell-exports | sed 's/^export //' >"$home_dir/.config/environment.d/50-veilkey-proxy.conf"
 for tool in codex claude opencode; do
   cat >"$home_dir/.local/bin/${tool}" <<SCRIPT
 #!/usr/bin/env bash

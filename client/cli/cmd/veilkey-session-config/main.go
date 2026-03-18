@@ -79,6 +79,10 @@ func getenvFirst(values ...string) string {
 	return ""
 }
 
+func (c *config) proxyURL(configured string) string {
+	return strings.TrimSpace(configured)
+}
+
 func (c *config) veilkeyLocalvaultURL() string {
 	return getenvFirst(
 		c.Veilkey.LocalvaultURL,
@@ -102,12 +106,15 @@ func (c *config) toolProxy(name string) (proxyTarget, error) {
 	}
 	proxyName := toolCfg.Proxy
 	if proxyName == "" || proxyName == "default" {
-		return c.Proxy.Default, nil
+		target := c.Proxy.Default
+		target.URL = c.proxyURL(target.URL)
+		return target, nil
 	}
 	cfg, ok := c.Proxy.Tools[proxyName]
 	if !ok {
 		return proxyTarget{}, fmt.Errorf("unknown proxy mapping: %s", proxyName)
 	}
+	cfg.URL = c.proxyURL(cfg.URL)
 	return cfg, nil
 }
 
@@ -149,6 +156,9 @@ func shellQuote(v string) string {
 
 func printExports(values [][2]string) {
 	for _, item := range values {
+		if item[1] == "" {
+			continue
+		}
 		fmt.Printf("export %s=%s\n", item[0], shellQuote(item[1]))
 	}
 }
@@ -329,11 +339,12 @@ func main() {
 			fmt.Println(host)
 		}
 	case "shell-exports":
+		proxyURL := cfg.proxyURL(cfg.Proxy.Default.URL)
 		printExports([][2]string{
-			{"VEILKEY_PROXY_URL", cfg.Proxy.Default.URL},
-			{"HTTP_PROXY", cfg.Proxy.Default.URL},
-			{"HTTPS_PROXY", cfg.Proxy.Default.URL},
-			{"ALL_PROXY", cfg.Proxy.Default.URL},
+			{"VEILKEY_PROXY_URL", proxyURL},
+			{"HTTP_PROXY", proxyURL},
+			{"HTTPS_PROXY", proxyURL},
+			{"ALL_PROXY", proxyURL},
 			{"NO_PROXY", cfg.mergedNoProxy(cfg.Proxy.Default.NoProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyKeycenterURL()},

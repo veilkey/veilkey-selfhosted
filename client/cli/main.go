@@ -32,12 +32,14 @@ func usage() {
 	fmt.Fprintf(os.Stderr, `Usage:
   veilkey-cli scan [options] [file|-]   Scan file/stdin for secrets (detect only)
   veilkey-cli filter [file|-]           Replace secrets in file/stdin (stdout)
+  veilkey-cli proxy [options]           Run the local egress proxy
   veilkey-cli wrap <command...>         Run command + auto-replace secrets
   veilkey-cli wrap-pty [command]        Interactive PTY + auto-replace (default: bash)
   veilkey-cli exec <command...>         Resolve VK: hashes + run command
   veilkey-cli resolve <VK:hash>         Resolve VK hash to original value
   veilkey-cli function <subcommand...>  Manage repo-tracked function wrappers
   veilkey-cli list                      List detected VeilKey entries
+  veilkey-cli paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey-cli clear                     Clear session log
   veilkey-cli status                    Show status
   veilkey-cli version                   Show version
@@ -72,7 +74,7 @@ func main() {
 		// These commands don't require API
 		if len(os.Args) > 1 {
 			switch os.Args[1] {
-			case "version", "help", "-h", "--help", "scan", "list", "clear", "status":
+			case "version", "help", "-h", "--help", "scan", "list", "clear", "status", "proxy", "paste-mode":
 				goto skipAPICheck
 			case "function":
 				if len(os.Args) > 2 {
@@ -154,6 +156,8 @@ skipAPICheck:
 	switch cmd {
 	case "wrap":
 		cmdWrap(args[1:], apiURL, logPath, patternsFile)
+	case "proxy":
+		cmdProxy(args[1:])
 	case "wrap-pty":
 		cmdWrapPty(args[1:], apiURL, logPath, patternsFile)
 	case "scan":
@@ -178,6 +182,8 @@ skipAPICheck:
 		cmdResolve(args[1], apiURL)
 	case "list":
 		cmdList(logPath)
+	case "paste-mode":
+		cmdPasteMode(args[1:])
 	case "clear":
 		cmdClear(logPath)
 	case "function":
@@ -402,6 +408,22 @@ func cmdClear(logPath string) {
 	fmt.Println("Session log cleared")
 }
 
+func cmdPasteMode(args []string) {
+	if len(args) == 0 || args[0] == "status" {
+		fmt.Printf("paste-mode: %s\n", currentPasteMode())
+		return
+	}
+	if len(args) > 1 {
+		fmt.Fprintln(os.Stderr, "Usage: veilkey-cli paste-mode [on|off|status]")
+		os.Exit(1)
+	}
+	if err := setPasteMode(args[0]); err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("paste-mode: %s\n", currentPasteMode())
+}
+
 func cmdStatus(apiURL, logPath, patternsFile string) {
 	cfg, err := LoadConfig(patternsFile)
 
@@ -410,6 +432,7 @@ func cmdStatus(apiURL, logPath, patternsFile string) {
 	fmt.Printf("Version: %s\n", version)
 	fmt.Printf("API:     %s\n", apiURL)
 	fmt.Printf("Log:     %s\n", logPath)
+	fmt.Printf("Paste:   %s\n", currentPasteMode())
 	fmt.Println()
 
 	logger := NewSessionLogger(logPath)
