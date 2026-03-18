@@ -32,7 +32,10 @@ func main() {
 }
 
 func runServer() {
-	dbPath := getEnvDefault("VEILKEY_DB_PATH", "/opt/veilkey/data/veilkey.db")
+	dbPath := os.Getenv("VEILKEY_DB_PATH")
+	if dbPath == "" {
+		log.Fatal("VEILKEY_DB_PATH is required")
+	}
 	dataDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		log.Fatalf("Failed to create data directory: %v", err)
@@ -50,7 +53,10 @@ func runServer() {
 	}
 	defer database.Close()
 
-	addr := getEnvDefault("VEILKEY_ADDR", ":10180")
+	addr := os.Getenv("VEILKEY_ADDR")
+	if addr == "" {
+		log.Fatal("VEILKEY_ADDR is required")
+	}
 
 	var trustedIPs []string
 	if v := os.Getenv("VEILKEY_TRUSTED_IPS"); v != "" {
@@ -136,7 +142,10 @@ func runHKMInit() {
 
 	password := ""
 
-	dbPath := getEnvDefault("VEILKEY_DB_PATH", "/opt/veilkey/data/veilkey.db")
+	dbPath := os.Getenv("VEILKEY_DB_PATH")
+	if dbPath == "" {
+		log.Fatal("VEILKEY_DB_PATH is required")
+	}
 	dataDir := filepath.Dir(dbPath)
 	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		log.Fatalf("Failed to create data directory: %v", err)
@@ -288,13 +297,6 @@ func readPassword(prompt string) string {
 		return strings.TrimSpace(scanner.Text())
 	}
 	return ""
-}
-
-func getEnvDefault(key, defaultVal string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return defaultVal
 }
 
 // parseDurationEnv reads a duration from env var (e.g. "30s", "5m"), falls back to default
