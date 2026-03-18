@@ -254,7 +254,7 @@ Secrets are referenced using `VK:{SCOPE}:{REF}` tokens:
 
 ## Database
 
-Both VaultCenter and LocalVault use SQLite:
+Both VaultCenter and LocalVault use SQLCipher (encrypted SQLite):
 
 - **VaultCenter**: `VEILKEY_DB_PATH` (default: `/opt/veilkey/vaultcenter/data/veilkey.db`)
 - **LocalVault**: `VEILKEY_DB_PATH` (default: `/opt/veilkey/localvault/data/veilkey.db`)

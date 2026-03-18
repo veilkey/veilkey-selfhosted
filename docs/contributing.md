@@ -7,12 +7,16 @@ git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 ```
 
-Each component is an independent Go module. To work on a specific service:
+Go services use SQLCipher (`CGO_ENABLED=1` required). Rust CLIs use Cargo.
 
 ```bash
+# Go services (requires gcc for CGO/SQLCipher)
 cd services/vaultcenter
-go test ./...
-go build -o veilkey-vaultcenter ./cmd
+CGO_ENABLED=1 go build -o veilkey-vaultcenter ./cmd
+
+# Rust CLIs
+cd services/veil-cli && cargo build --release
+cd services/veilkey-cli && cargo build --release
 ```
 
 ## Branch Strategy
@@ -36,12 +40,10 @@ go build -o veilkey-vaultcenter ./cmd
 
 | Job | Trigger | What it does |
 |-----|---------|-------------|
-| vaultcenter | `services/vaultcenter/**` changed | lint + test + build |
-| localvault | `services/localvault/**` changed | lint + test + build |
-| proxy | `services/proxy/**` changed | lint + test + build |
-| cli | `client/cli/**` changed | lint + test + build |
-| installer | `installer/**` changed | manifest validate + shell tests |
-| shared | `shared/**` changed | shell hook tests |
+| vaultcenter | `services/vaultcenter/**` changed | lint (golangci-lint) + build (CGO/SQLCipher) |
+| localvault | `services/localvault/**` changed | lint (golangci-lint) + build (CGO/SQLCipher) |
+| veil-cli | `services/veil-cli/**` changed | clippy + test + release build |
+| veilkey-cli | `services/veilkey-cli/**` changed | clippy + release build |
 | pr-gate | always | verifies all required jobs passed |
 
 ## Code Style
@@ -53,20 +55,16 @@ go build -o veilkey-vaultcenter ./cmd
 
 ## Testing
 
-### Go tests
+### Rust tests (veil-cli)
 
 ```bash
-cd services/vaultcenter && go test ./... -race -count=1
-cd services/localvault && go test ./... -race -count=1
-cd services/proxy && go test ./... -race -count=1
-cd client/cli && go test ./... -race -count=1
+cd services/veil-cli && cargo test
 ```
 
 ### Shell tests
 
 ```bash
-cd installer && bash tests/test_install_profile_command.sh
-cd shared && bash tests/test_veilroot_shell_hook.sh
+cd services/vaultcenter && bash tests/test_mr_guard.sh
 ```
 
 ## Component Ownership
