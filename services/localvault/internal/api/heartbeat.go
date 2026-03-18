@@ -16,7 +16,7 @@ import (
 
 func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Duration) {
 	if hubURL == "" {
-		log.Println("VEILKEY_KEYCENTER_URL not set, heartbeat disabled")
+		log.Println("VEILKEY_VAULTCENTER_URL not set, heartbeat disabled")
 		return
 	}
 

@@ -202,7 +202,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	// Save vaultcenter URL to DB config if provided
 	if req.VaultcenterURL != "" {
 		normalized := strings.TrimRight(req.VaultcenterURL, "/")
-		if err := database.SaveConfig("VEILKEY_KEYCENTER_URL", normalized); err != nil {
+		if err := database.SaveConfig("VEILKEY_VAULTCENTER_URL", normalized); err != nil {
 			log.Printf("install: failed to save vaultcenter URL: %v", err)
 			http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
 			return
@@ -325,7 +325,7 @@ func runCron() {
 		}
 		hubURL := server.LogResolvedVaultcenterURL("cron")
 		if hubURL == "" {
-			log.Fatal("VEILKEY_KEYCENTER_URL is required for cron tick")
+			log.Fatal("VEILKEY_VAULTCENTER_URL is required for cron tick")
 		}
 		globalEndpoint := strings.TrimRight(hubURL, "/") + "/api/functions/global"
 		if upserted, removed, err := server.SyncGlobalFunctions(globalEndpoint); err != nil {

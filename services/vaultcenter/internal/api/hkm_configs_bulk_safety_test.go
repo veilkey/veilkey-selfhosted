@@ -90,11 +90,11 @@ func TestHKM_BulkSet_RejectsNoOpOverwrite(t *testing.T) {
 func TestHKM_BulkSet_AllowsWhenValuesDiffer(t *testing.T) {
 	srv, handler := setupHKMServer(t)
 
-	registerMockAgent(t, srv, "svc-1", map[string]string{"KEYCENTER_URL": "http://old:10180"}, nil)
-	registerMockAgent(t, srv, "svc-2", map[string]string{"KEYCENTER_URL": "http://new:10180"}, nil)
+	registerMockAgent(t, srv, "svc-1", map[string]string{"VAULTCENTER_URL": "http://old:10180"}, nil)
+	registerMockAgent(t, srv, "svc-2", map[string]string{"VAULTCENTER_URL": "http://new:10180"}, nil)
 
 	w := postJSON(handler, "/api/configs/bulk-set", map[string]interface{}{
-		"key":   "KEYCENTER_URL",
+		"key":   "VAULTCENTER_URL",
 		"value": "http://new:10180",
 	})
 	if w.Code != http.StatusOK {

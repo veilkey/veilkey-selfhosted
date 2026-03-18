@@ -191,7 +191,7 @@ func TestHandleActivateRouteActivatesTempRefIntoLocal(t *testing.T) {
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
 	defer vaultcenter.Close()
-	t.Setenv("VEILKEY_KEYCENTER_URL", vaultcenter.URL)
+	t.Setenv("VEILKEY_VAULTCENTER_URL", vaultcenter.URL)
 	server.SetIdentity(&NodeIdentity{NodeID: "test-node", VaultHash: "deadbeef", VaultName: "test-vault"})
 	handler := server.SetupRoutes()
 
@@ -245,7 +245,7 @@ func TestHandleActivateRouteActivatesTempRefIntoLocal(t *testing.T) {
 
 func TestHandleActivatePrefersEnvVaultcenterOverStaleDBConfig(t *testing.T) {
 	server := setupReencryptTestServer(t)
-	if err := server.db.SaveConfig("VEILKEY_KEYCENTER_URL", "http://stale.example:10180"); err != nil {
+	if err := server.db.SaveConfig("VEILKEY_VAULTCENTER_URL", "http://stale.example:10180"); err != nil {
 		t.Fatalf("SaveConfig: %v", err)
 	}
 	var syncPath string
@@ -256,7 +256,7 @@ func TestHandleActivatePrefersEnvVaultcenterOverStaleDBConfig(t *testing.T) {
 	}))
 	defer vaultcenter.Close()
 
-	t.Setenv("VEILKEY_KEYCENTER_URL", vaultcenter.URL)
+	t.Setenv("VEILKEY_VAULTCENTER_URL", vaultcenter.URL)
 	server.SetIdentity(&NodeIdentity{NodeID: "test-node", VaultHash: "deadbeef", VaultName: "test-vault"})
 	handler := server.SetupRoutes()
 
@@ -280,7 +280,7 @@ func TestHandleActivateReturnsDegradedWhenTrackedRefSyncFails(t *testing.T) {
 	}))
 	defer vaultcenter.Close()
 
-	t.Setenv("VEILKEY_KEYCENTER_URL", vaultcenter.URL)
+	t.Setenv("VEILKEY_VAULTCENTER_URL", vaultcenter.URL)
 	server.SetIdentity(&NodeIdentity{NodeID: "test-node", VaultHash: "deadbeef", VaultName: "test-vault"})
 	handler := server.SetupRoutes()
 

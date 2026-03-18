@@ -82,7 +82,7 @@ func (s *Server) HandlePatchVaultcenterURL(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	if err := s.db.SaveConfig("VEILKEY_KEYCENTER_URL", strings.TrimRight(req.VaultcenterURL, "/")); err != nil {
+	if err := s.db.SaveConfig("VEILKEY_VAULTCENTER_URL", strings.TrimRight(req.VaultcenterURL, "/")); err != nil {
 		log.Printf("install: failed to save vaultcenter URL: %v", err)
 		http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
 		return

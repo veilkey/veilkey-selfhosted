@@ -30,9 +30,9 @@ chmod +x "${fake_bin}/vibe_lxc_ops"
 
 PATH="${fake_bin}:$PATH" VEILKEY_SOURCE_ONLY=1 bash -c "${source_script}"
 
-grep -q "^VEILKEY_KEYCENTER_URL=$" "${env_file}"
+grep -q "^VEILKEY_VAULTCENTER_URL=$" "${env_file}"
 
-count="$(grep -c '^VEILKEY_KEYCENTER_URL=' "${env_file}")"
+count="$(grep -c '^VEILKEY_VAULTCENTER_URL=' "${env_file}")"
 [[ "${count}" -eq 1 ]]
 
 echo "ok"

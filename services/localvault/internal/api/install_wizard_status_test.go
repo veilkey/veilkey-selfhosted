@@ -17,8 +17,8 @@ func TestHandleInstallStatusIncludesVaultcenterCompatibilityFields(t *testing.T)
 	}))
 	defer upstream.Close()
 
-	if err := server.db.SaveConfig("VEILKEY_KEYCENTER_URL", upstream.URL); err != nil {
-		t.Fatalf("SaveConfig VEILKEY_KEYCENTER_URL: %v", err)
+	if err := server.db.SaveConfig("VEILKEY_VAULTCENTER_URL", upstream.URL); err != nil {
+		t.Fatalf("SaveConfig VEILKEY_VAULTCENTER_URL: %v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/status", nil)
@@ -53,8 +53,8 @@ func TestHandleInstallStatusIncludesVaultcenterErrorAlias(t *testing.T) {
 	}))
 	defer upstream.Close()
 
-	if err := server.db.SaveConfig("VEILKEY_KEYCENTER_URL", upstream.URL); err != nil {
-		t.Fatalf("SaveConfig VEILKEY_KEYCENTER_URL: %v", err)
+	if err := server.db.SaveConfig("VEILKEY_VAULTCENTER_URL", upstream.URL); err != nil {
+		t.Fatalf("SaveConfig VEILKEY_VAULTCENTER_URL: %v", err)
 	}
 
 	req := httptest.NewRequest(http.MethodGet, "/api/install/status", nil)

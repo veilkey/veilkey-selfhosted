@@ -18,8 +18,8 @@ func (s *Server) resolveVaultcenterTarget() vaultcenterTarget {
 		label string
 		value string
 	}{
-		{label: "env:VEILKEY_KEYCENTER_URL", value: strings.TrimSpace(os.Getenv("VEILKEY_KEYCENTER_URL"))},
-		{label: "db:VEILKEY_KEYCENTER_URL", value: s.lookupConfigValue("VEILKEY_KEYCENTER_URL")},
+		{label: "env:VEILKEY_VAULTCENTER_URL", value: strings.TrimSpace(os.Getenv("VEILKEY_VAULTCENTER_URL"))},
+		{label: "db:VEILKEY_VAULTCENTER_URL", value: s.lookupConfigValue("VEILKEY_VAULTCENTER_URL")},
 	}
 
 	selected := vaultcenterTarget{}
@@ -59,7 +59,7 @@ func (s *Server) resolveVaultcenterTarget() vaultcenterTarget {
 func (s *Server) logVaultcenterTarget(context string) string {
 	target := s.resolveVaultcenterTarget()
 	if target.URL == "" {
-		log.Printf("%s: VEILKEY_KEYCENTER_URL not resolved", context)
+		log.Printf("%s: VEILKEY_VAULTCENTER_URL not resolved", context)
 		return ""
 	}
 	log.Printf("%s: resolved vaultcenter=%s source=%s", context, target.URL, target.Source)

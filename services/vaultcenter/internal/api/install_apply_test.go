@@ -103,7 +103,7 @@ func TestInstallValidateAllowsLXCAllInOneRootWithoutDangerousConfirmation(t *tes
 		t.Fatalf("WriteFile(localvaultPassword): %v", err)
 	}
 	t.Setenv("VEILKEY_INSTALL_SCRIPT_ALLOWLIST", script)
-	t.Setenv("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", vaultcenterPassword)
+	t.Setenv("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", vaultcenterPassword)
 	t.Setenv("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", localvaultPassword)
 	t.Setenv("VEILKEY_PROXMOX_LXC_TEMPLATE_VMID", "9000")
 	t.Setenv("VEILKEY_PROXMOX_LXC_NET0_TEMPLATE", "name=eth0,bridge=vmbr0,ip=192.0.2.%VMID%/24,gw=192.0.2.1")
@@ -165,7 +165,7 @@ func TestInstallValidateRejectsLXCAllInOneWithoutProvisioningInputs(t *testing.T
 		t.Fatalf("WriteFile(localvaultPassword): %v", err)
 	}
 	t.Setenv("VEILKEY_INSTALL_SCRIPT_ALLOWLIST", script)
-	t.Setenv("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", vaultcenterPassword)
+	t.Setenv("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", vaultcenterPassword)
 	t.Setenv("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", localvaultPassword)
 
 	cfg, err := srv.db.GetOrCreateUIConfig()
@@ -223,7 +223,7 @@ func TestRunInstallApplyExecutesConfiguredScript(t *testing.T) {
 	tmpDir := t.TempDir()
 	outputFile := filepath.Join(tmpDir, "install-env.txt")
 	script := filepath.Join(tmpDir, "apply-install.sh")
-	body := "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'profile=%s\\nroot=%s\\nvaultcenter=%s\\nlocalvault=%s\\n' \"$VEILKEY_INSTALL_PROFILE\" \"$VEILKEY_INSTALL_ROOT\" \"$VEILKEY_KEYCENTER_URL\" \"$VEILKEY_LOCALVAULT_URL\" > \"" + outputFile + "\"\n"
+	body := "#!/usr/bin/env bash\nset -euo pipefail\nprintf 'profile=%s\\nroot=%s\\nvaultcenter=%s\\nlocalvault=%s\\n' \"$VEILKEY_INSTALL_PROFILE\" \"$VEILKEY_INSTALL_ROOT\" \"$VEILKEY_VAULTCENTER_URL\" \"$VEILKEY_LOCALVAULT_URL\" > \"" + outputFile + "\"\n"
 	if err := os.WriteFile(script, []byte(body), 0755); err != nil {
 		t.Fatalf("WriteFile(script): %v", err)
 	}
