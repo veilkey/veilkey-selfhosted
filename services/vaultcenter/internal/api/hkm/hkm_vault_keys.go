@@ -203,7 +203,7 @@ func (h *Handler) handleVaultList(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta, int, []byte, error) {
-	resp, err := http.Get(agentURL + agentPathSecrets+"/meta/" + name)
+	resp, err := http.Get(joinPath(agentURL, agentPathSecrets, "meta", name))
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -211,7 +211,7 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
-		fallbackResp, err := http.Get(agentURL + agentPathSecrets+"/" + name)
+		fallbackResp, err := http.Get(joinPath(agentURL, agentPathSecrets, name))
 		if err != nil {
 			return nil, 0, nil, err
 		}

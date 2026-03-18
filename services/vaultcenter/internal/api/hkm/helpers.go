@@ -13,6 +13,8 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 )
 
+func joinPath(base string, elem ...string) string { return httputil.JoinPath(base, elem...) }
+
 func respondJSON(w http.ResponseWriter, status int, data any) {
 	httputil.RespondJSON(w, status, data)
 }

@@ -78,7 +78,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 		checkWg.Add(1)
 		go func(ai *agentInfo) {
 			defer checkWg.Done()
-			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.URL()+agentPathConfigs+"/"+req.Key, nil)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, joinPath(ai.URL(), agentPathConfigs, req.Key), nil)
 			if err != nil {
 				checkMu.Lock()
 				checks = append(checks, bulkSetCheck{ai: ai, found: false})
@@ -281,7 +281,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 			// Key didn't exist before → delete it
 			go func(ai *agentInfo) {
 				defer wg.Done()
-				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete, ai.URL()+agentPathConfigs+"/"+key, nil)
+				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete, joinPath(ai.URL(), agentPathConfigs, key), nil)
 				if httpReq != nil {
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {

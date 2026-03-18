@@ -47,7 +47,7 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 		wg.Add(1)
 		go func(ai *agentInfo) {
 			defer wg.Done()
-			req, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.URL()+agentPathConfigs+"/"+key, nil)
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinPath(ai.URL(), agentPathConfigs, key), nil)
 			if err != nil {
 				return
 			}

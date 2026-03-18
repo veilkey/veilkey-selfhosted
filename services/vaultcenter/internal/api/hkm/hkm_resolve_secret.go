@@ -5,7 +5,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -93,7 +92,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				case <-ctx.Done():
 					return
 				}
-				req, err := http.NewRequestWithContext(ctx, http.MethodGet, childURL+agentPathResolve+"/"+url.PathEscape(ref), nil)
+				req, err := http.NewRequestWithContext(ctx, http.MethodGet, joinPath(childURL, agentPathResolve, ref), nil)
 				if err != nil {
 					log.Printf("resolve: failed to create request for %s: %v", childURL, err)
 					return
@@ -136,7 +135,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 	// Parent resolve
 	if info, err := h.deps.DB().GetNodeInfo(); err == nil && info.ParentURL != "" {
 		client := &http.Client{Timeout: h.deps.ParentForwardTimeout()}
-		req, err := http.NewRequest(http.MethodGet, info.ParentURL+agentPathResolve+"/"+url.PathEscape(ref), nil)
+		req, err := http.NewRequest(http.MethodGet, joinPath(info.ParentURL, agentPathResolve, ref), nil)
 		if err != nil {
 			log.Printf("resolve: failed to create parent request: %v", err)
 			respondError(w, http.StatusNotFound, "ref not found: "+ref)

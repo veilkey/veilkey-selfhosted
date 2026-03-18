@@ -195,7 +195,7 @@ func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, agent.URL()+agentPathSecrets+"/"+name+"/fields/"+fieldKey, nil)
+	req, err := http.NewRequest(http.MethodDelete, joinPath(agent.URL(), agentPathSecrets, name, "fields", fieldKey), nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to build delete request")
 		return

@@ -68,7 +68,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 		wg.Add(1)
 		go func(ai *agentInfo) {
 			defer wg.Done()
-			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, ai.URL()+agentPathConfigs+"/"+req.Key, nil)
+			httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, joinPath(ai.URL(), agentPathConfigs, req.Key), nil)
 			if err != nil {
 				return
 			}
