@@ -34,7 +34,7 @@ jobs:
             veilkey-cli:
               - 'services/veilkey-cli/**'
 
-  # ── VaultCenter ───────────────────────────────────────────────
+  # ── VaultCenter (Go + SQLCipher) ─────────────────────────────
   vaultcenter:
     needs: changes
     if: needs.changes.outputs.vaultcenter == 'true' || github.ref_type == 'tag'
@@ -61,7 +61,7 @@ jobs:
           name: veilkey-vaultcenter-linux-amd64
           path: services/vaultcenter/veilkey-vaultcenter
 
-  # ── LocalVault ────────────────────────────────────────────────
+  # ── LocalVault (Go + SQLCipher) ──────────────────────────────
   localvault:
     needs: changes
     if: needs.changes.outputs.localvault == 'true' || github.ref_type == 'tag'
@@ -101,8 +101,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/veil-cli
       - name: Lint
         run: cargo clippy -- -D warnings
+      - name: Test
+        run: cargo test
       - name: Build
         run: cargo build --release
       - name: Upload artifact
@@ -110,7 +115,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veil-cli-linux-amd64
-          path: services/veil-cli/target/release/
+          path: |
+            services/veil-cli/target/release/veil
+            services/veil-cli/target/release/veilkey
 
   # ── veilkey-cli (Rust) ────────────────────────────────────────
   veilkey-cli:
@@ -125,6 +132,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/veilkey-cli
       - name: Lint
         run: cargo clippy -- -D warnings
       - name: Build
@@ -134,7 +144,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veilkey-cli-linux-amd64
-          path: services/veilkey-cli/target/release/
+          path: |
+            services/veilkey-cli/target/release/veilkey-cli
+            services/veilkey-cli/target/release/veilkey-session-config
 
   # ── PR 게이트 (모든 필수 job 통과 확인) ──────────────────────
   pr-gate:
