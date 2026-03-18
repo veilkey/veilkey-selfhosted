@@ -1,0 +1,19 @@
+[package]
+name = "veil-cli-rs"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "veil_cli_rs"
+path = "src/lib.rs"
+
+[[bin]]
+name = "veil"
+path = "src/bin/veil.rs"
+
+[[bin]]
+name = "veilkey"
+path = "src/bin/veilkey.rs"
+
+
+[dependencies]

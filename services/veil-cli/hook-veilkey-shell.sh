@@ -1,1 +1,0 @@
-../../../../shared/deploy/host/hook-veilkey-shell.sh
