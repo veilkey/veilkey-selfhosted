@@ -3,7 +3,6 @@ package commands
 import (
 	"bufio"
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -68,7 +67,6 @@ func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
 	return defaultVal
 }
 
-
 func generateInitRef(length int) (string, error) {
 	b := make([]byte, length)
 	if _, err := rand.Read(b); err != nil {
@@ -77,6 +75,3 @@ func generateInitRef(length int) (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func base64Encode(data []byte) string {
-	return base64.StdEncoding.EncodeToString(data)
-}

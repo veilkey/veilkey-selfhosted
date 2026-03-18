@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -23,7 +24,7 @@ func RunInit() {
 	}
 
 	if !isRoot {
-		fmt.Println("Usage: veilkey-storage init --root")
+		fmt.Println("Usage: veilkey-vaultcenter init --root")
 		fmt.Println("  --root      Initialize as root node")
 		fmt.Println("  Password is read from stdin (pipe) or interactive TTY prompt.")
 		os.Exit(1)
@@ -99,7 +100,7 @@ func RunInit() {
 		pwRefID, refErr := generateInitRef(16)
 		if refErr == nil {
 			parts := db.RefParts{Family: "VK", Scope: "TEMP", ID: pwRefID}
-			encoded := base64Encode(pwCiphertext) + ":" + base64Encode(pwNonce)
+			encoded := base64.StdEncoding.EncodeToString(pwCiphertext) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
 			expiresAt := time.Now().UTC().Add(1 * time.Hour)
 			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, "temp", expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
 				tempRef = parts.Canonical()

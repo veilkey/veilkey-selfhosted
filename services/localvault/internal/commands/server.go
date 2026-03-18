@@ -64,7 +64,6 @@ func runSetupServer(dbPath, dataDir string) {
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
-	defer database.Close()
 
 	server := api.NewServer(database, nil, []string{})
 
