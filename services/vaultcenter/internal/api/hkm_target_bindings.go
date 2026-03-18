@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -10,8 +9,8 @@ import (
 )
 
 func (s *Server) handleTargetBindings(w http.ResponseWriter, r *http.Request) {
-	bindingType := strings.TrimSpace(r.PathValue("binding_type"))
-	targetName := strings.TrimSpace(r.PathValue("target_name"))
+	bindingType := pathVal(r, "binding_type")
+	targetName := pathVal(r, "target_name")
 	if bindingType == "" || targetName == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_type and target_name are required")
 		return
@@ -55,8 +54,8 @@ func (s *Server) handleTargetBindings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTargetBindingsReplace(w http.ResponseWriter, r *http.Request) {
-	bindingType := strings.TrimSpace(r.PathValue("binding_type"))
-	targetName := strings.TrimSpace(r.PathValue("target_name"))
+	bindingType := pathVal(r, "binding_type")
+	targetName := pathVal(r, "target_name")
 	if bindingType == "" || targetName == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_type and target_name are required")
 		return
@@ -71,7 +70,7 @@ func (s *Server) handleTargetBindingsReplace(w http.ResponseWriter, r *http.Requ
 			Required     *bool  `json:"required"`
 		} `json:"bindings"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -133,8 +132,8 @@ func (s *Server) handleTargetBindingsReplace(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleTargetImpact(w http.ResponseWriter, r *http.Request) {
-	bindingType := strings.TrimSpace(r.PathValue("binding_type"))
-	targetName := strings.TrimSpace(r.PathValue("target_name"))
+	bindingType := pathVal(r, "binding_type")
+	targetName := pathVal(r, "target_name")
 	if bindingType == "" || targetName == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_type and target_name are required")
 		return
@@ -168,8 +167,8 @@ func (s *Server) handleTargetImpact(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTargetBindingsDeleteAll(w http.ResponseWriter, r *http.Request) {
-	bindingType := strings.TrimSpace(r.PathValue("binding_type"))
-	targetName := strings.TrimSpace(r.PathValue("target_name"))
+	bindingType := pathVal(r, "binding_type")
+	targetName := pathVal(r, "target_name")
 	if bindingType == "" || targetName == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_type and target_name are required")
 		return
@@ -191,8 +190,8 @@ func (s *Server) handleTargetBindingsDeleteAll(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleTargetSummary(w http.ResponseWriter, r *http.Request) {
-	bindingType := strings.TrimSpace(r.PathValue("binding_type"))
-	targetName := strings.TrimSpace(r.PathValue("target_name"))
+	bindingType := pathVal(r, "binding_type")
+	targetName := pathVal(r, "target_name")
 	if bindingType == "" || targetName == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_type and target_name are required")
 		return

@@ -311,6 +311,14 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func pathVal(r *http.Request, key string) string {
+	return strings.TrimSpace(r.PathValue(key))
+}
+
+func decodeJSON(r *http.Request, dst any) error {
+	return json.NewDecoder(r.Body).Decode(dst)
+}
+
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)

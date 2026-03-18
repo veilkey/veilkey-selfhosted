@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"slices"
 )
@@ -62,7 +61,7 @@ func (s *Server) handleTrackedRefCleanup(w http.ResponseWriter, r *http.Request)
 		Reasons []string `json:"reasons"`
 	}
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		_ = decodeJSON(r, &req)
 	}
 
 	report, err := s.loadTrackedRefAuditReport()
@@ -83,10 +82,10 @@ func (s *Server) handleTrackedRefCleanup(w http.ResponseWriter, r *http.Request)
 		Apply:   req.Apply,
 		Actions: actions,
 		Counts: map[string]int{
-			"actions":          len(actions),
+			"actions":           len(actions),
 			"delete_candidates": 0,
-			"manual_actions":   0,
-			"deleted":          0,
+			"manual_actions":    0,
+			"deleted":           0,
 		},
 	}
 	for _, action := range actions {

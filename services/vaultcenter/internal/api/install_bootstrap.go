@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -18,7 +17,7 @@ type installBootstrapRequest struct {
 
 func (s *Server) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r *http.Request) {
 	var req installBootstrapRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

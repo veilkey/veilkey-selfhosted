@@ -7,7 +7,6 @@ import (
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -665,7 +664,7 @@ func (s *Server) handleAdminTrackedRefCleanupPreview(w http.ResponseWriter, r *h
 		Reasons []string `json:"reasons"`
 	}
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		_ = decodeJSON(r, &req)
 	}
 	resp, err := s.adminTrackedRefCleanupResponse(false, req.Reasons)
 	if err != nil {
@@ -892,7 +891,7 @@ func totpCode(secret string, now time.Time) string {
 }
 
 func decodeRequestJSON(r *http.Request, dst any) error {
-	return json.NewDecoder(r.Body).Decode(dst)
+	return decodeJSON(r, dst)
 }
 
 func (s *Server) resolveAdminReveal(ref string) (map[string]any, error) {

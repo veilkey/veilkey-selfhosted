@@ -18,7 +18,7 @@ type approvalTokenSubmitRequest struct {
 }
 
 func (s *Server) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(r.PathValue("token"))
+	token := pathVal(r, "token")
 	if token == "" {
 		s.respondError(w, http.StatusBadRequest, "token is required")
 		return
@@ -52,7 +52,7 @@ func (s *Server) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleApprovalTokenSubmit(w http.ResponseWriter, r *http.Request) {
-	token := strings.TrimSpace(r.PathValue("token"))
+	token := pathVal(r, "token")
 	if token == "" {
 		s.respondError(w, http.StatusBadRequest, "token is required")
 		return
@@ -82,7 +82,7 @@ func (s *Server) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *ht
 
 	var req approvalTokenSubmitRequest
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			s.respondError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}

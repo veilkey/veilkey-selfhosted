@@ -29,7 +29,7 @@ func (s *Server) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Requ
 	var req struct {
 		Fields []agentSecretField `json:"fields"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || len(req.Fields) == 0 {
+	if err := decodeJSON(r, &req); err != nil || len(req.Fields) == 0 {
 		s.respondError(w, http.StatusBadRequest, "fields are required")
 		return
 	}

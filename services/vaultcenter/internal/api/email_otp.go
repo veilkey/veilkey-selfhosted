@@ -3,7 +3,6 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"math/rand/v2"
 	"net/http"
@@ -22,7 +21,7 @@ type emailOTPRequest struct {
 
 func (s *Server) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Request) {
 	var req emailOTPRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

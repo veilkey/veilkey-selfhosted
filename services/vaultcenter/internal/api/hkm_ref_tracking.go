@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -130,7 +129,7 @@ func (s *Server) handleTrackedRefSync(w http.ResponseWriter, r *http.Request) {
 		Version          int    `json:"version"`
 		Status           string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

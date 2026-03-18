@@ -224,7 +224,7 @@ func (s *Server) saveBulkApplyRun(vaultHash, workflowName, runKind, status strin
 }
 
 func (s *Server) handleBulkApplyWorkflows(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
+	vaultHash := pathVal(r, "vault")
 	if vaultHash == "" {
 		s.respondError(w, http.StatusBadRequest, "vault is required")
 		return
@@ -246,8 +246,8 @@ func (s *Server) handleBulkApplyWorkflows(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleBulkApplyWorkflow(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	workflowName := strings.TrimSpace(r.PathValue("name"))
+	vaultHash := pathVal(r, "vault")
+	workflowName := pathVal(r, "name")
 	if vaultHash == "" || workflowName == "" {
 		s.respondError(w, http.StatusBadRequest, "vault and workflow are required")
 		return
@@ -268,8 +268,8 @@ func (s *Server) handleBulkApplyWorkflow(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleBulkApplyWorkflowRuns(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	workflowName := strings.TrimSpace(r.PathValue("name"))
+	vaultHash := pathVal(r, "vault")
+	workflowName := pathVal(r, "name")
 	if vaultHash == "" || workflowName == "" {
 		s.respondError(w, http.StatusBadRequest, "vault and workflow are required")
 		return
@@ -292,7 +292,7 @@ func (s *Server) handleBulkApplyWorkflowRuns(w http.ResponseWriter, r *http.Requ
 }
 
 func (s *Server) handleBulkApplyRun(w http.ResponseWriter, r *http.Request) {
-	runID := strings.TrimSpace(r.PathValue("run"))
+	runID := pathVal(r, "run")
 	if runID == "" {
 		s.respondError(w, http.StatusBadRequest, "run is required")
 		return
@@ -326,52 +326,35 @@ func (s *Server) proxyBulkApplyWorkflow(r *http.Request, vaultHash, workflowName
 	return resp.StatusCode, respBody, nil
 }
 
-func (s *Server) handleBulkApplyWorkflowPrecheck(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	workflowName := strings.TrimSpace(r.PathValue("name"))
+func (s *Server) proxyAndRecordWorkflow(w http.ResponseWriter, r *http.Request, endpoint, runType, failStatus string) {
+	vaultHash := pathVal(r, "vault")
+	workflowName := pathVal(r, "name")
 	if vaultHash == "" || workflowName == "" {
 		s.respondError(w, http.StatusBadRequest, "vault and workflow are required")
 		return
 	}
-	statusCode, body, err := s.proxyBulkApplyWorkflow(r, vaultHash, workflowName, "/api/bulk-apply/precheck")
+	statusCode, body, err := s.proxyBulkApplyWorkflow(r, vaultHash, workflowName, endpoint)
 	if err != nil {
 		s.respondError(w, statusCode, err.Error())
 		return
 	}
 	var payload map[string]any
-	status := "precheck_failed"
+	status := failStatus
 	if json.Unmarshal(body, &payload) == nil {
 		if raw := strings.TrimSpace(fmt.Sprint(payload["status"])); raw != "" {
 			status = raw
 		}
 	}
-	s.saveBulkApplyRun(vaultHash, workflowName, "precheck", status, body)
+	s.saveBulkApplyRun(vaultHash, workflowName, runType, status, body)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
 	_, _ = w.Write(body)
 }
 
+func (s *Server) handleBulkApplyWorkflowPrecheck(w http.ResponseWriter, r *http.Request) {
+	s.proxyAndRecordWorkflow(w, r, "/api/bulk-apply/precheck", "precheck", "precheck_failed")
+}
+
 func (s *Server) handleBulkApplyWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	workflowName := strings.TrimSpace(r.PathValue("name"))
-	if vaultHash == "" || workflowName == "" {
-		s.respondError(w, http.StatusBadRequest, "vault and workflow are required")
-		return
-	}
-	statusCode, body, err := s.proxyBulkApplyWorkflow(r, vaultHash, workflowName, "/api/bulk-apply/execute")
-	if err != nil {
-		s.respondError(w, statusCode, err.Error())
-		return
-	}
-	var payload map[string]any
-	status := "apply_failed"
-	if json.Unmarshal(body, &payload) == nil {
-		if raw := strings.TrimSpace(fmt.Sprint(payload["status"])); raw != "" {
-			status = raw
-		}
-	}
-	s.saveBulkApplyRun(vaultHash, workflowName, "run", status, body)
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	_, _ = w.Write(body)
+	s.proxyAndRecordWorkflow(w, r, "/api/bulk-apply/execute", "run", "apply_failed")
 }

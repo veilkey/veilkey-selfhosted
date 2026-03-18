@@ -123,6 +123,29 @@ func (d *DB) migrate() error {
 	return d.PromoteOperationalTempRefs(nil)
 }
 
+// dbFirst fetches the first record matching query. Returns notFound error if no record exists.
+func dbFirst[T any](d *DB, notFound, query string, args ...any) (*T, error) {
+	var out T
+	conds := append([]any{query}, args...)
+	if err := d.conn.First(&out, conds...).Error; err != nil {
+		return nil, fmt.Errorf("%s", notFound)
+	}
+	return &out, nil
+}
+
+// dbDeleteWhere deletes records matching query. Returns notFound error if no rows affected.
+func dbDeleteWhere[T any](d *DB, notFound, query string, args ...any) error {
+	conds := append([]any{query}, args...)
+	result := d.conn.Delete(new(T), conds...)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("%s", notFound)
+	}
+	return nil
+}
+
 func (d *DB) Close() error {
 	sqlDB, err := d.conn.DB()
 	if err != nil {

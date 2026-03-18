@@ -118,11 +118,8 @@ func (d *DB) NormalizeTokenRefStorage() error {
 		if needsBackfill {
 			if err := d.conn.Model(&TokenRef{}).
 				Where("ref_canonical = ?", ref.RefCanonical).
-				Updates(map[string]any{
-					"ref_family": parsed.Family,
-					"ref_scope":  parsed.Scope,
-					"ref_id":     parsed.ID,
-				}).Error; err != nil {
+				Select("RefFamily", "RefScope", "RefID").
+				Updates(&TokenRef{RefFamily: parsed.Family, RefScope: parsed.Scope, RefID: parsed.ID}).Error; err != nil {
 				return err
 			}
 			continue
@@ -147,14 +144,8 @@ func DefaultRefStatus(scope string) string {
 }
 
 func (d *DB) GetRef(canonical string) (*TokenRef, error) {
-	var ref TokenRef
-	err := d.conn.First(&ref, "ref_canonical = ?", canonical).Error
-	if err != nil {
-		return nil, fmt.Errorf("ref %s not found", canonical)
-	}
-	return &ref, nil
+	return dbFirst[TokenRef](d, "ref "+canonical+" not found", "ref_canonical = ?", canonical)
 }
-
 func (d *DB) ListRefs() ([]TokenRef, error) {
 	var refs []TokenRef
 	err := d.conn.Order("ref_canonical ASC").Find(&refs).Error
@@ -211,16 +202,8 @@ func (d *DB) GetRefByCanonicalAndAgent(canonical, agentHash string) (*TokenRef, 
 }
 
 func (d *DB) DeleteRef(canonical string) error {
-	result := d.conn.Delete(&TokenRef{}, "ref_canonical = ?", canonical)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("ref %s not found", canonical)
-	}
-	return nil
+	return dbDeleteWhere[TokenRef](d, "ref "+canonical+" not found", "ref_canonical = ?", canonical)
 }
-
 func (d *DB) CountRefs() (int, error) {
 	var count int64
 	err := d.conn.Model(&TokenRef{}).Count(&count).Error
@@ -322,4 +305,3 @@ WHERE rowid NOT IN (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_token_refs_ref_canonical
 ON token_refs(ref_canonical)`).Error
 }
-

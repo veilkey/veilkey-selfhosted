@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 )
@@ -16,7 +15,7 @@ func (s *Server) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		URL           string `json:"url"`
 		Version       int    `json:"version"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

@@ -1,8 +1,6 @@
 package db
 
 import (
-	"fmt"
-
 	"gorm.io/gorm"
 )
 
@@ -34,13 +32,8 @@ func (d *DB) SaveConfigs(configs map[string]string) error {
 }
 
 func (d *DB) GetConfig(key string) (*Config, error) {
-	var entry Config
-	if err := d.conn.First(&entry, "key = ?", key).Error; err != nil {
-		return nil, fmt.Errorf("config %s not found", key)
-	}
-	return &entry, nil
+	return dbFirst[Config](d, "config "+key+" not found", "key = ?", key)
 }
-
 func (d *DB) ListConfigs() ([]Config, error) {
 	var entries []Config
 	if err := d.conn.Order("key asc").Find(&entries).Error; err != nil {
@@ -50,16 +43,8 @@ func (d *DB) ListConfigs() ([]Config, error) {
 }
 
 func (d *DB) DeleteConfig(key string) error {
-	result := d.conn.Delete(&Config{}, "key = ?", key)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("config %s not found", key)
-	}
-	return nil
+	return dbDeleteWhere[Config](d, "config "+key+" not found", "key = ?", key)
 }
-
 func (d *DB) CountConfigs() (int, error) {
 	var count int64
 	if err := d.conn.Model(&Config{}).Count(&count).Error; err != nil {

@@ -34,11 +34,8 @@ func (d *DB) SetParentURL(parentURL string) (int64, error) {
 
 func (d *DB) UpdateNodeDEK(dek, nonce []byte, version int) error {
 	result := d.conn.Model(&NodeInfo{}).Where("1 = 1").
-		Updates(map[string]interface{}{
-			"dek":       dek,
-			"dek_nonce": nonce,
-			"version":   version,
-		})
+		Select("DEK", "DEKNonce", "Version").
+		Updates(&NodeInfo{DEK: dek, DEKNonce: nonce, Version: version})
 	if result.Error != nil {
 		return result.Error
 	}

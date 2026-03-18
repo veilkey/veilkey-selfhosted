@@ -2,7 +2,6 @@ package db
 
 import (
 	"fmt"
-	"time"
 
 	"gorm.io/gorm"
 )
@@ -12,32 +11,14 @@ func (d *DB) SaveSecret(secret *Secret) error {
 }
 
 func (d *DB) GetSecretByName(name string) (*Secret, error) {
-	var s Secret
-	err := d.conn.First(&s, "name = ?", name).Error
-	if err != nil {
-		return nil, fmt.Errorf("secret %s not found", name)
-	}
-	return &s, nil
+	return dbFirst[Secret](d, "secret "+name+" not found", "name = ?", name)
 }
-
 func (d *DB) GetSecretByID(id string) (*Secret, error) {
-	var s Secret
-	err := d.conn.First(&s, "id = ?", id).Error
-	if err != nil {
-		return nil, fmt.Errorf("secret id %s not found", id)
-	}
-	return &s, nil
+	return dbFirst[Secret](d, "secret id "+id+" not found", "id = ?", id)
 }
-
 func (d *DB) GetSecretByRef(refHash string) (*Secret, error) {
-	var s Secret
-	err := d.conn.First(&s, "ref = ?", refHash).Error
-	if err != nil {
-		return nil, fmt.Errorf("secret ref %s not found", refHash)
-	}
-	return &s, nil
+	return dbFirst[Secret](d, "secret ref "+refHash+" not found", "ref = ?", refHash)
 }
-
 func (d *DB) ListSecrets() ([]Secret, error) {
 	var secrets []Secret
 	err := d.conn.Order("name").Find(&secrets).Error
@@ -45,16 +26,8 @@ func (d *DB) ListSecrets() ([]Secret, error) {
 }
 
 func (d *DB) DeleteSecret(name string) error {
-	result := d.conn.Delete(&Secret{}, "name = ?", name)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("secret %s not found", name)
-	}
-	return nil
+	return dbDeleteWhere[Secret](d, "secret "+name+" not found", "name = ?", name)
 }
-
 func (d *DB) CountSecrets() (int, error) {
 	var count int64
 	err := d.conn.Model(&Secret{}).Count(&count).Error
@@ -84,11 +57,10 @@ func (d *DB) ReencryptAllSecrets(
 			if err != nil {
 				return fmt.Errorf("encrypt secret %s: %w", s.Name, err)
 			}
-			if err := tx.Model(s).Updates(map[string]interface{}{
-				"ciphertext": newCiphertext,
-				"nonce":      newNonce,
-				"version":    newVersion,
-				"updated_at": time.Now(),
+			if err := tx.Model(s).Select("Ciphertext", "Nonce", "Version").Updates(&Secret{
+				Ciphertext: newCiphertext,
+				Nonce:      newNonce,
+				Version:    newVersion,
 			}).Error; err != nil {
 				return err
 			}

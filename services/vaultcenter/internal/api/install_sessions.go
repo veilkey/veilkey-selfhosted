@@ -99,7 +99,7 @@ func installStateFromPayload(req installStatePayload) *db.InstallSession {
 
 func (s *Server) handleCreateInstallSession(w http.ResponseWriter, r *http.Request) {
 	var req installStatePayload
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -146,7 +146,7 @@ func (s *Server) handleGetInstallState(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePatchInstallState(w http.ResponseWriter, r *http.Request) {
 	var req installStatePatchRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

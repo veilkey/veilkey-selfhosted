@@ -21,7 +21,7 @@ func (s *Server) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Value string `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Name == "" || req.Value == "" {
+	if err := decodeJSON(r, &req); err != nil || req.Name == "" || req.Value == "" {
 		s.respondError(w, http.StatusBadRequest, "name and value are required")
 		return
 	}

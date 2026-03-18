@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -21,7 +20,7 @@ func (s *Server) handleExactLookup(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Plaintext string `json:"plaintext"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

@@ -16,12 +16,8 @@ func (d *DB) SaveSecretCatalog(entry *SecretCatalog) error {
 func (d *DB) UpdateSecretCatalogMeta(refCanonical, displayName, description, tagsJSON string) error {
 	return d.conn.Model(&SecretCatalog{}).
 		Where("ref_canonical = ?", refCanonical).
-		Updates(map[string]any{
-			"display_name": displayName,
-			"description":  description,
-			"tags_json":    tagsJSON,
-			"updated_at":   time.Now().UTC(),
-		}).Error
+		Select("DisplayName", "Description", "TagsJSON").
+		Updates(&SecretCatalog{DisplayName: displayName, Description: description, TagsJSON: tagsJSON}).Error
 }
 
 func (d *DB) GetSecretCatalogByRef(refCanonical string) (*SecretCatalog, error) {

@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -89,7 +88,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		Key   string  `json:"key"`
 		Value *string `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -155,7 +154,7 @@ func (s *Server) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Configs map[string]string `json:"configs"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

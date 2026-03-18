@@ -29,7 +29,7 @@ type secretInputSubmitRequest struct {
 
 func (s *Server) handleCreateSecretInputChallenge(w http.ResponseWriter, r *http.Request) {
 	var req secretInputRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -91,7 +91,7 @@ func (s *Server) handleSecretInputPage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request) {
 	var req secretInputSubmitRequest
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			s.respondError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}

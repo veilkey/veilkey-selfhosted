@@ -99,10 +99,6 @@ func (d *DB) GetVaultInventoryByNodeID(nodeID string) (*VaultInventory, error) {
 func (d *DB) UpdateVaultInventoryMeta(nodeID, displayName, description, tagsJSON string) error {
 	return d.conn.Model(&VaultInventory{}).
 		Where("vault_node_uuid = ?", nodeID).
-		Updates(map[string]any{
-			"display_name": displayName,
-			"description":  description,
-			"tags_json":    tagsJSON,
-			"updated_at":   time.Now().UTC(),
-		}).Error
+		Select("DisplayName", "Description", "TagsJSON").
+		Updates(&VaultInventory{DisplayName: displayName, Description: description, TagsJSON: tagsJSON}).Error
 }

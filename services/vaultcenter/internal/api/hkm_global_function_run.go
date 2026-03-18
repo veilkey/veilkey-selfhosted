@@ -192,7 +192,7 @@ type globalFunctionRunRequest struct {
 }
 
 func (s *Server) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.PathValue("name"))
+	name := pathVal(r, "name")
 	if name == "" {
 		s.respondError(w, http.StatusBadRequest, "function name is required")
 		return
@@ -204,7 +204,7 @@ func (s *Server) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request)
 	}
 
 	var req globalFunctionRunRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid json body")
 		return
 	}

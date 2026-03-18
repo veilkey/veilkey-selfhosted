@@ -546,7 +546,7 @@ func (s *Server) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reques
 	_ = s.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
 
 	var raw map[string]json.RawMessage
-	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+	if err := decodeJSON(r, &raw); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -633,7 +633,7 @@ func (s *Server) handleVaultKeyBindingsReplace(w http.ResponseWriter, r *http.Re
 			Required    *bool  `json:"required"`
 		} `json:"bindings"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -781,7 +781,7 @@ func (s *Server) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Request) {
 	hashOrLabel := r.PathValue("vault")
 	name := r.PathValue("name")
-	bindingID := strings.TrimSpace(r.PathValue("binding_id"))
+	bindingID := pathVal(r, "binding_id")
 	if bindingID == "" {
 		s.respondError(w, http.StatusBadRequest, "binding_id is required")
 		return
@@ -877,7 +877,7 @@ func (s *Server) handleVaultPatch(w http.ResponseWriter, r *http.Request) {
 		Description string   `json:"description"`
 		Tags        []string `json:"tags"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -899,7 +899,7 @@ func (s *Server) handleVaultKeyMetaPatch(w http.ResponseWriter, r *http.Request)
 		Description string   `json:"description"`
 		Tags        []string `json:"tags"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -983,7 +983,7 @@ func (s *Server) handleVaultKeySave(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.PathValue("name"))
+	name := pathVal(r, "name")
 	if name == "" {
 		s.respondError(w, http.StatusBadRequest, "name is required")
 		return
@@ -992,7 +992,7 @@ func (s *Server) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
 		Name  string `json:"name"`
 		Value string `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -1074,8 +1074,8 @@ func (s *Server) handleVaultKeyFieldGet(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Request) {
-	name := strings.TrimSpace(r.PathValue("name"))
-	fieldKey := strings.TrimSpace(r.PathValue("field"))
+	name := pathVal(r, "name")
+	fieldKey := pathVal(r, "field")
 	if name == "" || fieldKey == "" {
 		s.respondError(w, http.StatusBadRequest, "name and field are required")
 		return
@@ -1085,7 +1085,7 @@ func (s *Server) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Reques
 		Type  string `json:"type"`
 		Value string `json:"value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

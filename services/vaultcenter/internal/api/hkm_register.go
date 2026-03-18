@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"net/url"
@@ -18,7 +17,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		Label         string `json:"label"`
 		URL           string `json:"url"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

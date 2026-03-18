@@ -59,24 +59,19 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 		return d.UpsertVaultInventoryFromAgent(&agent)
 	}
 	// Update existing
-	role := strings.TrimSpace(existing.AgentRole)
-	if role == "" {
-		role = "agent"
+	if strings.TrimSpace(existing.AgentRole) == "" {
+		existing.AgentRole = "agent"
 	}
-	if err := d.conn.Model(&existing).Updates(map[string]interface{}{
-		"label":         label,
-		"vault_hash":    vaultHash,
-		"vault_name":    vaultName,
-		"agent_role":    role,
-		"host_enabled":  existing.HostEnabled,
-		"local_enabled": existing.LocalEnabled,
-		"key_version":   keyVersion,
-		"ip":            ip,
-		"port":          port,
-		"secrets_count": secretsCount,
-		"configs_count": configsCount,
-		"version":       version,
-	}).Error; err != nil {
+	existing.Label = label
+	existing.VaultHash = vaultHash
+	existing.VaultName = vaultName
+	existing.KeyVersion = keyVersion
+	existing.IP = ip
+	existing.Port = port
+	existing.SecretsCount = secretsCount
+	existing.ConfigsCount = configsCount
+	existing.Version = version
+	if err := d.conn.Save(&existing).Error; err != nil {
 		return err
 	}
 	updated, err := d.GetAgentByNodeID(nodeID)
@@ -163,11 +158,9 @@ func (d *DB) UpdateAgentRole(nodeID, role string) error {
 
 func (d *DB) UpdateAgentCapabilities(nodeID, role string, hostEnabled, localEnabled *bool) error {
 	host, local := normalizeAgentCapabilities(role, hostEnabled, localEnabled)
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]any{
-		"agent_role":    canonicalAgentRole(role, host, local),
-		"host_enabled":  host,
-		"local_enabled": local,
-	})
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("AgentRole", "HostEnabled", "LocalEnabled").
+		Updates(&Agent{AgentRole: canonicalAgentRole(role, host, local), HostEnabled: host, LocalEnabled: local})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -195,11 +188,9 @@ func (d *DB) BackfillAgentCapabilities() error {
 			continue
 		}
 		host, local := normalizeAgentCapabilities(agent.AgentRole, nil, nil)
-		if err := d.conn.Model(&Agent{}).Where("node_id = ?", agent.NodeID).Updates(map[string]any{
-			"agent_role":    canonicalAgentRole(agent.AgentRole, host, local),
-			"host_enabled":  host,
-			"local_enabled": local,
-		}).Error; err != nil {
+		if err := d.conn.Model(&Agent{}).Where("node_id = ?", agent.NodeID).
+			Select("AgentRole", "HostEnabled", "LocalEnabled").
+			Updates(&Agent{AgentRole: canonicalAgentRole(agent.AgentRole, host, local), HostEnabled: host, LocalEnabled: local}).Error; err != nil {
 			return err
 		}
 	}
@@ -213,32 +204,14 @@ func (d *DB) ListAgents() ([]Agent, error) {
 }
 
 func (d *DB) GetAgentByNodeID(nodeID string) (*Agent, error) {
-	var agent Agent
-	err := d.conn.First(&agent, "node_id = ?", nodeID).Error
-	if err != nil {
-		return nil, fmt.Errorf("agent %s not found", nodeID)
-	}
-	return &agent, nil
+	return dbFirst[Agent](d, "agent "+nodeID+" not found", "node_id = ?", nodeID)
 }
-
 func (d *DB) GetAgentByLabel(label string) (*Agent, error) {
-	var agent Agent
-	err := d.conn.First(&agent, "label = ?", label).Error
-	if err != nil {
-		return nil, fmt.Errorf("agent label %s not found", label)
-	}
-	return &agent, nil
+	return dbFirst[Agent](d, "agent label "+label+" not found", "label = ?", label)
 }
-
 func (d *DB) GetAgentByHash(agentHash string) (*Agent, error) {
-	var agent Agent
-	err := d.conn.First(&agent, "agent_hash = ?", agentHash).Error
-	if err != nil {
-		return nil, fmt.Errorf("agent hash %s not found", agentHash)
-	}
-	return &agent, nil
+	return dbFirst[Agent](d, "agent hash "+agentHash+" not found", "agent_hash = ?", agentHash)
 }
-
 func (d *DB) DeleteAgentByNodeID(nodeID string) error {
 	agent, err := d.GetAgentByNodeID(nodeID)
 	if err != nil {
@@ -282,11 +255,8 @@ func (d *DB) GetAgentRecord(hashOrLabel string) (*Agent, error) {
 
 func (d *DB) UpdateAgentDEK(nodeID string, agentHash string, dek, dekNonce []byte) error {
 	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
-		Updates(map[string]interface{}{
-			"agent_hash": agentHash,
-			"dek":        dek,
-			"dek_nonce":  dekNonce,
-		})
+		Select("AgentHash", "DEK", "DEKNonce").
+		Updates(&Agent{AgentHash: agentHash, DEK: dek, DEKNonce: dekNonce})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -427,34 +397,24 @@ func (d *DB) ApproveAgentRebind(nodeID string) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]interface{}{
-		"agent_hash":      newAgentHash,
-		"key_version":     agent.KeyVersion + 1,
-		"rebind_required": false,
-		"rebind_reason":   "",
-		"retry_stage":     0,
-		"next_retry_at":   nil,
-		"blocked_at":      nil,
-		"block_reason":    "",
-	})
-	if result.Error != nil {
-		return nil, result.Error
-	}
-	if result.RowsAffected == 0 {
-		return nil, fmt.Errorf("agent %s not found", nodeID)
+	agent.AgentHash = newAgentHash
+	agent.KeyVersion++
+	agent.RebindRequired = false
+	agent.RebindReason = ""
+	agent.RetryStage = 0
+	agent.NextRetryAt = nil
+	agent.BlockedAt = nil
+	agent.BlockReason = ""
+	if err := d.conn.Save(&agent).Error; err != nil {
+		return nil, err
 	}
 	return d.GetAgentByNodeID(nodeID)
 }
 
 func (d *DB) ClearAgentRebind(nodeID string) (*Agent, error) {
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]interface{}{
-		"rebind_required": false,
-		"rebind_reason":   "",
-		"retry_stage":     0,
-		"next_retry_at":   nil,
-		"blocked_at":      nil,
-		"block_reason":    "",
-	})
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("RebindRequired", "RebindReason", "RetryStage", "NextRetryAt", "BlockedAt", "BlockReason").
+		Updates(&Agent{})
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -469,28 +429,25 @@ func (d *DB) ScheduleAgentRotation(nodeID, reason string) (*Agent, error) {
 	if err := d.conn.First(&agent, "node_id = ?", nodeID).Error; err != nil {
 		return nil, fmt.Errorf("agent %s not found", nodeID)
 	}
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]interface{}{
-		"key_version":       agent.KeyVersion + 1,
-		"rotation_required": true,
-		"rotation_reason":   reason,
-		"rebind_required":   false,
-		"rebind_reason":     "",
-		"retry_stage":       0,
-		"next_retry_at":     nil,
-		"blocked_at":        nil,
-		"block_reason":      "",
-	})
-	if result.Error != nil {
-		return nil, result.Error
+	agent.KeyVersion++
+	agent.RotationRequired = true
+	agent.RotationReason = reason
+	agent.RebindRequired = false
+	agent.RebindReason = ""
+	agent.RetryStage = 0
+	agent.NextRetryAt = nil
+	agent.BlockedAt = nil
+	agent.BlockReason = ""
+	if err := d.conn.Save(&agent).Error; err != nil {
+		return nil, err
 	}
 	return d.GetAgentByNodeID(nodeID)
 }
 
 func (d *DB) ClearAgentRotation(nodeID string) (*Agent, error) {
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]interface{}{
-		"rotation_required": false,
-		"rotation_reason":   "",
-	})
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("RotationRequired", "RotationReason").
+		Updates(&Agent{})
 	if result.Error != nil {
 		return nil, result.Error
 	}
@@ -501,14 +458,16 @@ func (d *DB) ClearAgentRotation(nodeID string) (*Agent, error) {
 }
 
 func (d *DB) UpdateAgentRotationState(nodeID string, retryStage int, nextRetryAt *time.Time, rotationRequired bool, rotationReason string, blockedAt *time.Time, blockReason string) error {
-	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Updates(map[string]interface{}{
-		"retry_stage":       retryStage,
-		"next_retry_at":     nextRetryAt,
-		"rotation_required": rotationRequired,
-		"rotation_reason":   rotationReason,
-		"blocked_at":        blockedAt,
-		"block_reason":      blockReason,
-	})
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("RetryStage", "NextRetryAt", "RotationRequired", "RotationReason", "BlockedAt", "BlockReason").
+		Updates(&Agent{
+			RetryStage:       retryStage,
+			NextRetryAt:      nextRetryAt,
+			RotationRequired: rotationRequired,
+			RotationReason:   rotationReason,
+			BlockedAt:        blockedAt,
+			BlockReason:      blockReason,
+		})
 	if result.Error != nil {
 		return result.Error
 	}

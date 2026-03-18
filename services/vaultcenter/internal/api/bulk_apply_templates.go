@@ -187,7 +187,7 @@ func (s *Server) renderResolvedBulkApplyPreview(vaultHash, body string) string {
 }
 
 func (s *Server) handleBulkApplyTemplates(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
+	vaultHash := pathVal(r, "vault")
 	if vaultHash == "" {
 		s.respondError(w, http.StatusBadRequest, "vault is required")
 		return
@@ -226,8 +226,8 @@ func (s *Server) handleBulkApplyTemplates(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleBulkApplyTemplate(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	name := strings.TrimSpace(r.PathValue("name"))
+	vaultHash := pathVal(r, "vault")
+	name := pathVal(r, "name")
 	if vaultHash == "" || name == "" {
 		s.respondError(w, http.StatusBadRequest, "vault and name are required")
 		return
@@ -268,8 +268,8 @@ func (s *Server) handleBulkApplyTemplate(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) handleBulkApplyTemplatePreview(w http.ResponseWriter, r *http.Request) {
-	vaultHash := strings.TrimSpace(r.PathValue("vault"))
-	name := strings.TrimSpace(r.PathValue("name"))
+	vaultHash := pathVal(r, "vault")
+	name := pathVal(r, "name")
 	if vaultHash == "" || name == "" {
 		s.respondError(w, http.StatusBadRequest, "vault and name are required")
 		return

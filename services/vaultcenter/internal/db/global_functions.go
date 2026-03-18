@@ -22,13 +22,8 @@ func (d *DB) SaveGlobalFunction(fn *GlobalFunction) error {
 }
 
 func (d *DB) GetGlobalFunction(name string) (*GlobalFunction, error) {
-	var fn GlobalFunction
-	if err := d.conn.First(&fn, "name = ?", name).Error; err != nil {
-		return nil, fmt.Errorf("global function %s not found", name)
-	}
-	return &fn, nil
+	return dbFirst[GlobalFunction](d, "global function "+name+" not found", "name = ?", name)
 }
-
 func (d *DB) ListGlobalFunctions() ([]GlobalFunction, error) {
 	var out []GlobalFunction
 	if err := d.conn.Order("name ASC").Find(&out).Error; err != nil {
@@ -38,12 +33,5 @@ func (d *DB) ListGlobalFunctions() ([]GlobalFunction, error) {
 }
 
 func (d *DB) DeleteGlobalFunction(name string) error {
-	result := d.conn.Delete(&GlobalFunction{}, "name = ?", name)
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return fmt.Errorf("global function %s not found", name)
-	}
-	return nil
+	return dbDeleteWhere[GlobalFunction](d, "global function "+name+" not found", "name = ?", name)
 }

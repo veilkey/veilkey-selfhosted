@@ -2,19 +2,17 @@ package api
 
 import (
 	"crypto/sha256"
-	"crypto/tls"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
-	"net/smtp"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	vcrypto "veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/wneessen/go-mail"
 )
 
 type installCustodyRequest struct {
@@ -40,7 +38,7 @@ func appendUnique(items []string, value string) []string {
 
 func (s *Server) handleCreateInstallCustodyChallenge(w http.ResponseWriter, r *http.Request) {
 	var req installCustodyRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -117,7 +115,7 @@ func (s *Server) handleInstallCustodyPage(w http.ResponseWriter, r *http.Request
 func (s *Server) handleSubmitInstallCustody(w http.ResponseWriter, r *http.Request) {
 	var req installCustodySubmitRequest
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			s.respondError(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
@@ -226,51 +224,36 @@ func sendInstallSendmail(from, to, subject, body string) error {
 
 func sendInstallSMTP(from, to, subject, body string) error {
 	host := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_HOST"))
-	port := envDefault("VEILKEY_OTP_SMTP_PORT", "587")
+	portStr := envDefault("VEILKEY_OTP_SMTP_PORT", "587")
+	port, _ := strconv.Atoi(portStr)
 	username := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_USERNAME"))
 	password := strings.TrimSpace(os.Getenv("VEILKEY_OTP_SMTP_PASSWORD"))
 	startTLS := strings.ToLower(envDefault("VEILKEY_OTP_SMTP_STARTTLS", "true")) != "false"
-	addr := net.JoinHostPort(host, port)
-	conn, err := net.Dial("tcp", addr)
+
+	m := mail.NewMsg()
+	if err := m.From(from); err != nil {
+		return fmt.Errorf("smtp from: %w", err)
+	}
+	if err := m.To(to); err != nil {
+		return fmt.Errorf("smtp to: %w", err)
+	}
+	m.Subject(subject)
+	m.SetBodyString(mail.TypeTextPlain, body)
+
+	tlsPolicy := mail.TLSOpportunistic
+	if !startTLS {
+		tlsPolicy = mail.NoTLS
+	}
+	c, err := mail.NewClient(host,
+		mail.WithPort(port),
+		mail.WithUsername(username),
+		mail.WithPassword(password),
+		mail.WithTLSPolicy(tlsPolicy),
+	)
 	if err != nil {
-		return fmt.Errorf("smtp dial failed: %w", err)
+		return fmt.Errorf("smtp client: %w", err)
 	}
-	defer conn.Close()
-	client, err := smtp.NewClient(conn, host)
-	if err != nil {
-		return fmt.Errorf("smtp client failed: %w", err)
-	}
-	defer client.Close()
-	if startTLS {
-		if ok, _ := client.Extension("STARTTLS"); ok {
-			if err := client.StartTLS(&tls.Config{ServerName: host}); err != nil {
-				return fmt.Errorf("smtp starttls failed: %w", err)
-			}
-		}
-	}
-	if username != "" || password != "" {
-		auth := smtp.PlainAuth("", username, password, host)
-		if err := client.Auth(auth); err != nil {
-			return fmt.Errorf("smtp auth failed: %w", err)
-		}
-	}
-	if err := client.Mail(from); err != nil {
-		return fmt.Errorf("smtp MAIL FROM failed: %w", err)
-	}
-	if err := client.Rcpt(to); err != nil {
-		return fmt.Errorf("smtp RCPT TO failed: %w", err)
-	}
-	wc, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("smtp DATA failed: %w", err)
-	}
-	if _, err := io.WriteString(wc, formatInstallMail(from, to, subject, body)); err != nil {
-		return fmt.Errorf("smtp write failed: %w", err)
-	}
-	if err := wc.Close(); err != nil {
-		return fmt.Errorf("smtp close failed: %w", err)
-	}
-	return client.Quit()
+	return c.DialAndSend(m)
 }
 
 func formatInstallMail(from, to, subject, body string) string {

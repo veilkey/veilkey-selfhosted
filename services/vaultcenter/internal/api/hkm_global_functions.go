@@ -1,7 +1,6 @@
 package api
 
 import (
-	"encoding/json"
 	"net/http"
 	"strings"
 	"veilkey-vaultcenter/internal/db"
@@ -21,7 +20,7 @@ func (s *Server) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) {
 		})
 	case http.MethodPost:
 		var req db.GlobalFunction
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		if err := decodeJSON(r, &req); err != nil {
 			s.respondError(w, http.StatusBadRequest, "invalid json body")
 			return
 		}

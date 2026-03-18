@@ -60,10 +60,8 @@ func (d *DB) GetAdminSessionByTokenHash(tokenHash string) (*AdminSession, error)
 func (d *DB) TouchAdminSession(sessionID string, lastSeenAt, idleExpiresAt time.Time) error {
 	return d.conn.Model(&AdminSession{}).
 		Where("session_id = ? AND revoked_at IS NULL", sessionID).
-		Updates(map[string]any{
-			"last_seen_at":    lastSeenAt.UTC(),
-			"idle_expires_at": idleExpiresAt.UTC(),
-		}).Error
+		Select("LastSeenAt", "IdleExpiresAt").
+		Updates(&AdminSession{LastSeenAt: lastSeenAt.UTC(), IdleExpiresAt: idleExpiresAt.UTC()}).Error
 }
 
 func (d *DB) UpdateAdminSessionRevealUntil(sessionID string, revealUntil *time.Time) error {

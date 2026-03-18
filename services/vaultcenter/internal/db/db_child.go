@@ -10,14 +10,8 @@ func (d *DB) RegisterChild(child *Child) error {
 }
 
 func (d *DB) GetChild(nodeID string) (*Child, error) {
-	var child Child
-	err := d.conn.First(&child, "node_id = ?", nodeID).Error
-	if err != nil {
-		return nil, fmt.Errorf("child %s not found", nodeID)
-	}
-	return &child, nil
+	return dbFirst[Child](d, "child "+nodeID+" not found", "node_id = ?", nodeID)
 }
-
 func (d *DB) ListChildren() ([]Child, error) {
 	var children []Child
 	err := d.conn.Order("created_at").Find(&children).Error
@@ -27,10 +21,8 @@ func (d *DB) ListChildren() ([]Child, error) {
 func (d *DB) UpdateChildURL(nodeID, url string) error {
 	now := time.Now()
 	result := d.conn.Model(&Child{}).Where("node_id = ?", nodeID).
-		Updates(map[string]interface{}{
-			"url":       url,
-			"last_seen": now,
-		})
+		Select("URL", "LastSeen").
+		Updates(&Child{URL: url, LastSeen: &now})
 	if result.Error != nil {
 		return result.Error
 	}
@@ -42,11 +34,8 @@ func (d *DB) UpdateChildURL(nodeID, url string) error {
 
 func (d *DB) UpdateChildDEK(nodeID string, encryptedDEK, nonce []byte, version int) error {
 	result := d.conn.Model(&Child{}).Where("node_id = ?", nodeID).
-		Updates(map[string]interface{}{
-			"encrypted_dek": encryptedDEK,
-			"nonce":         nonce,
-			"version":       version,
-		})
+		Select("EncryptedDEK", "Nonce", "Version").
+		Updates(&Child{EncryptedDEK: encryptedDEK, Nonce: nonce, Version: version})
 	if result.Error != nil {
 		return result.Error
 	}

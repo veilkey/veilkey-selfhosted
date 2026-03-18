@@ -17,7 +17,7 @@ func (s *Server) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request)
 		OldValue string `json:"old_value"`
 		NewValue string `json:"new_value"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
