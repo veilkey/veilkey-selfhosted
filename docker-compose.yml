@@ -20,7 +20,7 @@ services:
     volumes:
       - ${VAULTCENTER_DATA_DIR:-./data/vaultcenter}:/data
     healthcheck:
-      test: ["CMD", "curl", "-fs", "http://localhost:10181/health"]
+      test: ["CMD", "curl", "-fsk", "https://localhost:10181/health"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -39,10 +39,11 @@ services:
       VEILKEY_ADDR: ":10180"
       VEILKEY_DB_PATH: /data/veilkey.db
       VEILKEY_MODE: child
-      VEILKEY_PARENT_URL: "http://vaultcenter:10181"
+      VEILKEY_PARENT_URL: "https://vaultcenter:10181"
       VEILKEY_LABEL: "${LOCALVAULT_LABEL:-localvault-01}"
-      VEILKEY_VAULTCENTER_URL: "http://vaultcenter:10181"
+      VEILKEY_VAULTCENTER_URL: "https://vaultcenter:10181"
       VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
+      VEILKEY_TLS_INSECURE: "1"
     volumes:
       - ${LOCALVAULT_DATA_DIR:-./data/localvault}:/data
     depends_on:
