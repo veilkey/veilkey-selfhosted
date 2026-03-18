@@ -1,4 +1,4 @@
-package api
+package bulk
 
 import (
 	"encoding/json"
@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"veilkey-localvault/internal/httputil"
 )
 
 type bulkApplyStep struct {
@@ -25,16 +27,16 @@ type bulkApplyWorkflowRequest struct {
 }
 
 var allowedBulkApplyTargets = map[string]struct{}{
-	"/opt/mattermost/config/config.json":                    {},
-	"/opt/mattermost/.env":                                  {},
+	"/opt/mattermost/config/config.json":                     {},
+	"/opt/mattermost/.env":                                   {},
 	"/etc/systemd/system/mattermost.service.d/override.conf": {},
-	"/etc/gitlab/gitlab.rb":                                 {},
+	"/etc/gitlab/gitlab.rb":                                  {},
 }
 
 var allowedBulkApplyHooks = map[string][]string{
-	"reload_systemd":      {"systemctl", "daemon-reload"},
-	"restart_mattermost":  {"systemctl", "restart", "mattermost"},
-	"reconfigure_gitlab":  {"gitlab-ctl", "reconfigure"},
+	"reload_systemd":     {"systemctl", "daemon-reload"},
+	"restart_mattermost": {"systemctl", "restart", "mattermost"},
+	"reconfigure_gitlab": {"gitlab-ctl", "reconfigure"},
 }
 
 func recursiveJSONMerge(dst map[string]any, src map[string]any) map[string]any {
@@ -53,10 +55,10 @@ func recursiveJSONMerge(dst map[string]any, src map[string]any) map[string]any {
 func writeAtomically(path string, content []byte) error {
 	dir := filepath.Dir(path)
 	var (
-		mode      os.FileMode = 0644
-		uid       int = -1
-		gid       int = -1
-		haveStat  bool
+		mode     os.FileMode = 0644
+		uid      int         = -1
+		gid      int         = -1
+		haveStat bool
 	)
 	if info, err := os.Stat(path); err == nil {
 		mode = info.Mode().Perm()
@@ -126,18 +128,18 @@ func validateBulkApplyStep(step bulkApplyStep) error {
 	return nil
 }
 
-func (s *Server) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request) {
 	var req bulkApplyWorkflowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.respondError(w, 400, "invalid request body")
+		respondError(w, 400, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" || len(req.Steps) == 0 {
-		s.respondError(w, 400, "workflow name and steps are required")
+		respondError(w, 400, "workflow name and steps are required")
 		return
 	}
-	if len(req.Steps) > maxBulkItems {
-		s.respondError(w, 400, "too many steps (max 200)")
+	if len(req.Steps) > httputil.MaxBulkItems {
+		respondError(w, 400, "too many steps (max 200)")
 		return
 	}
 	checks := make([]map[string]any, 0, len(req.Steps))
@@ -155,7 +157,7 @@ func (s *Server) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request)
 			"message": message,
 		})
 		if err != nil {
-			s.respondJSON(w, 409, map[string]any{
+			respondJSON(w, 409, map[string]any{
 				"workflow": req.Name,
 				"status":   "precheck_failed",
 				"checks":   checks,
@@ -163,7 +165,7 @@ func (s *Server) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request)
 			return
 		}
 	}
-	s.respondJSON(w, 200, map[string]any{
+	respondJSON(w, 200, map[string]any{
 		"workflow": req.Name,
 		"status":   "ready",
 		"checks":   checks,
@@ -380,18 +382,18 @@ func runPostcheck(step bulkApplyStep, name string) (map[string]any, error) {
 	}
 }
 
-func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) {
 	var req bulkApplyWorkflowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.respondError(w, 400, "invalid request body")
+		respondError(w, 400, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" || len(req.Steps) == 0 {
-		s.respondError(w, 400, "workflow name and steps are required")
+		respondError(w, 400, "workflow name and steps are required")
 		return
 	}
-	if len(req.Steps) > maxBulkItems {
-		s.respondError(w, 400, "too many steps (max 200)")
+	if len(req.Steps) > httputil.MaxBulkItems {
+		respondError(w, 400, "too many steps (max 200)")
 		return
 	}
 	results := make([]map[string]any, 0, len(req.Steps))
@@ -400,25 +402,25 @@ func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) 
 	hooks := orderedHooks(req.Steps)
 	for _, step := range req.Steps {
 		if err := validateBulkApplyStep(step); err != nil {
-			s.respondJSON(w, 409, map[string]any{
-				"workflow":   req.Name,
-				"status":     "precheck_failed",
-				"step":       step.Name,
-				"error":      err.Error(),
-				"results":    results,
-				"postchecks": postcheckResults,
+			respondJSON(w, 409, map[string]any{
+				"workflow":     req.Name,
+				"status":       "precheck_failed",
+				"step":         step.Name,
+				"error":        err.Error(),
+				"results":      results,
+				"postchecks":   postcheckResults,
 				"hook_results": hookResults,
 			})
 			return
 		}
 		if err := applyBulkApplyStep(step); err != nil {
-			s.respondJSON(w, 500, map[string]any{
-				"workflow":    req.Name,
-				"status":      "apply_failed",
-				"step":        step.Name,
-				"error":       err.Error(),
-				"results":     results,
-				"postchecks":  postcheckResults,
+			respondJSON(w, 500, map[string]any{
+				"workflow":     req.Name,
+				"status":       "apply_failed",
+				"step":         step.Name,
+				"error":        err.Error(),
+				"results":      results,
+				"postchecks":   postcheckResults,
 				"hook_results": hookResults,
 			})
 			return
@@ -441,7 +443,7 @@ func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) 
 					"step":   step.Name,
 					"checks": checkRows,
 				})
-				s.respondJSON(w, 500, map[string]any{
+				respondJSON(w, 500, map[string]any{
 					"workflow":     req.Name,
 					"status":       "postcheck_failed",
 					"step":         step.Name,
@@ -473,7 +475,7 @@ func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) 
 			hookRow["status"] = "failed"
 			hookRow["message"] = err.Error()
 			hookResults = append(hookResults, hookRow)
-			s.respondJSON(w, 500, map[string]any{
+			respondJSON(w, 500, map[string]any{
 				"workflow":     req.Name,
 				"status":       "hook_failed",
 				"hook":         hook,
@@ -486,7 +488,7 @@ func (s *Server) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) 
 		}
 		hookResults = append(hookResults, hookRow)
 	}
-	s.respondJSON(w, 200, map[string]any{
+	respondJSON(w, 200, map[string]any{
 		"workflow":     req.Name,
 		"status":       "applied",
 		"results":      results,

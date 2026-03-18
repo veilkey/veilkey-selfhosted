@@ -33,8 +33,8 @@ type Secret struct {
 	Ciphertext     []byte
 	Nonce          []byte
 	Version        int
-	Scope          string
-	Status         string
+	Scope          RefScope
+	Status         RefStatus
 	Class          string
 	DisplayName    string
 	Description    string
@@ -63,8 +63,8 @@ type SecretField struct {
 type Config struct {
 	Key       string
 	Value     string
-	Scope     string
-	Status    string
+	Scope     RefScope
+	Status    RefStatus
 	UpdatedAt time.Time
 }
 
@@ -238,10 +238,10 @@ func (d *DB) UpdateNodeVersion(version int) error {
 
 func (d *DB) SaveSecret(secret *Secret) error {
 	if secret.Status == "" {
-		secret.Status = "active"
+		secret.Status = RefStatusActive
 	}
 	if secret.Scope == "" {
-		secret.Scope = "LOCAL"
+		secret.Scope = RefScopeLocal
 	}
 	_, err := d.conn.Exec(`
 		INSERT OR REPLACE INTO secrets (
@@ -356,7 +356,7 @@ func (d *DB) UpdateSecretStatus(refHash, status string) error {
 	return nil
 }
 
-func (d *DB) UpdateSecretLifecycle(refHash, scope, status string) error {
+func (d *DB) UpdateSecretLifecycle(refHash string, scope RefScope, status RefStatus) error {
 	result, err := d.conn.Exec(`UPDATE secrets SET scope = ?, status = ?, updated_at = CURRENT_TIMESTAMP WHERE ref = ?`, scope, status, refHash)
 	if err != nil {
 		return err
@@ -632,7 +632,7 @@ func (d *DB) CountConfigs() (int, error) {
 	return count, err
 }
 
-func (d *DB) UpdateConfigLifecycle(key, scope, status string) error {
+func (d *DB) UpdateConfigLifecycle(key string, scope RefScope, status RefStatus) error {
 	if scope == "" {
 		_, err := d.conn.Exec(`UPDATE configs SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE key = ?`, status, key)
 		if err != nil {
