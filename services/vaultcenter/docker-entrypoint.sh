@@ -3,9 +3,9 @@ set -e
 
 DATA_DIR="/data"
 SALT_FILE="$DATA_DIR/salt"
-ADDR="${VEILKEY_ADDR:-:10180}"
-AUTO_INSTALL_COMPLETE="${VEILKEY_AUTO_COMPLETE_INSTALL_FLOW:-0}"
-PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:-/run/secrets/veilkey_password}"
+ADDR="${VEILKEY_ADDR:?VEILKEY_ADDR is required}"
+AUTO_INSTALL_COMPLETE="${VEILKEY_AUTO_COMPLETE_INSTALL_FLOW:?VEILKEY_AUTO_COMPLETE_INSTALL_FLOW is required}"
+PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:?VEILKEY_PASSWORD_FILE is required}"
 
 # Reject legacy VEILKEY_PASSWORD env var
 if [ -n "${VEILKEY_PASSWORD:-}" ]; then
@@ -66,7 +66,7 @@ if [ ! -f "$SALT_FILE" ]; then
     exit 1
   fi
 
-  MODE="${VEILKEY_MODE:-root}"
+  MODE="${VEILKEY_MODE:?VEILKEY_MODE is required}"
 
   case "$MODE" in
     root)
@@ -78,7 +78,7 @@ if [ ! -f "$SALT_FILE" ]; then
         echo "ERROR: VEILKEY_PARENT_URL required for child mode."
         exit 1
       fi
-      LABEL="${VEILKEY_LABEL:-$(hostname)}"
+      LABEL="${VEILKEY_LABEL:?VEILKEY_LABEL is required}"
       echo "=== VeilKey HKM Init (child) ==="
       veilkey-vaultcenter init --child \
         --parent "$VEILKEY_PARENT_URL" \

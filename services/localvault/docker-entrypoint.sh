@@ -3,7 +3,7 @@ set -e
 
 DATA_DIR="/data"
 SALT_FILE="$DATA_DIR/salt"
-PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:-/run/secrets/veilkey_password}"
+PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:?VEILKEY_PASSWORD_FILE is required}"
 
 # Reject legacy VEILKEY_PASSWORD env var
 if [ -n "${VEILKEY_PASSWORD:-}" ]; then
