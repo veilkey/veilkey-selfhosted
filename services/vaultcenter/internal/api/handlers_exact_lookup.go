@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -80,6 +81,36 @@ func (s *Server) exactLookupHostRefs(plaintext string) ([]exactLookupMatch, erro
 	return matches, nil
 }
 
+// resolveHostSecretInline decrypts a locally-stored (non-agent) secret and
+// returns its plaintext value. It mirrors hkm.Handler.resolveHostTrackedSecret.
+func (s *Server) resolveHostSecretInline(tracked *db.TokenRef) (string, error) {
+	if tracked == nil || tracked.AgentHash != "" {
+		return "", nil
+	}
+	var (
+		secret *db.Secret
+		err    error
+	)
+	if tracked.SecretName != "" {
+		secret, err = s.db.GetSecretByName(tracked.SecretName)
+	}
+	if (err != nil || secret == nil) && tracked.RefID != "" {
+		secret, err = s.db.GetSecretByRef(tracked.RefID)
+	}
+	if err != nil || secret == nil {
+		return "", err
+	}
+	localDEK, err := s.GetLocalDEK()
+	if err != nil {
+		return "", err
+	}
+	plaintext, err := crypto.Decrypt(localDEK, secret.Ciphertext, secret.Nonce)
+	if err != nil {
+		return "", err
+	}
+	return string(plaintext), nil
+}
+
 func (s *Server) resolveLookupCandidate(tracked *db.TokenRef) (string, bool, error) {
 	if tracked == nil || tracked.AgentHash != "" {
 		return "", false, nil
@@ -93,12 +124,12 @@ func (s *Server) resolveLookupCandidate(tracked *db.TokenRef) (string, bool, err
 		return plaintext, true, nil
 	}
 
-	resolved, err := s.resolveHostTrackedSecret(tracked)
+	resolved, err := s.resolveHostSecretInline(tracked)
 	if err != nil {
 		return "", false, err
 	}
-	if resolved == nil {
+	if resolved == "" {
 		return "", false, nil
 	}
-	return resolved.Value, true, nil
+	return resolved, true, nil
 }

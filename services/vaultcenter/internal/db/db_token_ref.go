@@ -15,7 +15,12 @@ type RefParts struct {
 }
 
 func (r RefParts) Canonical() string {
-	return r.Family + ":" + r.Scope + ":" + r.ID
+	return r.Family + RefSep + r.Scope + RefSep + r.ID
+}
+
+// MakeRef constructs a canonical ref string from its components.
+func MakeRef(family, scope, id string) string {
+	return RefParts{Family: family, Scope: scope, ID: id}.Canonical()
 }
 
 func ParseCanonicalRef(canonical string) (RefParts, error) {
@@ -140,7 +145,7 @@ func (d *DB) NormalizeTokenRefStorage() error {
 }
 
 func DefaultRefStatus(scope string) string {
-	return DefaultRefStatusForFamily("VK", scope)
+	return DefaultRefStatusForFamily(RefFamilyVK, scope)
 }
 
 func (d *DB) GetRef(canonical string) (*TokenRef, error) {
@@ -212,7 +217,7 @@ func (d *DB) CountRefs() (int, error) {
 
 func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) error {
 	query := d.conn.Model(&TokenRef{}).
-		Where("ref_scope = ? AND status = ?", "TEMP", "temp").
+		Where("ref_scope = ? AND status = ?", RefScopeTemp, RefStatusTemp).
 		Where("agent_hash <> ''")
 	if len(excludedAgentHashes) > 0 {
 		var hashes []string
@@ -232,7 +237,7 @@ func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) err
 		return err
 	}
 	query = d.conn.Model(&TokenRef{}).
-		Where("ref_scope = ? AND status = ?", "TEMP", "temp").
+		Where("ref_scope = ? AND status = ?", RefScopeTemp, RefStatusTemp).
 		Where("agent_hash <> ''")
 	if len(excludedAgentHashes) > 0 {
 		var hashes []string
@@ -242,9 +247,9 @@ func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) err
 		query = query.Not("agent_hash IN ?", hashes)
 	}
 	return query.Updates(map[string]any{
-		"ref_scope":     "LOCAL",
+		"ref_scope":     RefScopeLocal,
 		"ref_canonical": gorm.Expr("ref_family || ':LOCAL:' || ref_id"),
-		"status":        "active",
+		"status":        RefStatusActive,
 	}).Error
 }
 
@@ -266,7 +271,7 @@ func (d *DB) SaveRefWithExpiryAndHash(parts RefParts, ciphertext string, version
 		return err
 	}
 	if status == "" {
-		status = "temp"
+		status = RefStatusTemp
 	}
 	secretName = strings.TrimSpace(secretName)
 	if secretName == "" {

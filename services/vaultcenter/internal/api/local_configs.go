@@ -3,6 +3,8 @@ package api
 import (
 	"fmt"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/db"
 )
 
 func localSupportedFeatures() []string {
@@ -243,4 +245,39 @@ func (s *Server) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"deleted": key,
 	})
+}
+
+// normalizeScopeStatus delegates to db.NormalizeRefState.
+func normalizeScopeStatus(family, scope, status, fallbackScope string) (string, string, error) {
+	return db.NormalizeRefState(family, scope, status, fallbackScope)
+}
+
+// upsertTrackedRef upserts a tracked ref directly via the DB.
+func (s *Server) upsertTrackedRef(ref string, version int, status string, agentHash string) error {
+	if s.hkmHandler != nil {
+		return s.hkmHandler.UpsertTrackedRef(ref, version, status, agentHash)
+	}
+	// Minimal inline fallback for non-HKM nodes.
+	parts, err := db.ParseCanonicalRef(ref)
+	if err != nil {
+		return err
+	}
+	if version == 0 {
+		version = 1
+	}
+	if existing, err := s.db.GetRef(ref); err == nil && existing != nil {
+		return s.db.UpdateRefWithName(ref, ref, version, status, "")
+	}
+	return s.db.SaveRef(parts, "", version, status, agentHash)
+}
+
+// deleteTrackedRef removes a tracked ref directly via the DB.
+func (s *Server) deleteTrackedRef(ref string) error {
+	if s.hkmHandler != nil {
+		return s.hkmHandler.DeleteTrackedRef(ref)
+	}
+	if _, err := s.db.GetRef(ref); err != nil {
+		return err
+	}
+	return s.db.DeleteRef(ref)
 }

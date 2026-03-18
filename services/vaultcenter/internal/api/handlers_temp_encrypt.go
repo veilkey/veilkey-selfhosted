@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"veilkey-vaultcenter/internal/api/hkm"
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
@@ -47,7 +48,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dek, err := s.getLocalDEK()
+	dek, err := s.GetLocalDEK()
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to get encryption key")
 		return
@@ -59,7 +60,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	refID, err := generateSecretRef(16)
+	refID, err := hkm.GenerateSecretRef(16)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to generate ref")
 		return

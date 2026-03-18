@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 // NewTLSHTTPClient creates an HTTP client configured for TLS inter-service communication.
@@ -65,15 +67,4 @@ func InitHTTPClientFromEnv() *http.Client {
 }
 
 // AgentScheme returns the URL scheme for agent communication.
-// If VEILKEY_AGENT_SCHEME is set, that value is used directly.
-// Otherwise defaults to "https" when TLS is configured (VEILKEY_TLS_CERT is set),
-// or "http" for backward compatibility when TLS is not configured.
-func AgentScheme() string {
-	if scheme := os.Getenv("VEILKEY_AGENT_SCHEME"); scheme != "" {
-		return scheme
-	}
-	if os.Getenv("VEILKEY_TLS_CERT") != "" {
-		return "https"
-	}
-	return "http"
-}
+func AgentScheme() string { return httputil.AgentScheme() }

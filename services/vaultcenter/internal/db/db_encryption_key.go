@@ -4,7 +4,7 @@ import "fmt"
 
 func (d *DB) GetActiveKey() (*EncryptionKey, error) {
 	var key EncryptionKey
-	err := d.conn.Where("status = ?", "active").Order("version DESC").First(&key).Error
+	err := d.conn.Where("status = ?", RefStatusActive).Order("version DESC").First(&key).Error
 	if err != nil {
 		return nil, err
 	}

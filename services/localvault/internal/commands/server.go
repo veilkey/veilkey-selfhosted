@@ -8,12 +8,15 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"veilkey-localvault/internal/api"
 	"veilkey-localvault/internal/crypto"
 	"veilkey-localvault/internal/db"
 )
+
+var initMu sync.Mutex
 
 func RunServer() {
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
@@ -105,6 +108,9 @@ func runSetupServer(dbPath, dataDir string) {
 }
 
 func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string) {
+	initMu.Lock()
+	defer initMu.Unlock()
+
 	var req struct {
 		Password       string `json:"password"`
 		VaultcenterURL string `json:"vaultcenter_url"`

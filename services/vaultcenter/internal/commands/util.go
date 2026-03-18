@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"bufio"
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
@@ -9,6 +8,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 )
 
 func readPasswordFromFileEnv() string {
@@ -20,7 +21,7 @@ func readPasswordFromFileEnv() string {
 	if err != nil {
 		log.Fatalf("Failed to read VEILKEY_PASSWORD_FILE (%s): %v", path, err)
 	}
-	pw := strings.TrimRight(string(data), "\n\r")
+	pw := strings.TrimSpace(string(data))
 	if pw == "" {
 		log.Fatalf("VEILKEY_PASSWORD_FILE (%s) is empty", path)
 	}
@@ -30,31 +31,24 @@ func readPasswordFromFileEnv() string {
 func readPassword(prompt string) string {
 	stat, _ := os.Stdin.Stat()
 	if (stat.Mode() & os.ModeCharDevice) == 0 {
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			return strings.TrimSpace(scanner.Text())
-		}
-		return ""
+		var s string
+		fmt.Fscan(os.Stdin, &s)
+		return strings.TrimSpace(s)
 	}
 
 	tty, err := os.Open("/dev/tty")
 	if err != nil {
-		fmt.Fprint(os.Stderr, prompt)
-		scanner := bufio.NewScanner(os.Stdin)
-		if scanner.Scan() {
-			return strings.TrimSpace(scanner.Text())
-		}
-		return ""
+		log.Fatalf("Failed to open TTY: %v", err)
 	}
 	defer tty.Close()
 
-	fmt.Fprint(os.Stderr, prompt)
-	scanner := bufio.NewScanner(tty)
-	if scanner.Scan() {
-		fmt.Fprintln(os.Stderr)
-		return strings.TrimSpace(scanner.Text())
+	fmt.Fprint(tty, prompt)
+	data, err := term.ReadPassword(int(tty.Fd()))
+	fmt.Fprintln(tty)
+	if err != nil {
+		log.Fatalf("Failed to read password: %v", err)
 	}
-	return ""
+	return strings.TrimSpace(string(data))
 }
 
 func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
@@ -74,4 +68,3 @@ func generateInitRef(length int) (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
-

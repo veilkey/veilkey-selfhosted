@@ -9,7 +9,7 @@ func classifyCatalogEntry(ref *TokenRef) string {
 	if ref == nil {
 		return "key"
 	}
-	if ref.RefFamily == "VE" {
+	if ref.RefFamily == RefFamilyVE {
 		return "config"
 	}
 	return "key"

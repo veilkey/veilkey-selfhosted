@@ -6,6 +6,28 @@ import (
 	"strings"
 )
 
+// RefSep is the canonical separator between family, scope, and ID components.
+const RefSep = ":"
+
+// Ref family identifiers.
+const (
+	RefFamilyVK = "VK" // secret refs
+	RefFamilyVE = "VE" // config/env refs
+)
+
+// Ref scope identifiers.
+const (
+	RefScopeLocal    = "LOCAL"
+	RefScopeTemp     = "TEMP"
+	RefScopeExternal = "EXTERNAL"
+)
+
+// Ref status values.
+const (
+	RefStatusActive = "active"
+	RefStatusTemp   = "temp"
+)
+
 type RefPolicy struct {
 	Family        string
 	DefaultScope  string
@@ -13,22 +35,22 @@ type RefPolicy struct {
 }
 
 var refPolicies = map[string]RefPolicy{
-	"VK": {
-		Family:       "VK",
-		DefaultScope: "TEMP",
+	RefFamilyVK: {
+		Family:       RefFamilyVK,
+		DefaultScope: RefScopeTemp,
 		AllowedScopes: map[string]string{
-			"TEMP":     "temp",
-			"LOCAL":    "active",
-			"EXTERNAL": "active",
+			RefScopeTemp:     RefStatusTemp,
+			RefScopeLocal:    RefStatusActive,
+			RefScopeExternal: RefStatusActive,
 		},
 	},
-	"VE": {
-		Family:       "VE",
-		DefaultScope: "TEMP",
+	RefFamilyVE: {
+		Family:       RefFamilyVE,
+		DefaultScope: RefScopeTemp,
 		AllowedScopes: map[string]string{
-			"TEMP":     "temp",
-			"LOCAL":    "active",
-			"EXTERNAL": "active",
+			RefScopeTemp:     RefStatusTemp,
+			RefScopeLocal:    RefStatusActive,
+			RefScopeExternal: RefStatusActive,
 		},
 	},
 }
@@ -75,7 +97,7 @@ func NormalizeRefState(family, scope, status, fallbackScope string) (string, str
 func DefaultRefStatusForFamily(family, scope string) string {
 	_, status, err := NormalizeRefState(family, scope, "", "")
 	if err != nil {
-		return "temp"
+		return RefStatusTemp
 	}
 	return status
 }

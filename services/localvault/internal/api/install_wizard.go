@@ -39,7 +39,7 @@ func (s *Server) HandleInstallStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Check vaultcenter connectivity
 	if target.URL != "" {
-		healthURL := strings.TrimRight(target.URL, "/") + "/health"
+		healthURL := joinPath(target.URL, "/health")
 		resp, err := s.httpClient.Get(healthURL)
 		if err != nil {
 			status.Connected = false

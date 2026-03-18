@@ -10,8 +10,14 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/api/admin"
+	"veilkey-vaultcenter/internal/api/approval"
+	"veilkey-vaultcenter/internal/api/bulk"
+	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/api/install"
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type NodeIdentity struct {
@@ -38,22 +44,180 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db            *db.DB
-	kek           []byte
-	kekMu         sync.RWMutex
-	locked        bool
-	salt          []byte
-	trustedIPs    map[string]bool
-	trustedCIDRs  []*net.IPNet
-	identity      *NodeIdentity
-	timeouts      Timeouts
-	unlockLimiter *UnlockRateLimiter
-	httpClient    *http.Client
-	bulkApplyDir  string
-	updateMu      sync.RWMutex
-	updateState   systemUpdateState
-	installMu     sync.RWMutex
-	installState  installApplyState
+	db             *db.DB
+	kek            []byte
+	kekMu          sync.RWMutex
+	locked         bool
+	salt           []byte
+	trustedIPs     map[string]bool
+	trustedCIDRs   []*net.IPNet
+	identity       *NodeIdentity
+	timeouts       Timeouts
+	unlockLimiter  *UnlockRateLimiter
+	httpClient     *http.Client
+	bulkApplyDir   string
+	updateMu       sync.RWMutex
+	updateState    systemUpdateState
+	installHandler  *install.Handler
+	approvalHandler *approval.Handler
+	adminHandler    *admin.Handler
+	hkmHandler      *hkm.Handler
+	bulkHandler     *bulk.Handler
+}
+
+// ── hkm.Deps implementation ──────────────────────────────────────────────────
+
+func (s *Server) DB() *db.DB { return s.db }
+
+func (s *Server) HTTPClient() *http.Client { return s.httpClient }
+
+func (s *Server) GetKEK() []byte {
+	s.kekMu.RLock()
+	defer s.kekMu.RUnlock()
+	k := make([]byte, len(s.kek))
+	copy(k, s.kek)
+	return k
+}
+
+func (s *Server) GetLocalDEK() ([]byte, error) {
+	info, err := s.db.GetNodeInfo()
+	if err != nil {
+		return nil, fmt.Errorf("no node info: %w", err)
+	}
+	kek := s.GetKEK()
+	dek, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt DEK: %w", err)
+	}
+	return dek, nil
+}
+
+func (s *Server) CascadeResolveTimeout() time.Duration { return s.timeouts.CascadeResolve }
+
+func (s *Server) ParentForwardTimeout() time.Duration { return s.timeouts.ParentForward }
+
+func (s *Server) DeployTimeout() time.Duration { return s.timeouts.Deploy }
+
+func (s *Server) IsTrustedIPString(ip string) bool { return s.isTrustedIPString(ip) }
+
+func (s *Server) SaveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source string, before, after map[string]any) {
+	s.saveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source, before, after)
+}
+
+// ── admin.Deps implementation ────────────────────────────────────────────────
+
+func (s *Server) DecryptAgentDEK(encDEK, encNonce []byte) ([]byte, error) {
+	if len(encDEK) == 0 {
+		return nil, fmt.Errorf("agent has no DEK assigned")
+	}
+	return crypto.Decrypt(s.GetKEK(), encDEK, encNonce)
+}
+
+func (s *Server) FindAgentRecord(hashOrLabel string) (*db.Agent, error) {
+	agent, err := s.db.GetAgentRecord(hashOrLabel)
+	if err != nil {
+		return nil, fmt.Errorf("agent not found: %s", hashOrLabel)
+	}
+	return agent, nil
+}
+
+func (s *Server) FetchAgentCiphertext(agentURL, ref string) (name string, ciphertext []byte, nonce []byte, err error) {
+	resp, httpErr := s.httpClient.Get(httputil.JoinPath(agentURL, httputil.AgentPathCipher, ref))
+	if httpErr != nil {
+		return "", nil, nil, fmt.Errorf("agent unreachable: %w", httpErr)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", nil, nil, fmt.Errorf("agent returned %d", resp.StatusCode)
+	}
+	var data struct {
+		Name       string `json:"name"`
+		Ciphertext []byte `json:"ciphertext"`
+		Nonce      []byte `json:"nonce"`
+	}
+	if decErr := json.NewDecoder(resp.Body).Decode(&data); decErr != nil {
+		return "", nil, nil, fmt.Errorf("invalid agent response: %w", decErr)
+	}
+	return data.Name, data.Ciphertext, data.Nonce, nil
+}
+
+func (s *Server) AgentURL(ip string, port int) string {
+	if port == 0 {
+		port = db.DefaultAgentPort
+	}
+	return fmt.Sprintf("%s://%s:%d", AgentScheme(), ip, port)
+}
+
+// ── bulk.Deps implementation ─────────────────────────────────────────────────
+
+func (s *Server) FindAgentURL(hashOrLabel string) (string, error) {
+	agent, err := s.FindAgentRecord(hashOrLabel)
+	if err != nil {
+		return "", err
+	}
+	return s.AgentURL(agent.IP, agent.Port), nil
+}
+
+func (s *Server) ResolveTemplateValue(vaultHash, kind, name string) (string, bool) {
+	agent, err := s.FindAgentRecord(vaultHash)
+	if err != nil {
+		return "", false
+	}
+	if agent.BlockedAt != nil || agent.RebindRequired {
+		return "", false
+	}
+	agentURL := s.AgentURL(agent.IP, agent.Port)
+	if kind == "secret" {
+		return s.resolveBulkApplySecretValue(agentURL, agent.DEK, agent.DEKNonce, name)
+	}
+	return s.resolveBulkApplyConfigValue(agentURL, name)
+}
+
+func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce []byte, name string) (string, bool) {
+	// Try to fetch the ciphertext directly and decrypt with the agent DEK.
+	_, ciphertext, nonce, err := s.FetchAgentCiphertext(agentURL, name)
+	if err == nil {
+		agentDEK, dekErr := s.DecryptAgentDEK(encDEK, encNonce)
+		if dekErr == nil {
+			plaintext, decErr := crypto.Decrypt(agentDEK, ciphertext, nonce)
+			if decErr == nil {
+				return string(plaintext), true
+			}
+		}
+	}
+	// Fall back to the agent's own resolve endpoint.
+	resp, resolveErr := s.httpClient.Get(httputil.JoinPath(agentURL, httputil.AgentPathResolve, name))
+	if resolveErr != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", false
+	}
+	var data struct {
+		Value string `json:"value"`
+	}
+	if json.NewDecoder(resp.Body).Decode(&data) != nil {
+		return "", false
+	}
+	return data.Value, strings.TrimSpace(data.Value) != ""
+}
+
+func (s *Server) resolveBulkApplyConfigValue(agentURL, key string) (string, bool) {
+	resp, err := s.httpClient.Get(httputil.JoinPath(agentURL, httputil.AgentPathConfigs, key))
+	if err != nil {
+		return "", false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", false
+	}
+	var data map[string]any
+	if json.NewDecoder(resp.Body).Decode(&data) != nil {
+		return "", false
+	}
+	value, _ := data["value"].(string)
+	return value, strings.TrimSpace(value) != ""
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
@@ -123,6 +287,9 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 			}
 		}
 	}
+	srv.adminHandler = admin.NewHandler(srv)
+	srv.hkmHandler = hkm.NewHandler(srv)
+	srv.bulkHandler = bulk.NewHandler(srv)
 	return srv
 }
 
@@ -136,14 +303,13 @@ func (s *Server) SetBulkApplyDir(dir string) {
 }
 
 func (s *Server) BulkApplyDir() string {
-	if strings.TrimSpace(s.bulkApplyDir) != "" {
-		return strings.TrimSpace(s.bulkApplyDir)
-	}
-	return os.Getenv("VEILKEY_BULK_APPLY_DIR")
+	return s.bulkApplyDir
 }
 
 func (s *Server) SetSalt(salt []byte) {
 	s.salt = salt
+	s.installHandler = install.NewHandler(s.db, salt)
+	s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient, s.installHandler)
 }
 
 func (s *Server) Unlock(kek []byte) error {
@@ -187,13 +353,13 @@ func (s *Server) installGateState() (bool, *db.InstallSession) {
 	}
 
 	completed := make(map[string]bool)
-	for _, stage := range decodeStringList(session.CompletedStagesJSON) {
+	for _, stage := range httputil.DecodeStringList(session.CompletedStagesJSON) {
 		stage = strings.TrimSpace(strings.ToLower(stage))
 		if stage != "" {
 			completed[stage] = true
 		}
 	}
-	planned := decodeStringList(session.PlannedStagesJSON)
+	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
 	if len(planned) > 0 {
 		allPlannedDone := true
 		for _, stage := range planned {
@@ -225,8 +391,8 @@ func (s *Server) currentInstallAccessState() installAccessState {
 		return installAccessState{Exists: false, Complete: complete}
 	}
 
-	planned := decodeStringList(session.PlannedStagesJSON)
-	completed := decodeStringList(session.CompletedStagesJSON)
+	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
+	completed := httputil.DecodeStringList(session.CompletedStagesJSON)
 	finalStage := ""
 	if len(planned) > 0 {
 		finalStage = planned[len(planned)-1]
@@ -311,24 +477,16 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func pathVal(r *http.Request, key string) string {
-	return strings.TrimSpace(r.PathValue(key))
-}
-
 func decodeJSON(r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("failed to encode response: %v", err)
-	}
+	httputil.RespondJSON(w, status, data)
 }
 
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
-	s.respondJSON(w, status, map[string]string{"error": message})
+	httputil.RespondError(w, status, message)
 }
 
 func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
@@ -356,6 +514,9 @@ func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) SetupRoutes() http.Handler {
+	if s.installHandler == nil || s.approvalHandler == nil {
+		panic("api: SetSalt must be called before SetupRoutes")
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -369,10 +530,16 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
+	s.installHandler.Register(mux, s.requireTrustedIP, s.requireUnlocked)
+	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)
-	s.SetupAdminRoutes(mux)
+	s.adminHandler.Register(mux, s.requireReadyForOps, s.requireTrustedIP)
+	// tracked-ref cleanup routes delegate to the hkm handler (registered after IsHKM check below)
 	if s.IsHKM() {
-		s.SetupHKMRoutes(mux)
+		s.hkmHandler.Register(mux, s.requireTrustedIP, s.requireReadyForOps)
+		s.bulkHandler.Register(mux, s.requireTrustedIP)
+		// Admin tracked-ref cleanup routes require an active hkm handler.
+		mux.HandleFunc("POST /api/admin/tracked-refs/cleanup", s.requireReadyForOps(s.adminHandler.RequireAdminSession(s.hkmHandler.HandleTrackedRefCleanup)))
 	}
 
 	return logMiddleware(mux)

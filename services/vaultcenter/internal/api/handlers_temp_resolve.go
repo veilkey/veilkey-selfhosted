@@ -23,7 +23,7 @@ func (s *Server) resolveTempRef(tracked *db.TokenRef) (string, error) {
 		return "", fmt.Errorf("decode nonce: %w", err)
 	}
 
-	dek, err := s.getLocalDEK()
+	dek, err := s.GetLocalDEK()
 	if err != nil {
 		return "", fmt.Errorf("get DEK: %w", err)
 	}
