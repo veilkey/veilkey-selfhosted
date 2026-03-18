@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//go:embed ui_dist/index.html ui_dist/install.html ui_dist/setup.html ui_dist/favicon.svg ui_dist/assets
+//go:embed ui_dist/index.html ui_dist/install.html ui_dist/setup.html ui_dist/favicon.svg all:ui_dist/assets
 var embeddedUIFS embed.FS
 
 // EmbeddedUIIndex returns the content of ui_dist/index.html.
