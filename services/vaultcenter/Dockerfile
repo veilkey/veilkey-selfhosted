@@ -14,7 +14,5 @@ COPY --from=builder /build/veilkey-vaultcenter /usr/local/bin/
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 VOLUME /data
-ENV VEILKEY_DB_PATH=/data/veilkey.db
-ENV VEILKEY_ADDR=:10180
 EXPOSE 10180
 ENTRYPOINT ["docker-entrypoint.sh"]

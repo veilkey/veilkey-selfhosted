@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# 하드코딩된 기본값이 Go 소스코드에 있으면 커밋 차단
+found=0
+
+SERVICES="services/localvault services/vaultcenter"
+
+# 1. 하드코딩된 기본값 차단 (Go, Dockerfile, sh)
 BANNED=(
   ":10180"
   ":10181"
@@ -10,9 +14,12 @@ BANNED=(
   "/usr/local/bin/veilkey"
 )
 
-found=0
 for val in "${BANNED[@]}"; do
-  matches=$(grep -rn --include="*.go" "$val" services/localvault services/vaultcenter 2>/dev/null || true)
+  matches=$(grep -rn \
+    --include="*.go" \
+    --include="Dockerfile" \
+    --include="*.sh" \
+    "$val" $SERVICES 2>/dev/null || true)
   if [[ -n "$matches" ]]; then
     echo "❌ 하드코딩 금지: '$val'"
     echo "$matches"
@@ -20,8 +27,50 @@ for val in "${BANNED[@]}"; do
   fi
 done
 
+# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외)
+sh_fallbacks=$(grep -rn --include="*.sh" \
+  'VEILKEY_[A-Z_]*:-[^}]' $SERVICES 2>/dev/null || true)
+if [[ -n "$sh_fallbacks" ]]; then
+  echo "❌ sh fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
+  echo "$sh_fallbacks"
+  found=1
+fi
+
+# 3. Dockerfile ENV 기본값 차단
+dockerfile_envs=$(grep -rn --include="Dockerfile" \
+  '^ENV VEILKEY_' $SERVICES 2>/dev/null || true)
+if [[ -n "$dockerfile_envs" ]]; then
+  echo "❌ Dockerfile ENV 기본값 금지: docker-compose 또는 런타임에서 주입하세요"
+  echo "$dockerfile_envs"
+  found=1
+fi
+
+# 4. .env.example에 없는 VEILKEY_* 변수 차단
+check_env_documented() {
+  local service="$1"
+  local env_example="services/${service}/.env.example"
+
+  [[ -f "$env_example" ]] || return 0
+
+  used=$(grep -roh 'VEILKEY_[A-Z_]*' "services/${service}" --include="*.go" 2>/dev/null \
+    | sed 's/.*://' | sort -u)
+
+  documented=$(grep -oh 'VEILKEY_[A-Z_]*' "$env_example" 2>/dev/null | sort -u)
+
+  while IFS= read -r var; do
+    [[ -z "$var" ]] && continue
+    if ! echo "$documented" | grep -qx "$var"; then
+      echo "❌ .env.example 누락: $var (services/${service})"
+      found=1
+    fi
+  done <<< "$used"
+}
+
+check_env_documented "localvault"
+check_env_documented "vaultcenter"
+
 if [[ $found -eq 1 ]]; then
   echo ""
-  echo "env에서 읽으세요. 기본값은 .env.example 참고."
+  echo "기본값은 .env.example에 추가하세요."
   exit 1
 fi
