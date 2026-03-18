@@ -80,7 +80,7 @@ func runServer() {
 func runSetupServer(dbPath, dataDir string) {
 	addr := os.Getenv("VEILKEY_ADDR")
 	if addr == "" {
-		addr = ":10180"
+		log.Fatal("VEILKEY_ADDR is required")
 	}
 
 	// Create minimal DB for config storage during setup
@@ -301,11 +301,15 @@ func mustLoadServer() (*api.Server, string, int) {
 		log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 	}
 
-	listenPort := 10180
+	listenPort := 0
 	if idx := strings.LastIndex(addr, ":"); idx >= 0 {
-		if p, err := strconv.Atoi(addr[idx+1:]); err == nil {
-			listenPort = p
+		p, err := strconv.Atoi(addr[idx+1:])
+		if err != nil {
+			log.Fatalf("VEILKEY_ADDR has invalid port: %s", addr)
 		}
+		listenPort = p
+	} else {
+		log.Fatalf("VEILKEY_ADDR has no port: %s", addr)
 	}
 	return server, addr, listenPort
 }
