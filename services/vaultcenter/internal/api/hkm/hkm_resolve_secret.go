@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -84,7 +85,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			wg.Add(1)
-			go func(url string) {
+			go func(childURL string) {
 				defer wg.Done()
 				select {
 				case sem <- struct{}{}:
@@ -92,9 +93,9 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				case <-ctx.Done():
 					return
 				}
-				req, err := http.NewRequestWithContext(ctx, "GET", url+"/api/resolve/"+ref, nil)
+				req, err := http.NewRequestWithContext(ctx, "GET", childURL+"/api/resolve/"+url.PathEscape(ref), nil)
 				if err != nil {
-					log.Printf("resolve: failed to create request for %s: %v", url, err)
+					log.Printf("resolve: failed to create request for %s: %v", childURL, err)
 					return
 				}
 				req.Header.Set("X-VeilKey-Cascade", "true")
@@ -108,7 +109,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				body, err := io.ReadAll(resp.Body)
 				resp.Body.Close()
 				if err != nil {
-					log.Printf("resolve: failed to read response from %s: %v", url, err)
+					log.Printf("resolve: failed to read response from %s: %v", childURL, err)
 					return
 				}
 				select {
@@ -135,7 +136,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 	// Parent resolve
 	if info, err := h.deps.DB().GetNodeInfo(); err == nil && info.ParentURL != "" {
 		client := &http.Client{Timeout: h.deps.ParentForwardTimeout()}
-		req, err := http.NewRequest("GET", info.ParentURL+"/api/resolve/"+ref, nil)
+		req, err := http.NewRequest("GET", info.ParentURL+"/api/resolve/"+url.PathEscape(ref), nil)
 		if err != nil {
 			log.Printf("resolve: failed to create parent request: %v", err)
 			respondError(w, http.StatusNotFound, "ref not found: "+ref)

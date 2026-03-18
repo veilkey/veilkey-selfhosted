@@ -87,6 +87,14 @@ func sendSMTP(from, to, subject, body string) error {
 	return c.DialAndSend(m)
 }
 
+// sanitizeHeader strips \r and \n to prevent SMTP header injection.
+func sanitizeHeader(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	return s
+}
+
 func formatMail(from, to, subject, body string) string {
-	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s", from, to, subject, body)
+	return fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s",
+		sanitizeHeader(from), sanitizeHeader(to), sanitizeHeader(subject), body)
 }
