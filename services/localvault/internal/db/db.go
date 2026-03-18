@@ -2,13 +2,18 @@ package db
 
 import (
 	"database/sql"
+	"embed"
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	_ "github.com/mutecomm/go-sqlcipher/v4"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 type DB struct {
 	conn *sql.DB
@@ -140,240 +145,42 @@ func sqlCipherVersion(conn *sql.DB) (string, error) {
 }
 
 func (d *DB) migrate() error {
-	if err := d.ensureMigrationTable(); err != nil {
-		return err
-	}
-	if err := d.runMigration(1, d.migrateV1); err != nil {
-		return err
-	}
-	if err := d.runMigration(2, d.migrateV2SecretRef); err != nil {
-		return err
-	}
-	if err := d.runMigration(5, d.migrateV5Configs); err != nil {
-		return err
-	}
-	if err := d.runMigration(6, d.migrateV6SecretStatus); err != nil {
-		return err
-	}
-	if err := d.runMigration(7, d.migrateV7ConfigLifecycle); err != nil {
-		return err
-	}
-	if err := d.runMigration(8, d.migrateV8SecretScope); err != nil {
-		return err
-	}
-	if err := d.runMigration(9, d.migrateV9PromoteOperationalRefs); err != nil {
-		return err
-	}
-	if err := d.runMigration(10, d.migrateV10Functions); err != nil {
-		return err
-	}
-	if err := d.runMigration(11, d.migrateV11FunctionLogs); err != nil {
-		return err
-	}
-	if err := d.runMigration(12, d.migrateV12SecretFields); err != nil {
-		return err
-	}
-	if err := d.runMigration(13, d.migrateV13OperatorCatalogMetadata); err != nil {
-		return err
-	}
-	return nil
-}
-
-func (d *DB) migrateV1() error {
-	stmts := []string{
-		`CREATE TABLE IF NOT EXISTS node_info (
-			node_id    TEXT PRIMARY KEY,
-			dek        BLOB NOT NULL,
-			dek_nonce  BLOB NOT NULL,
-			version    INT DEFAULT 1,
-			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE TABLE IF NOT EXISTS secrets (
-			id         TEXT PRIMARY KEY,
-			name       TEXT NOT NULL UNIQUE,
-			ciphertext BLOB NOT NULL,
-			nonce      BLOB NOT NULL,
-			version    INT NOT NULL,
-			scope      TEXT NOT NULL DEFAULT 'TEMP',
-			status     TEXT NOT NULL DEFAULT 'temp',
-			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_secrets_name ON secrets(name)`,
-	}
-	for _, stmt := range stmts {
-		if _, err := d.conn.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (d *DB) migrateV2SecretRef() error {
-	_, err := d.conn.Exec(`ALTER TABLE secrets ADD COLUMN ref TEXT`)
-	if err != nil {
-		if !isDuplicateColumn(err.Error()) {
-			return err
-		}
-	}
-	_, err = d.conn.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_secrets_ref ON secrets(ref) WHERE ref IS NOT NULL`)
-	return err
-}
-
-func isDuplicateColumn(msg string) bool {
-	return len(msg) >= 9 && msg[:9] == "duplicate"
-}
-
-func (d *DB) ensureMigrationTable() error {
-	_, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS migrations (
-		version INT PRIMARY KEY,
+	if _, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS migrations (
+		filename   TEXT PRIMARY KEY,
 		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	return err
-}
-
-func (d *DB) runMigration(version int, fn func() error) error {
-	var count int
-	d.conn.QueryRow(`SELECT COUNT(*) FROM migrations WHERE version = ?`, version).Scan(&count)
-	if count > 0 {
-		return nil
+	)`); err != nil {
+		return err
 	}
-	if err := fn(); err != nil {
-		return fmt.Errorf("migration v%d failed: %w", version, err)
-	}
-	_, err := d.conn.Exec(`INSERT INTO migrations (version) VALUES (?)`, version)
-	return err
-}
 
-func (d *DB) migrateV5Configs() error {
-	_, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS configs (
-		key        TEXT PRIMARY KEY,
-		value      TEXT NOT NULL,
-		scope      TEXT NOT NULL DEFAULT 'TEMP',
-		status     TEXT NOT NULL DEFAULT 'temp',
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	return err
-}
-
-func (d *DB) migrateV6SecretStatus() error {
-	_, err := d.conn.Exec(`ALTER TABLE secrets ADD COLUMN status TEXT NOT NULL DEFAULT 'temp'`)
+	entries, err := migrationsFS.ReadDir("migrations")
 	if err != nil {
-		if !isDuplicateColumn(err.Error()) {
-			return err
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
+			continue
+		}
+		filename := entry.Name()
+
+		var count int
+		d.conn.QueryRow(`SELECT COUNT(*) FROM migrations WHERE filename = ?`, filename).Scan(&count)
+		if count > 0 {
+			continue
+		}
+
+		sql, err := migrationsFS.ReadFile("migrations/" + filename)
+		if err != nil {
+			return fmt.Errorf("read migration %s: %w", filename, err)
+		}
+		if _, err := d.conn.Exec(string(sql)); err != nil {
+			return fmt.Errorf("migration %s failed: %w", filename, err)
+		}
+		if _, err := d.conn.Exec(`INSERT INTO migrations (filename) VALUES (?)`, filename); err != nil {
+			return fmt.Errorf("record migration %s: %w", filename, err)
 		}
 	}
-	_, err = d.conn.Exec(`UPDATE secrets SET status = 'temp' WHERE status IS NULL OR status = ''`)
-	return err
-}
 
-func (d *DB) migrateV7ConfigLifecycle() error {
-	_, err := d.conn.Exec(`ALTER TABLE configs ADD COLUMN scope TEXT NOT NULL DEFAULT 'TEMP'`)
-	if err != nil && !isDuplicateColumn(err.Error()) {
-		return err
-	}
-	_, err = d.conn.Exec(`ALTER TABLE configs ADD COLUMN status TEXT NOT NULL DEFAULT 'temp'`)
-	if err != nil && !isDuplicateColumn(err.Error()) {
-		return err
-	}
-	if _, err := d.conn.Exec(`UPDATE configs SET scope = 'TEMP' WHERE scope IS NULL OR scope = ''`); err != nil {
-		return err
-	}
-	_, err = d.conn.Exec(`UPDATE configs SET status = 'temp' WHERE status IS NULL OR status = ''`)
-	return err
-}
-
-func (d *DB) migrateV8SecretScope() error {
-	_, err := d.conn.Exec(`ALTER TABLE secrets ADD COLUMN scope TEXT NOT NULL DEFAULT 'TEMP'`)
-	if err != nil && !isDuplicateColumn(err.Error()) {
-		return err
-	}
-	_, err = d.conn.Exec(`UPDATE secrets SET scope = 'TEMP' WHERE scope IS NULL OR scope = ''`)
-	return err
-}
-
-func (d *DB) migrateV9PromoteOperationalRefs() error {
-	stmts := []string{
-		`UPDATE secrets SET scope = 'LOCAL', status = 'active' WHERE (scope IS NULL OR scope = '' OR scope = 'TEMP') AND (status IS NULL OR status = '' OR status = 'temp')`,
-		`UPDATE configs SET scope = 'LOCAL', status = 'active' WHERE (scope IS NULL OR scope = '' OR scope = 'TEMP') AND (status IS NULL OR status = '' OR status = 'temp')`,
-	}
-	for _, stmt := range stmts {
-		if _, err := d.conn.Exec(stmt); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (d *DB) migrateV10Functions() error {
-	_, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS functions (
-		name          TEXT PRIMARY KEY,
-		scope         TEXT NOT NULL,
-		vault_hash    TEXT NOT NULL,
-		function_hash TEXT NOT NULL UNIQUE,
-		category      TEXT NOT NULL DEFAULT '',
-		command       TEXT NOT NULL,
-		vars_json     TEXT NOT NULL,
-		created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	return err
-}
-
-func (d *DB) migrateV11FunctionLogs() error {
-	_, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS function_logs (
-		id            INTEGER PRIMARY KEY AUTOINCREMENT,
-		function_hash TEXT NOT NULL,
-		action        TEXT NOT NULL,
-		status        TEXT NOT NULL,
-		detail_json   TEXT NOT NULL DEFAULT '{}',
-		created_at    DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`)
-	return err
-}
-
-func (d *DB) migrateV12SecretFields() error {
-	_, err := d.conn.Exec(`CREATE TABLE IF NOT EXISTS secret_fields (
-		secret_name TEXT NOT NULL,
-		field_key   TEXT NOT NULL,
-		field_type  TEXT NOT NULL DEFAULT 'text',
-		ciphertext  BLOB NOT NULL,
-		nonce       BLOB NOT NULL,
-		updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
-		PRIMARY KEY (secret_name, field_key),
-		FOREIGN KEY (secret_name) REFERENCES secrets(name) ON DELETE CASCADE
-	)`)
-	return err
-}
-
-func (d *DB) migrateV13OperatorCatalogMetadata() error {
-	stmts := []string{
-		`ALTER TABLE secrets ADD COLUMN class TEXT NOT NULL DEFAULT 'key'`,
-		`ALTER TABLE secrets ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE secrets ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE secrets ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE secrets ADD COLUMN origin TEXT NOT NULL DEFAULT 'sync'`,
-		`ALTER TABLE secrets ADD COLUMN created_at DATETIME`,
-		`ALTER TABLE secrets ADD COLUMN last_rotated_at DATETIME`,
-		`ALTER TABLE secrets ADD COLUMN last_revealed_at DATETIME`,
-		`ALTER TABLE secret_fields ADD COLUMN field_role TEXT NOT NULL DEFAULT 'text'`,
-		`ALTER TABLE secret_fields ADD COLUMN display_name TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE secret_fields ADD COLUMN masked_by_default INTEGER NOT NULL DEFAULT 1`,
-		`ALTER TABLE secret_fields ADD COLUMN required INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE secret_fields ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE functions ADD COLUMN description TEXT NOT NULL DEFAULT ''`,
-		`ALTER TABLE functions ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'`,
-		`ALTER TABLE functions ADD COLUMN provenance TEXT NOT NULL DEFAULT 'local'`,
-		`ALTER TABLE functions ADD COLUMN last_tested_at DATETIME`,
-		`ALTER TABLE functions ADD COLUMN last_run_at DATETIME`,
-	}
-	for _, stmt := range stmts {
-		if _, err := d.conn.Exec(stmt); err != nil && !isDuplicateColumn(err.Error()) {
-			return err
-		}
-	}
-	if _, err := d.conn.Exec(`UPDATE secrets SET created_at = updated_at WHERE created_at IS NULL`); err != nil {
-		return err
-	}
 	return nil
 }
 

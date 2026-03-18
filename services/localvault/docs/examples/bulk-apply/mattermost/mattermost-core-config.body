@@ -1,8 +1,0 @@
-{
-  "ServiceSettings": {
-    "SiteURL": "{{ VE.MATTERMOST_SITE_URL }}"
-  },
-  "SqlSettings": {
-    "DataSource": "postgres://{{ VE.MATTERMOST_DB_USERNAME }}:{{ VK.DB_PASSWORD }}@{{ VE.MATTERMOST_DB_HOST }}:{{ VE.MATTERMOST_DB_PORT }}/{{ VE.MATTERMOST_DB_NAME }}?sslmode=disable&connect_timeout=10"
-  }
-}
