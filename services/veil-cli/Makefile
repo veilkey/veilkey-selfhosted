@@ -2,13 +2,7 @@ VERSION := 0.1.0
 CARGO   ?= cargo
 PLATFORMS := linux-amd64 linux-arm64 darwin-amd64 darwin-arm64
 
-TARGETS := \
-  linux-amd64:x86_64-unknown-linux-gnu \
-  linux-arm64:aarch64-unknown-linux-gnu \
-  darwin-amd64:x86_64-apple-darwin \
-  darwin-arm64:aarch64-apple-darwin
-
-.PHONY: build release test lint bench coverage install clean \
+.PHONY: build release test lint install clean \
         $(addprefix build-,$(PLATFORMS)) package
 
 build:
@@ -23,22 +17,14 @@ test:
 lint:
 	$(CARGO) clippy -- -D warnings
 
-bench:
-	$(CARGO) bench
-
-coverage:
-	$(CARGO) test -- --test-output immediate
-	@echo "For HTML coverage: cargo install cargo-llvm-cov && cargo llvm-cov --html"
-
 install: release
-	cp target/release/veilkey-cli /usr/local/bin/veilkey-cli
-	cp target/release/veilkey-session-config /usr/local/bin/veilkey-session-config
+	cp target/release/veil    /usr/local/bin/veil
+	cp target/release/veilkey /usr/local/bin/veilkey
 
 clean:
 	$(CARGO) clean
 
 # Cross-compilation targets.
-# By default uses cargo (requires target toolchain installed via rustup).
 # For Linux targets from macOS, set CARGO=cross (needs: cargo install cross).
 build-linux-amd64:
 	$(CARGO) build --release --target x86_64-unknown-linux-gnu
@@ -61,12 +47,12 @@ package: $(addprefix build-,$(PLATFORMS))
 	    "darwin-amd64:x86_64-apple-darwin" \
 	    "darwin-arm64:aarch64-apple-darwin"; do \
 	    plat=$${entry%%:*}; triple=$${entry##*:}; \
-	    echo "Packaging veilkey-cli-rs-$$plat..."; \
+	    echo "Packaging veil-cli-rs-$$plat..."; \
 	    tmpdir=$$(mktemp -d); \
-	    cp target/$$triple/release/veilkey-cli          $$tmpdir/veilkey-cli; \
-	    cp target/$$triple/release/veilkey-session-config $$tmpdir/veilkey-session-config; \
-	    tar -czf dist/manual/veilkey-cli-rs-$(VERSION)-$$plat.tar.gz -C $$tmpdir \
-	        veilkey-cli veilkey-session-config; \
+	    cp target/$$triple/release/veil    $$tmpdir/veil; \
+	    cp target/$$triple/release/veilkey $$tmpdir/veilkey; \
+	    tar -czf dist/manual/veil-cli-rs-$(VERSION)-$$plat.tar.gz -C $$tmpdir \
+	        veil veilkey; \
 	    rm -rf $$tmpdir; \
 	done
 	@echo "Done: dist/manual/"

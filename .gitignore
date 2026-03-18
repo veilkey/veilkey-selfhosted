@@ -1,11 +1,19 @@
 # Build outputs
-bin/
-dist/
+/bin/
+/dist/
+# per-service build dirs
+services/*/bin/
+services/*/dist/
 .tmp/
 *.log
 
+# Rust
+target/
+
 # Go
 coverage.out
+coverage.html
+*.test
 
 # Database / data
 *.db
@@ -15,12 +23,23 @@ data/
 .env
 secrets/password
 
+# macOS
+.DS_Store
+*.dSYM
+
+# IDE
+.idea/
+.vscode/
+
 # Node
 node_modules/
 
-# Compiled binaries
-veilkey-localvault
-veilkey-vaultcenter
-veilkey-proxy
-veilkey-cli
-veil-cli
+# Compiled binaries (anchored to repo root to avoid matching service directories)
+/veilkey-localvault
+/veilkey-vaultcenter
+/veilkey-proxy
+/veilkey-cli
+/veilkey-session-config
+/veil-cli
+/veil
+/veilkey

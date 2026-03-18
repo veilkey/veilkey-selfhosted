@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "services/veilkey-cli",
+    "services/veil-cli",
+]
+resolver = "2"

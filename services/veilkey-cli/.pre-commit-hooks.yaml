@@ -2,7 +2,7 @@
   name: VeilKey Guard Secret Scanner
   description: Scans staged files for secrets, API keys, tokens, and credentials.
   entry: veilkey-cli scan --exit-code
-  language: golang
+  language: system
   types: [text]
   stages: [pre-commit]
   pass_filenames: true

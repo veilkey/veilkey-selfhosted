@@ -1,1 +1,0 @@
-../../../shared/tests/test_install_user_boundary.sh
