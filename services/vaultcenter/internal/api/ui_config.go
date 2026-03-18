@@ -29,7 +29,7 @@ func (s *Server) handleGetUIConfig(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handlePatchUIConfig(w http.ResponseWriter, r *http.Request) {
 	var req uiConfigPayload
-	if err := decodeRequestJSON(r, &req); err != nil {
+	if err := decodeJSON(r, &req); err != nil {
 		s.respondError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}

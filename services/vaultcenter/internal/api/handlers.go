@@ -3,11 +3,17 @@ package api
 import (
 	"net/http"
 	"strings"
+
+	"veilkey-vaultcenter/internal/api/admin"
 )
 
 // handleStatus returns current key version info
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
-	resp, err := s.hkmRuntimeInfo()
+	if s.hkmHandler == nil {
+		s.respondError(w, http.StatusInternalServerError, "node info not available")
+		return
+	}
+	resp, err := s.hkmHandler.HkmRuntimeInfo()
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "node info not available")
 		return
@@ -67,16 +73,16 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
-	mux.HandleFunc("GET /preview/admin-vue", s.handleAdminVuePreview)
-	mux.HandleFunc("GET /preview/admin-vue/", s.handleAdminVuePreview)
-	mux.HandleFunc("GET /preview/admin-html-only", s.handleAdminHTMLOneShotPreview)
-	mux.HandleFunc("GET /preview/admin-html-only/", s.handleAdminHTMLOneShotPreview)
-	mux.HandleFunc("GET /preview/mockups/dark", s.handleAdminMockupDark)
-	mux.HandleFunc("GET /preview/mockups/dark/", s.handleAdminMockupDark)
-	mux.HandleFunc("GET /preview/mockups/amber", s.handleAdminMockupAmber)
-	mux.HandleFunc("GET /preview/mockups/amber/", s.handleAdminMockupAmber)
-	mux.HandleFunc("GET /preview/mockups/mono", s.handleAdminMockupMono)
-	mux.HandleFunc("GET /preview/mockups/mono/", s.handleAdminMockupMono)
+	mux.HandleFunc("GET /preview/admin-vue", s.adminHandler.HandleAdminVuePreview)
+	mux.HandleFunc("GET /preview/admin-vue/", s.adminHandler.HandleAdminVuePreview)
+	mux.HandleFunc("GET /preview/admin-html-only", s.adminHandler.HandleAdminHTMLOneShotPreview)
+	mux.HandleFunc("GET /preview/admin-html-only/", s.adminHandler.HandleAdminHTMLOneShotPreview)
+	mux.HandleFunc("GET /preview/mockups/dark", s.adminHandler.HandleAdminMockupDark)
+	mux.HandleFunc("GET /preview/mockups/dark/", s.adminHandler.HandleAdminMockupDark)
+	mux.HandleFunc("GET /preview/mockups/amber", s.adminHandler.HandleAdminMockupAmber)
+	mux.HandleFunc("GET /preview/mockups/amber/", s.adminHandler.HandleAdminMockupAmber)
+	mux.HandleFunc("GET /preview/mockups/mono", s.adminHandler.HandleAdminMockupMono)
+	mux.HandleFunc("GET /preview/mockups/mono/", s.adminHandler.HandleAdminMockupMono)
 	mux.HandleFunc("GET /dashboard", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})
@@ -97,14 +103,14 @@ func (s *Server) handleLegacyVaultRoute(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) handleAdminStaticFile(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimPrefix(r.URL.Path, "/")
-	if body, ok := devUIStaticFile(name); ok {
+	if body, ok := admin.DevUIStaticFile(name); ok {
 		if strings.HasSuffix(name, ".svg") {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}
 		_, _ = w.Write(body)
 		return
 	}
-	if body, ok := embeddedUIStaticFile(name); ok {
+	if body, ok := admin.EmbeddedUIStaticFile(name); ok {
 		if strings.HasSuffix(name, ".svg") {
 			w.Header().Set("Content-Type", "image/svg+xml")
 		}

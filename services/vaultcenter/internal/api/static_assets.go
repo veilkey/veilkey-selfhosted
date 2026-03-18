@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+
+	"veilkey-vaultcenter/internal/api/admin"
 )
 
 //go:embed assets/*
@@ -18,11 +20,11 @@ func (s *Server) assetHandler() http.Handler {
 	}
 	legacy := http.StripPrefix("/assets/", http.FileServer(http.FS(sub)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if assetsDir := devUIAssetsDir(); assetsDir != "" {
+		if assetsDir := admin.DevUIAssetsDir(); assetsDir != "" {
 			http.StripPrefix("/assets/", http.FileServer(http.Dir(assetsDir))).ServeHTTP(w, r)
 			return
 		}
-		if uiAssets, ok := embeddedUIAssets(); ok {
+		if uiAssets, ok := admin.EmbeddedUIAssets(); ok {
 			name := filepath.Clean(strings.TrimPrefix(r.URL.Path, "/assets/"))
 			name = strings.TrimPrefix(name, "/")
 			if name != "" {
