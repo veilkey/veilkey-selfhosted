@@ -10,6 +10,14 @@ Contributions are welcome, but changes should prove the exact path they touch.
 2. User-facing or operator-facing behavior changes must update README or docs in the same change.
 3. Installer and deploy changes should verify one real operator path whenever practical.
 4. Do not introduce plaintext-secret examples where an existing masked or file-based path already exists.
+5. Do not hardcode default values (ports, file paths, URLs) in Go source code. All runtime values must come from environment variables. If a value is missing, the process must exit with a clear error — no silent fallbacks. Default values belong in `.env.example` only.
+
+A pre-commit hook enforces rule 5. To install it:
+
+```bash
+cp scripts/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
 
 ## Where To Start
 

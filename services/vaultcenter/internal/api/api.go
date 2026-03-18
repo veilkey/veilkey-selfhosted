@@ -139,7 +139,7 @@ func (s *Server) BulkApplyDir() string {
 	if strings.TrimSpace(s.bulkApplyDir) != "" {
 		return strings.TrimSpace(s.bulkApplyDir)
 	}
-	return "/etc/veilkey/bulk-apply"
+	return os.Getenv("VEILKEY_BULK_APPLY_DIR")
 }
 
 func (s *Server) SetSalt(salt []byte) {

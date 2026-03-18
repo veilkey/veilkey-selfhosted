@@ -53,7 +53,7 @@ func (s *Server) localFunctionBaseURL() string {
 		scheme = "https"
 	}
 	if addr == "" {
-		return scheme + "://127.0.0.1:10180"
+		return ""
 	}
 	if strings.HasPrefix(addr, ":") {
 		return scheme + "://127.0.0.1" + addr
@@ -142,7 +142,7 @@ func (s *Server) renderGlobalFunctionCommand(fn *db.GlobalFunction) (string, err
 func (s *Server) buildGlobalFunctionRunEnv(req globalFunctionRunRequest) ([]string, []string, error) {
 	env := append(os.Environ(),
 		"VEILKEY_LOCALVAULT_URL="+s.localFunctionBaseURL(),
-		"VEILKEY_FUNCTION_DIR=/opt/veilkey/veilkey-cli/functions",
+		"VEILKEY_FUNCTION_DIR="+os.Getenv("VEILKEY_FUNCTION_DIR"),
 	)
 	applied := []string{}
 	apply := func(key, value string) {

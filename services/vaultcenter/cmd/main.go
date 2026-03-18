@@ -240,7 +240,7 @@ func runHKMInit() {
 		fmt.Println("")
 		fmt.Printf("  Password ref: %s\n", tempRef)
 		fmt.Println("  This ref expires in 1 hour. Retrieve your password before then:")
-		fmt.Printf("    curl -s http://localhost:10180/api/resolve/%s\n", tempRef)
+		fmt.Printf("    curl -s http://localhost:<port>/api/resolve/%s\n", tempRef)
 	}
 	fmt.Println("")
 	fmt.Println("  WARNING: Your password is the only way to unlock this server.")

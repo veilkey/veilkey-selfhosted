@@ -1,0 +1,27 @@
+#!/bin/bash
+set -euo pipefail
+
+# 하드코딩된 기본값이 Go 소스코드에 있으면 커밋 차단
+BANNED=(
+  ":10180"
+  ":10181"
+  "/opt/veilkey"
+  "/etc/veilkey"
+  "/usr/local/bin/veilkey"
+)
+
+found=0
+for val in "${BANNED[@]}"; do
+  matches=$(grep -rn --include="*.go" "$val" services/localvault services/vaultcenter 2>/dev/null || true)
+  if [[ -n "$matches" ]]; then
+    echo "❌ 하드코딩 금지: '$val'"
+    echo "$matches"
+    found=1
+  fi
+done
+
+if [[ $found -eq 1 ]]; then
+  echo ""
+  echo "env에서 읽으세요. 기본값은 .env.example 참고."
+  exit 1
+fi
