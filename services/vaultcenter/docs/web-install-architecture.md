@@ -114,7 +114,7 @@ VaultCenter runs a server-side script or job runner on a trusted control node.
 Use for:
 
 - local host installs
-- proxmox-host-localvault
+- host-localvault
 - single-node recovery
 
 #### B. Pull Agent

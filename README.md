@@ -124,11 +124,11 @@ VeilKey is self-hosted because the main value is control over:
 
 - where ciphertext and runtime state live
 - how node identity and policy are enforced
-- how Proxmox hosts and LXCs are provisioned
+- how containers are provisioned and managed
 - how secrets are handled inside your own trust boundary
 
 If you need a hosted SaaS secret manager, this repository is not that.
-If you need VeilKey to live on your own host, LXC, and network boundary, this repository is the right surface.
+If you need VeilKey to live on your own host and network boundary, this repository is the right surface.
 
 ## Quick Start
 
@@ -140,20 +140,10 @@ cd veilkey-selfhosted/installer
 ./install.sh validate
 ```
 
-Then choose one of the validated install paths:
-
-- all-in-one LXC
+Then run the installer for your target:
 
 ```bash
-./scripts/proxmox-lxc-allinone-install.sh --activate /
-./scripts/proxmox-lxc-allinone-health.sh /
-```
-
-- host-side LocalVault
-
-```bash
-./scripts/proxmox-host-localvault/install.sh --activate /
-./scripts/proxmox-host-localvault/health.sh /
+./install.sh install-profile linux-host /
 ```
 
 The minimum success check should look like this:
@@ -289,7 +279,7 @@ VeilKey is not trying to be a generic password manager or a hosted secret vault.
 The practical difference is:
 
 - stronger emphasis on self-hosted runtime identity and node registration
-- explicit Proxmox and LXC install paths
+- explicit Docker container install paths
 - local runtime components such as LocalVault instead of a cloud-only model
 - tighter install-to-runtime contract inside one source tree
 - central VaultCenter + multiple LocalVault runtime topology instead of a single hosted vault model
@@ -304,7 +294,7 @@ The practical difference is:
 ### Tradeoffs
 
 - higher operational complexity than a hosted secret service
-- stronger dependency on your own host, LXC, and network setup
+- stronger dependency on your own host and network setup
 - installer and runtime verification matter more because the value is in the full self-hosted path
 
 ### Rough Comparison

@@ -10,11 +10,6 @@ import (
 )
 
 type installRuntimeConfigPayload struct {
-	TargetType     string `json:"target_type"`
-	TargetMode     string `json:"target_mode"`
-	TargetNode     string `json:"target_node"`
-	TargetVMID     string `json:"target_vmid"`
-	HostCompanion  bool   `json:"host_companion"`
 	PublicBaseURL  string `json:"public_base_url"`
 	RuntimeWarning string `json:"runtime_warning,omitempty"`
 	InstallProfile string `json:"install_profile"`
@@ -29,11 +24,6 @@ type installRuntimeConfigPayload struct {
 }
 
 type installRuntimeConfigPatchRequest struct {
-	TargetType     *string `json:"target_type"`
-	TargetMode     *string `json:"target_mode"`
-	TargetNode     *string `json:"target_node"`
-	TargetVMID     *string `json:"target_vmid"`
-	HostCompanion  *bool   `json:"host_companion"`
 	PublicBaseURL  *string `json:"public_base_url"`
 	InstallProfile *string `json:"install_profile"`
 	InstallRoot    *string `json:"install_root"`
@@ -48,11 +38,6 @@ type installRuntimeConfigPatchRequest struct {
 
 func installRuntimeConfigFromUI(cfg *db.UIConfig) installRuntimeConfigPayload {
 	return installRuntimeConfigPayload{
-		TargetType:     cfg.TargetType,
-		TargetMode:     cfg.TargetMode,
-		TargetNode:     cfg.TargetNode,
-		TargetVMID:     cfg.TargetVMID,
-		HostCompanion:  cfg.HostCompanion,
 		PublicBaseURL:  cfg.PublicBaseURL,
 		InstallProfile: cfg.InstallProfile,
 		InstallRoot:    cfg.InstallRoot,
@@ -105,21 +90,6 @@ func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.
 
 	if req.InstallProfile != nil {
 		cfg.InstallProfile = strings.TrimSpace(*req.InstallProfile)
-	}
-	if req.TargetType != nil {
-		cfg.TargetType = strings.TrimSpace(*req.TargetType)
-	}
-	if req.TargetMode != nil {
-		cfg.TargetMode = strings.TrimSpace(*req.TargetMode)
-	}
-	if req.TargetNode != nil {
-		cfg.TargetNode = strings.TrimSpace(*req.TargetNode)
-	}
-	if req.TargetVMID != nil {
-		cfg.TargetVMID = strings.TrimSpace(*req.TargetVMID)
-	}
-	if req.HostCompanion != nil {
-		cfg.HostCompanion = *req.HostCompanion
 	}
 	if req.PublicBaseURL != nil {
 		cfg.PublicBaseURL = strings.TrimSpace(*req.PublicBaseURL)

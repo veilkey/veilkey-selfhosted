@@ -137,9 +137,8 @@ Example:
 
 ## Deploy
 
-`scripts/deploy-lxc.sh` must run on a Proxmox host only. The CI deploy job must use the `proxmox-host` runner.
+Deploy via Docker container. See the `Dockerfile` in this directory.
 
-Docker image push and LXC runtime deploy are separate CI stages so that an image-push failure does not block the LXC deploy.
 
 ## API
 
