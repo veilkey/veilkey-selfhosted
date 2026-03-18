@@ -123,7 +123,7 @@ func (s *Server) FindAgentRecord(hashOrLabel string) (*db.Agent, error) {
 }
 
 func (s *Server) FetchAgentCiphertext(agentURL, ref string) (name string, ciphertext []byte, nonce []byte, err error) {
-	resp, httpErr := s.httpClient.Get(agentURL + "/api/cipher/" + url.PathEscape(ref))
+	resp, httpErr := s.httpClient.Get(agentURL + httputil.AgentPathCipher + "/" + url.PathEscape(ref))
 	if httpErr != nil {
 		return "", nil, nil, fmt.Errorf("agent unreachable: %w", httpErr)
 	}
@@ -187,7 +187,7 @@ func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce [
 		}
 	}
 	// Fall back to the agent's own resolve endpoint.
-	resp, resolveErr := s.httpClient.Get(agentURL + "/api/resolve/" + url.PathEscape(name))
+	resp, resolveErr := s.httpClient.Get(agentURL + httputil.AgentPathResolve + "/" + url.PathEscape(name))
 	if resolveErr != nil {
 		return "", false
 	}
@@ -205,7 +205,7 @@ func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce [
 }
 
 func (s *Server) resolveBulkApplyConfigValue(agentURL, key string) (string, bool) {
-	resp, err := s.httpClient.Get(agentURL + "/api/configs/" + url.PathEscape(key))
+	resp, err := s.httpClient.Get(agentURL + httputil.AgentPathConfigs + "/" + url.PathEscape(key))
 	if err != nil {
 		return "", false
 	}

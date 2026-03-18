@@ -16,7 +16,7 @@ func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.deps.HTTPClient().Get(agent.URL() + "/api/secrets")
+	resp, err := h.deps.HTTPClient().Get(agent.URL() + agentPathSecrets)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

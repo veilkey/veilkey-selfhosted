@@ -24,7 +24,7 @@ func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request
 		}
 	}
 
-	req, _ := http.NewRequest(http.MethodDelete, agent.URL()+"/api/secrets/"+name, nil)
+	req, _ := http.NewRequest(http.MethodDelete, agent.URL()+agentPathSecrets+"/"+name, nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())

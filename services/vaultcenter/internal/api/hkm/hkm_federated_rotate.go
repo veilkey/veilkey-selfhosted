@@ -77,7 +77,7 @@ func (h *Handler) handleFederatedRotate(w http.ResponseWriter, r *http.Request) 
 			failCount++
 			continue
 		}
-		resp, err := client.Post(child.URL+"/api/rekey", "application/json", bytes.NewReader(payload))
+		resp, err := client.Post(child.URL+agentPathRekey, "application/json", bytes.NewReader(payload))
 		if err != nil {
 			results = append(results, rotateResult{
 				NodeID: child.NodeID, Label: child.Label,

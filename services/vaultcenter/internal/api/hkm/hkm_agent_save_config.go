@@ -39,7 +39,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agent.URL()+"/api/configs", bytes.NewReader(body))
+	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agent.URL()+agentPathConfigs, bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {

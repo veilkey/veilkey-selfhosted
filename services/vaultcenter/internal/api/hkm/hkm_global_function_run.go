@@ -67,7 +67,7 @@ func (h *Handler) localFunctionBaseURL() string {
 
 func (h *Handler) resolveFunctionRef(ref string) (string, error) {
 	baseURL := h.localFunctionBaseURL()
-	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+"/api/resolve/"+ref, nil)
+	req, err := http.NewRequest(http.MethodGet, strings.TrimRight(baseURL, "/")+agentPathResolve+"/"+ref, nil)
 	if err != nil {
 		return "", fmt.Errorf("resolve %s request build failed: %w", ref, err)
 	}

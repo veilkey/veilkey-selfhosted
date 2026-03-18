@@ -11,6 +11,17 @@ import (
 	"strings"
 )
 
+// Agent API path constants — localvault API endpoints called by vaultcenter.
+const (
+	AgentPathConfigs      = "/api/configs"
+	AgentPathConfigsBulk  = "/api/configs/bulk"
+	AgentPathSecrets      = "/api/secrets"
+	AgentPathSecretFields = "/api/secrets/fields"
+	AgentPathCipher       = "/api/cipher"
+	AgentPathResolve      = "/api/resolve"
+	AgentPathRekey        = "/api/rekey"
+)
+
 // AgentScheme returns the URL scheme for agent communication.
 func AgentScheme() string {
 	if scheme := os.Getenv("VEILKEY_AGENT_SCHEME"); scheme != "" {

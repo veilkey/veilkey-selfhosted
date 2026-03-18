@@ -161,7 +161,7 @@ func (h *Handler) respondAgentLookupError(w http.ResponseWriter, err error) {
 }
 
 func (h *Handler) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, error) {
-	resp, err := h.deps.HTTPClient().Get(agentURL + "/api/cipher/" + ref)
+	resp, err := h.deps.HTTPClient().Get(agentURL + agentPathCipher+"/" + ref)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
@@ -188,7 +188,7 @@ func (h *Handler) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, err
 }
 
 func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*cipherSecretField, error) {
-	resp, err := h.deps.HTTPClient().Get(agentURL + "/api/cipher/" + ref + "/fields/" + fieldKey)
+	resp, err := h.deps.HTTPClient().Get(agentURL + agentPathCipher+"/" + ref + "/fields/" + fieldKey)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
@@ -219,7 +219,7 @@ func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*ci
 }
 
 func (h *Handler) fetchAgentResolvedValue(agentURL, ref string) (*resolvedAgentSecret, error) {
-	resp, err := http.Get(agentURL + "/api/resolve/" + ref)
+	resp, err := http.Get(agentURL + agentPathResolve+"/" + ref)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}

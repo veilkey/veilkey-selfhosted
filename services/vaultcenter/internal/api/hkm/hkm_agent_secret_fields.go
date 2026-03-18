@@ -91,7 +91,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		"name":   name,
 		"fields": payloadFields,
 	})
-	resp, err := http.Post(agent.URL()+"/api/secrets/fields", "application/json", bytes.NewReader(reqBody))
+	resp, err := http.Post(agent.URL()+agentPathSecretFields, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -195,7 +195,7 @@ func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, agent.URL()+"/api/secrets/"+name+"/fields/"+fieldKey, nil)
+	req, err := http.NewRequest(http.MethodDelete, agent.URL()+agentPathSecrets+"/"+name+"/fields/"+fieldKey, nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to build delete request")
 		return
