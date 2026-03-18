@@ -1,1 +1,0 @@
-../../../shared/tests/test_veilroot_shell_hook.sh

@@ -1,1 +1,0 @@
-../../../../../shared/deploy/host/snippets/veilroot-veilkey-shell.sh

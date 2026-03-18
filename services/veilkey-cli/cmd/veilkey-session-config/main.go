@@ -15,7 +15,7 @@ import (
 type config struct {
 	Proxy    proxyConfig     `toml:"proxy"`
 	Tools    map[string]tool `toml:"tools"`
-	Veilroot profileDefaults `toml:"veilroot"`
+	Session  profileDefaults `toml:"session"`
 	RootAI   profileDefaults `toml:"root_ai"`
 	Veilkey  veilkeyConfig   `toml:"veilkey"`
 	Rewrite  rewriteConfig   `toml:"rewrite"`
@@ -389,8 +389,8 @@ func main() {
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
 			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyVaultcenterURL()},
 		})
-	case "veilroot-default-profile":
-		value, err := chooseProfileValue(cfg.Veilroot.DefaultProfile, cfg.RootAI.DefaultProfile, "veilroot.default_profile")
+	case "session-default-profile":
+		value, err := chooseProfileValue(cfg.Session.DefaultProfile, cfg.RootAI.DefaultProfile, "session.default_profile")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -400,22 +400,22 @@ func main() {
 		fmt.Println(cfg.veilkeyLocalvaultURL())
 	case "veilkey-vaultcenter-url":
 		fmt.Println(cfg.veilkeyVaultcenterURL())
-	case "veilroot-unit-prefix":
-		value, err := chooseProfileValue(cfg.Veilroot.UnitPrefix, cfg.RootAI.UnitPrefix, "veilroot.unit_prefix")
+	case "session-unit-prefix":
+		value, err := chooseProfileValue(cfg.Session.UnitPrefix, cfg.RootAI.UnitPrefix, "session.unit_prefix")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		fmt.Println(value)
 	case "root-ai-default-profile":
-		value, err := chooseProfileValue(cfg.Veilroot.DefaultProfile, cfg.RootAI.DefaultProfile, "root_ai.default_profile")
+		value, err := chooseProfileValue(cfg.Session.DefaultProfile, cfg.RootAI.DefaultProfile, "root_ai.default_profile")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 		fmt.Println(value)
 	case "root-ai-unit-prefix":
-		value, err := chooseProfileValue(cfg.Veilroot.UnitPrefix, cfg.RootAI.UnitPrefix, "root_ai.unit_prefix")
+		value, err := chooseProfileValue(cfg.Session.UnitPrefix, cfg.RootAI.UnitPrefix, "root_ai.unit_prefix")
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)

@@ -1,1 +1,0 @@
-../../../../shared/deploy/host/verify-veilroot-session.sh
