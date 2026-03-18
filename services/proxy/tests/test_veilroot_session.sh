@@ -1,1 +1,0 @@
-../../../shared/tests/test_veilroot_session.sh
