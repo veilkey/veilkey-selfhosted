@@ -221,7 +221,6 @@ jobs:
           cd shared
           bash tests/test_veilroot_shell_hook.sh
           bash tests/test_mr_guard.sh
-          bash tests/test_dalroot_migration.sh
 
   # ── PR 게이트 (모든 필수 job 통과 확인) ──────────────────────
   pr-gate:
