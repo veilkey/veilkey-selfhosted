@@ -207,7 +207,7 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 			result.Warnings = append(result.Warnings, "target_node is empty; proxmox node selection should be explicit")
 		}
 		for _, passwordPath := range []string{
-			proxmoxLXCPasswordFile("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password"),
+			proxmoxLXCPasswordFile("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password"),
 			proxmoxLXCPasswordFile("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", "/etc/veilkey/localvault.password"),
 		} {
 			if _, err := os.Stat(passwordPath); err != nil {
@@ -456,7 +456,7 @@ func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation inst
 		return "", fmt.Errorf("install workdir is not configured")
 	}
 
-	vaultcenterPasswordFile := proxmoxLXCPasswordFile("VEILKEY_INSTALL_KEYCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password")
+	vaultcenterPasswordFile := proxmoxLXCPasswordFile("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password")
 	localvaultPasswordFile := proxmoxLXCPasswordFile("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", "/etc/veilkey/localvault.password")
 	vaultcenterPassword, err := os.ReadFile(vaultcenterPasswordFile)
 	if err != nil {
@@ -478,7 +478,7 @@ func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation inst
 	passwordFile := filepath.Join(tmpRoot, "password")
 
 	installerRoot := filepath.Clean(filepath.Join(workdir, ".."))
-	if err := os.WriteFile(passwordFile, []byte("VEILKEY_KEYCENTER_PASSWORD="+strings.TrimSpace(string(vaultcenterPassword))+"\nVEILKEY_LOCALVAULT_PASSWORD="+strings.TrimSpace(string(localvaultPassword))+"\n"), 0600); err != nil {
+	if err := os.WriteFile(passwordFile, []byte("VEILKEY_VAULTCENTER_PASSWORD="+strings.TrimSpace(string(vaultcenterPassword))+"\nVEILKEY_LOCALVAULT_PASSWORD="+strings.TrimSpace(string(localvaultPassword))+"\n"), 0600); err != nil {
 		return "", err
 	}
 
@@ -762,9 +762,9 @@ func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationR
 		cmd.Env = append(os.Environ(),
 			"VEILKEY_INSTALL_PROFILE="+validation.ResolvedProfile,
 			"VEILKEY_INSTALL_ROOT="+validation.ResolvedRoot,
-			"VEILKEY_INSTALL_KEYCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
+			"VEILKEY_INSTALL_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
 			"VEILKEY_INSTALL_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
-			"VEILKEY_KEYCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
+			"VEILKEY_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
 			"VEILKEY_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
 			"VEILKEY_TLS_CERT="+strings.TrimSpace(cfg.TLSCertPath),
 			"VEILKEY_TLS_KEY="+strings.TrimSpace(cfg.TLSKeyPath),

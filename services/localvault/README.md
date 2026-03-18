@@ -64,8 +64,8 @@ Identity rules:
 
 Heartbeat and tracked-ref sync share a single effective VaultCenter URL, resolved by this precedence:
 
-1. `VEILKEY_KEYCENTER_URL` environment variable
-2. `VEILKEY_KEYCENTER_URL` stored in DB config
+1. `VEILKEY_VAULTCENTER_URL` environment variable
+2. `VEILKEY_VAULTCENTER_URL` stored in DB config
 
 If multiple sources contain differing values, a drift warning is logged at startup and runtime.
 
@@ -111,7 +111,7 @@ Initialization is performed automatically via the VaultCenter `init --child` com
 
 ```bash
 veilkey-vaultcenter init --child \
-  --parent http://KEYCENTER_IP:10180 \
+  --parent http://VAULTCENTER_IP:10180 \
 --label my-service \
   --install
 ```

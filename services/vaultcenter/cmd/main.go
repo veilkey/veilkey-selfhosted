@@ -216,7 +216,7 @@ func runHKMInit() {
 			parts := db.RefParts{Family: "VK", Scope: "TEMP", ID: pwRefID}
 			encoded := base64Encode(pwCiphertext) + ":" + base64Encode(pwNonce)
 			expiresAt := time.Now().UTC().Add(1 * time.Hour)
-			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, "temp", expiresAt, "KEYCENTER_PASSWORD"); saveErr == nil {
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, "temp", expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
 				tempRef = parts.Canonical()
 			}
 		}

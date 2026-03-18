@@ -21,7 +21,7 @@ type bulkSetCheck struct {
 // POST /api/configs/bulk-set
 // Sets a key=value on ALL agents (or creates if not exists).
 // All-or-nothing: if any agent fails, the entire operation is rolled back.
-// Request: {"key": "VEILKEY_KEYCENTER_URL", "value": "http://your-hub:10180"}
+// Request: {"key": "VEILKEY_VAULTCENTER_URL", "value": "http://your-hub:10180"}
 // Optional: {"key": "...", "value": "...", "overwrite": false}  — skip agents that already have the key
 func (s *Server) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 	var req struct {

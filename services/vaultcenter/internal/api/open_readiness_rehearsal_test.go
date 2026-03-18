@@ -10,7 +10,7 @@ func TestOpenReadinessRehearsalAgentSaveGetAndVersionGuard(t *testing.T) {
 	srv, handler := setupHKMServer(t)
 
 	_, agentHash := registerMockAgent(t, srv, "open-readiness-agent", map[string]string{
-		"VEILKEY_KEYCENTER_URL": "http://127.0.0.1:10180",
+		"VEILKEY_VAULTCENTER_URL": "http://127.0.0.1:10180",
 	}, nil)
 
 	save := postJSON(handler, "/api/agents/"+agentHash+"/secrets", map[string]string{

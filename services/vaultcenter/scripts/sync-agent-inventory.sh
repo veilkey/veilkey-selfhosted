@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-KEYCENTER_NAME="veilkey-vaultcenter"
+VAULTCENTER_NAME="veilkey-vaultcenter"
 SERVICE_NAME="veilkey-localvault"
 
 lxc_exec() {
@@ -10,10 +10,10 @@ lxc_exec() {
   pct exec "$vmid" -- bash -lc "$*"
 }
 
-vaultcenter_vmid="$(pct list 2>/dev/null | awk -v name="$KEYCENTER_NAME" '$3==name{print $1; exit}')"
-[[ -n "$vaultcenter_vmid" ]] || { echo "Error: vaultcenter LXC not found: $KEYCENTER_NAME" >&2; exit 1; }
+vaultcenter_vmid="$(pct list 2>/dev/null | awk -v name="$VAULTCENTER_NAME" '$3==name{print $1; exit}')"
+[[ -n "$vaultcenter_vmid" ]] || { echo "Error: vaultcenter LXC not found: $VAULTCENTER_NAME" >&2; exit 1; }
 
-env_file="$(lxc_exec "$vaultcenter_vmid" "systemctl cat ${KEYCENTER_NAME}.service" 2>/dev/null | awk -F= '/^EnvironmentFile=/{print $2; exit}')"
+env_file="$(lxc_exec "$vaultcenter_vmid" "systemctl cat ${VAULTCENTER_NAME}.service" 2>/dev/null | awk -F= '/^EnvironmentFile=/{print $2; exit}')"
 [[ -n "$env_file" ]] || { echo "Error: could not locate vaultcenter env file" >&2; exit 1; }
 
 db_path="$(lxc_exec "$vaultcenter_vmid" "awk -F= '/^VEILKEY_DB_PATH=/{print \$2; exit}' '$env_file'")"
