@@ -6,7 +6,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 	"net/url"
 	"strings"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 

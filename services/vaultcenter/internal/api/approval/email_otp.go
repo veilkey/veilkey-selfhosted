@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	vcrypto "veilkey-vaultcenter/internal/crypto"
+	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/mailer"

@@ -9,7 +9,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type agentSecretField struct {

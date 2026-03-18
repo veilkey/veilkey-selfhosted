@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 func (h *Handler) handleListConfigs(w http.ResponseWriter, r *http.Request) {

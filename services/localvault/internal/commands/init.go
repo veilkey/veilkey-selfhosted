@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"veilkey-localvault/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
 )
 

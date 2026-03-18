@@ -3,7 +3,7 @@ package bulk
 import (
 	"net/http"
 
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 func respondJSON(w http.ResponseWriter, status int, data any) {

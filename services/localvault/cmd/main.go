@@ -16,9 +16,9 @@ import (
 	"golang.org/x/term"
 
 	"veilkey-localvault/internal/api"
-	"veilkey-localvault/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 func main() {

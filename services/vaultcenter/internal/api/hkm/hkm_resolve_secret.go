@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 

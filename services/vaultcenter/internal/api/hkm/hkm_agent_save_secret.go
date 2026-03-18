@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"veilkey-vaultcenter/internal/httputil"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {

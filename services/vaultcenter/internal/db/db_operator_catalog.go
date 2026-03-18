@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"time"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 
 	"gorm.io/gorm"
 )

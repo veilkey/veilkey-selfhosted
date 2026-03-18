@@ -14,9 +14,9 @@ import (
 	"veilkey-localvault/internal/api/configs"
 	"veilkey-localvault/internal/api/functions"
 	"veilkey-localvault/internal/api/secrets"
-	"veilkey-localvault/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 type NodeIdentity struct {

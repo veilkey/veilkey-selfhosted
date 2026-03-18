@@ -10,7 +10,7 @@ import (
 	"strings"
 	"syscall"
 
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 type bulkApplyStep struct {
