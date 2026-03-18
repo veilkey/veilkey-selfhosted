@@ -1,9 +1,5 @@
 package api
 
-import "regexp"
+import "veilkey-vaultcenter/internal/httputil"
 
-var validResourceName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-
-func isValidResourceName(name string) bool {
-	return validResourceName.MatchString(name)
-}
+func isValidResourceName(name string) bool { return httputil.IsValidResourceName(name) }

@@ -6,8 +6,28 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
+	"regexp"
 	"strings"
 )
+
+// AgentScheme returns the URL scheme for agent communication.
+func AgentScheme() string {
+	if scheme := os.Getenv("VEILKEY_AGENT_SCHEME"); scheme != "" {
+		return scheme
+	}
+	if os.Getenv("VEILKEY_TLS_CERT") != "" {
+		return "https"
+	}
+	return "http"
+}
+
+var validResourceName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
+
+// IsValidResourceName reports whether name matches [A-Z_][A-Z0-9_]*.
+func IsValidResourceName(name string) bool {
+	return validResourceName.MatchString(name)
+}
 
 func RespondJSON(w http.ResponseWriter, status int, data any) {
 	w.Header().Set("Content-Type", "application/json")

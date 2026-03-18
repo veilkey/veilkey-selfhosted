@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -122,7 +123,7 @@ func (s *Server) FindAgentRecord(hashOrLabel string) (*db.Agent, error) {
 }
 
 func (s *Server) FetchAgentCiphertext(agentURL, ref string) (name string, ciphertext []byte, nonce []byte, err error) {
-	resp, httpErr := s.httpClient.Get(agentURL + "/api/cipher/" + ref)
+	resp, httpErr := s.httpClient.Get(agentURL + "/api/cipher/" + url.PathEscape(ref))
 	if httpErr != nil {
 		return "", nil, nil, fmt.Errorf("agent unreachable: %w", httpErr)
 	}
@@ -186,7 +187,7 @@ func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce [
 		}
 	}
 	// Fall back to the agent's own resolve endpoint.
-	resp, resolveErr := s.httpClient.Get(agentURL + "/api/resolve/" + name)
+	resp, resolveErr := s.httpClient.Get(agentURL + "/api/resolve/" + url.PathEscape(name))
 	if resolveErr != nil {
 		return "", false
 	}
@@ -204,7 +205,7 @@ func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce [
 }
 
 func (s *Server) resolveBulkApplyConfigValue(agentURL, key string) (string, bool) {
-	resp, err := s.httpClient.Get(agentURL + "/api/configs/" + key)
+	resp, err := s.httpClient.Get(agentURL + "/api/configs/" + url.PathEscape(key))
 	if err != nil {
 		return "", false
 	}
@@ -288,6 +289,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		}
 	}
 	srv.adminHandler = admin.NewHandler(srv)
+	srv.hkmHandler = hkm.NewHandler(srv)
 	srv.bulkHandler = bulk.NewHandler(srv)
 	return srv
 }
@@ -302,10 +304,7 @@ func (s *Server) SetBulkApplyDir(dir string) {
 }
 
 func (s *Server) BulkApplyDir() string {
-	if strings.TrimSpace(s.bulkApplyDir) != "" {
-		return strings.TrimSpace(s.bulkApplyDir)
-	}
-	return os.Getenv("VEILKEY_BULK_APPLY_DIR")
+	return s.bulkApplyDir
 }
 
 func (s *Server) SetSalt(salt []byte) {
@@ -479,24 +478,16 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func pathVal(r *http.Request, key string) string {
-	return strings.TrimSpace(r.PathValue(key))
-}
-
 func decodeJSON(r *http.Request, dst any) error {
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("failed to encode response: %v", err)
-	}
+	httputil.RespondJSON(w, status, data)
 }
 
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
-	s.respondJSON(w, status, map[string]string{"error": message})
+	httputil.RespondError(w, status, message)
 }
 
 func (s *Server) Health(w http.ResponseWriter, r *http.Request) {
@@ -524,6 +515,9 @@ func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) SetupRoutes() http.Handler {
+	if s.installHandler == nil || s.approvalHandler == nil {
+		panic("api: SetSalt must be called before SetupRoutes")
+	}
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
@@ -543,7 +537,6 @@ func (s *Server) SetupRoutes() http.Handler {
 	s.adminHandler.Register(mux, s.requireReadyForOps, s.requireTrustedIP)
 	// tracked-ref cleanup routes delegate to the hkm handler (registered after IsHKM check below)
 	if s.IsHKM() {
-		s.hkmHandler = hkm.NewHandler(s)
 		s.hkmHandler.Register(mux, s.requireTrustedIP, s.requireReadyForOps)
 		s.bulkHandler.Register(mux, s.requireTrustedIP)
 		// Admin tracked-ref cleanup routes require an active hkm handler.

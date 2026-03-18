@@ -2,13 +2,10 @@ package hkm
 
 import (
 	"crypto/rand"
-	"encoding/hex"
-	"net/http"
-	"os"
-	"regexp"
-
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
+	"net/http"
 	"strings"
 
 	"veilkey-vaultcenter/internal/crypto"
@@ -51,21 +48,9 @@ type federatedSecretEntry struct {
 }
 
 // AgentScheme returns the URL scheme for agent communication.
-func AgentScheme() string {
-	if scheme := os.Getenv("VEILKEY_AGENT_SCHEME"); scheme != "" {
-		return scheme
-	}
-	if os.Getenv("VEILKEY_TLS_CERT") != "" {
-		return "https"
-	}
-	return "http"
-}
+func AgentScheme() string { return httputil.AgentScheme() }
 
-var validResourceName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-
-func isValidResourceName(name string) bool {
-	return validResourceName.MatchString(name)
-}
+func isValidResourceName(name string) bool { return httputil.IsValidResourceName(name) }
 
 // getLocalDEK retrieves and decrypts the local node's DEK using the server KEK.
 func (h *Handler) getLocalDEK() ([]byte, error) {
