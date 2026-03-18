@@ -9,7 +9,7 @@ The canonical current version lives in `VERSION`.
 The product version applies to the self-hosted monorepo as a whole:
 
 - `installer`
-- `services/keycenter`
+- `services/vaultcenter`
 - `services/localvault`
 - `services/proxy`
 - `client/cli`

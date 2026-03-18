@@ -11,12 +11,12 @@ repo: {
 	}
 	canonical_docs: {
 		root:      "README.md"
-		keycenter: "services/keycenter/README.md"
+		vaultcenter: "services/vaultcenter/README.md"
 		localvault: "services/localvault/README.md"
 	}
 	paths: {
 		installer:  "installer"
-		keycenter:  "services/keycenter"
+		vaultcenter:  "services/vaultcenter"
 		localvault: "services/localvault"
 		proxy:      "services/proxy"
 		cli:        "client/cli"
