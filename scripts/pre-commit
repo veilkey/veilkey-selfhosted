@@ -3,9 +3,11 @@ set -euo pipefail
 
 found=0
 
-SERVICES="services/localvault services/vaultcenter"
+GO_SERVICES="services/localvault services/vaultcenter"
+RUST_SERVICES="services/veilkey-cli services/veil-cli"
+ALL_SERVICES="$GO_SERVICES $RUST_SERVICES"
 
-# 1. 하드코딩된 기본값 차단 (Go, Dockerfile, sh)
+# 1. 하드코딩된 기본값 차단 (Go, Rust, Dockerfile, sh)
 BANNED=(
   ":10180"
   ":10181"
@@ -17,9 +19,10 @@ BANNED=(
 for val in "${BANNED[@]}"; do
   matches=$(grep -rn \
     --include="*.go" \
+    --include="*.rs" \
     --include="Dockerfile" \
     --include="*.sh" \
-    "$val" $SERVICES 2>/dev/null || true)
+    "$val" $ALL_SERVICES 2>/dev/null || true)
   if [[ -n "$matches" ]]; then
     echo "❌ 하드코딩 금지: '$val'"
     echo "$matches"
@@ -29,7 +32,7 @@ done
 
 # 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외)
 sh_fallbacks=$(grep -rn --include="*.sh" \
-  'VEILKEY_[A-Z_]*:-[^}]' $SERVICES 2>/dev/null || true)
+  'VEILKEY_[A-Z_]*:-[^}]' $ALL_SERVICES 2>/dev/null || true)
 if [[ -n "$sh_fallbacks" ]]; then
   echo "❌ sh fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
   echo "$sh_fallbacks"
@@ -38,14 +41,30 @@ fi
 
 # 3. Dockerfile ENV 기본값 차단
 dockerfile_envs=$(grep -rn --include="Dockerfile" \
-  '^ENV VEILKEY_' $SERVICES 2>/dev/null || true)
+  '^ENV VEILKEY_' $ALL_SERVICES 2>/dev/null || true)
 if [[ -n "$dockerfile_envs" ]]; then
   echo "❌ Dockerfile ENV 기본값 금지: docker-compose 또는 런타임에서 주입하세요"
   echo "$dockerfile_envs"
   found=1
 fi
 
-# 4. .env.example에 없는 VEILKEY_* 변수 차단
+# 4. Rust에서 VEILKEY_* env var에 비어있지 않은 unwrap_or 기본값 차단
+# env::var("VEILKEY_FOO").unwrap_or("...") 또는 unwrap_or_else(|_| "...".to_string()) 패턴
+rs_fallbacks=$(grep -rn --include="*.rs" \
+  'VEILKEY_[A-Z_]*.*\.unwrap_or\b' $RUST_SERVICES 2>/dev/null | \
+  grep -v 'unwrap_or_default\|unwrap_or("")\|unwrap_or_else.*unwrap_or_default' || true)
+# multi-line: env::var("VEILKEY_*") 뒤에 오는 .unwrap_or_else(|_| "non-empty")
+rs_multiline=$(grep -rn --include="*.rs" -A2 \
+  'env::var("VEILKEY_' $RUST_SERVICES 2>/dev/null | \
+  grep 'unwrap_or_else.*"[^"]' || true)
+if [[ -n "$rs_fallbacks" || -n "$rs_multiline" ]]; then
+  echo "❌ Rust fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
+  [[ -n "$rs_fallbacks" ]] && echo "$rs_fallbacks"
+  [[ -n "$rs_multiline" ]] && echo "$rs_multiline"
+  found=1
+fi
+
+# 5. .env.example에 없는 VEILKEY_* 변수 차단 (Go)
 check_env_documented() {
   local service="$1"
   local env_example="services/${service}/.env.example"
