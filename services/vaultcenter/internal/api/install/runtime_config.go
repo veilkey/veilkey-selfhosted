@@ -1,4 +1,4 @@
-package api
+package install
 
 import (
 	"net/http"
@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type installRuntimeConfigPayload struct {
@@ -67,24 +68,24 @@ func normalizeOptionalPath(raw string) string {
 	return filepath.Clean(raw)
 }
 
-func (s *Server) handleGetInstallRuntimeConfig(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.db.GetOrCreateUIConfig()
+func (h *Handler) handleGetInstallRuntimeConfig(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.db.GetOrCreateUIConfig()
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
+		respondErr(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
-	s.respondJSON(w, http.StatusOK, installRuntimeConfigFromUI(cfg))
+	respond(w, http.StatusOK, installRuntimeConfigFromUI(cfg))
 }
 
-func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.Request) {
 	var req installRuntimeConfigPatchRequest
-	if err := decodeRequestJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	cfg, err := s.db.GetOrCreateUIConfig()
+	cfg, err := h.db.GetOrCreateUIConfig()
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
+		respondErr(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
 
@@ -120,29 +121,29 @@ func (s *Server) handlePatchInstallRuntimeConfig(w http.ResponseWriter, r *http.
 	}
 
 	if !validateOptionalURL(cfg.PublicBaseURL) {
-		s.respondError(w, http.StatusBadRequest, "public_base_url must be an absolute URL")
+		respondErr(w, http.StatusBadRequest, "public_base_url must be an absolute URL")
 		return
 	}
 	if !validateOptionalURL(cfg.VaultcenterURL) {
-		s.respondError(w, http.StatusBadRequest, "vaultcenter_url must be an absolute URL")
+		respondErr(w, http.StatusBadRequest, "vaultcenter_url must be an absolute URL")
 		return
 	}
 	if !validateOptionalURL(cfg.LocalvaultURL) {
-		s.respondError(w, http.StatusBadRequest, "localvault_url must be an absolute URL")
+		respondErr(w, http.StatusBadRequest, "localvault_url must be an absolute URL")
 		return
 	}
 	if cfg.TLSCertPath != "" && cfg.TLSKeyPath == "" {
-		s.respondError(w, http.StatusBadRequest, "tls_key_path is required when tls_cert_path is set")
+		respondErr(w, http.StatusBadRequest, "tls_key_path is required when tls_cert_path is set")
 		return
 	}
 	if cfg.TLSKeyPath != "" && cfg.TLSCertPath == "" {
-		s.respondError(w, http.StatusBadRequest, "tls_cert_path is required when tls_key_path is set")
+		respondErr(w, http.StatusBadRequest, "tls_cert_path is required when tls_key_path is set")
 		return
 	}
 
-	if err := s.db.SaveUIConfig(cfg); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to save install runtime config")
+	if err := h.db.SaveUIConfig(cfg); err != nil {
+		respondErr(w, http.StatusInternalServerError, "failed to save install runtime config")
 		return
 	}
-	s.respondJSON(w, http.StatusOK, installRuntimeConfigFromUI(cfg))
+	respond(w, http.StatusOK, installRuntimeConfigFromUI(cfg))
 }

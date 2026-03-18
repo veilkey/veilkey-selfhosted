@@ -1,4 +1,4 @@
-package api
+package install
 
 import (
 	"fmt"
@@ -7,6 +7,8 @@ import (
 
 	vcrypto "veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+	"veilkey-vaultcenter/internal/mailer"
 )
 
 type installBootstrapRequest struct {
@@ -15,19 +17,19 @@ type installBootstrapRequest struct {
 	BaseURL   string `json:"base_url"`
 }
 
-func (s *Server) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r *http.Request) {
 	var req installBootstrapRequest
-	if err := decodeJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.SessionID == "" || req.Email == "" {
-		s.respondError(w, http.StatusBadRequest, "session_id and email are required")
+		respondErr(w, http.StatusBadRequest, "session_id and email are required")
 		return
 	}
-	session, err := s.db.GetInstallSession(req.SessionID)
+	session, err := h.db.GetInstallSession(req.SessionID)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	token := vcrypto.GenerateUUID()
@@ -41,13 +43,13 @@ func (s *Server) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r 
 		TargetName:  req.SessionID,
 		Status:      "pending",
 	}
-	if err := s.db.SaveApprovalTokenChallenge(challenge); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to create install bootstrap challenge")
+	if err := h.db.SaveApprovalTokenChallenge(challenge); err != nil {
+		respondErr(w, http.StatusInternalServerError, "failed to create install bootstrap challenge")
 		return
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 	if baseURL == "" {
-		baseURL = requestBaseURL(r)
+		baseURL = httputil.RequestBaseURL(r)
 	}
 	link := baseURL + "/approve/t/" + token
 	subject := "VeilKey install bootstrap input"
@@ -57,22 +59,22 @@ func (s *Server) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r 
 		session.Flow,
 		link,
 	)
-	if err := sendInstallMail(req.Email, subject, body); err != nil {
-		s.respondError(w, http.StatusBadGateway, err.Error())
+	if err := mailer.Send(req.Email, subject, body); err != nil {
+		respondErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	_ = s.db.SaveAuditEvent(&db.AuditEvent{
+	_ = h.db.SaveAuditEvent(&db.AuditEvent{
 		EventID:             vcrypto.GenerateUUID(),
 		EntityType:          "install_bootstrap",
 		EntityID:            token,
 		Action:              "request",
 		ActorType:           "api",
-		ActorID:             actorIDForRequest(r),
+		ActorID:             httputil.ActorIDForRequest(r),
 		Reason:              "install_bootstrap_request",
 		Source:              "install_bootstrap",
 		ApprovalChallengeID: token,
 	})
-	s.respondJSON(w, http.StatusCreated, map[string]any{
+	respond(w, http.StatusCreated, map[string]any{
 		"token":      token,
 		"link":       link,
 		"session_id": session.SessionID,
@@ -80,20 +82,20 @@ func (s *Server) handleCreateInstallBootstrapChallenge(w http.ResponseWriter, r 
 	})
 }
 
-func (s *Server) handleInstallBootstrapPage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleInstallBootstrapPage(w http.ResponseWriter, r *http.Request) {
 	sessionID := strings.TrimSpace(r.URL.Query().Get("session_id"))
 	var session *db.InstallSession
 	var err error
 	if sessionID != "" {
-		session, err = s.db.GetInstallSession(sessionID)
+		session, err = h.db.GetInstallSession(sessionID)
 	} else {
-		session, err = s.db.GetLatestInstallSession()
+		session, err = h.db.GetLatestInstallSession()
 	}
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, "install session not found")
+		respondErr(w, http.StatusNotFound, "install session not found")
 		return
 	}
-	challenge, err := s.db.GetLatestApprovalTokenChallenge(session.SessionID, "install_bootstrap", "pending")
+	challenge, err := h.db.GetLatestApprovalTokenChallenge(session.SessionID, "install_bootstrap", "pending")
 	if err != nil || challenge == nil {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, installBootstrapPendingHTML)

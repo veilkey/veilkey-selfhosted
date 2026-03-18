@@ -1,4 +1,4 @@
-package api
+package install
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type installApplyState struct {
@@ -112,7 +113,6 @@ func installScriptAllowlist() []string {
 			allowed = append(allowed, path)
 		}
 	}
-
 	for _, token := range strings.FieldsFunc(os.Getenv("VEILKEY_INSTALL_SCRIPT_ALLOWLIST"), func(r rune) bool {
 		return r == ':' || r == ',' || r == '\n'
 	}) {
@@ -156,7 +156,6 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	if result.ResolvedWorkdir == "" && result.ResolvedScript != "" {
 		result.ResolvedWorkdir = filepath.Dir(result.ResolvedScript)
 	}
-
 	if result.ResolvedScript == "" {
 		result.Valid = false
 		result.Errors = append(result.Errors, "install script is not configured")
@@ -185,7 +184,6 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 			result.Errors = append(result.Errors, "install workdir is not available")
 		}
 	}
-
 	result.DangerousRoot = isDangerousInstallRoot(result.ResolvedRoot)
 	if result.DangerousRoot {
 		result.Warnings = append(result.Warnings, "install_root targets the live filesystem root")
@@ -195,7 +193,6 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 			result.Errors = append(result.Errors, "dangerous install_root requires explicit confirmation")
 		}
 	}
-
 	if strings.TrimSpace(cfg.VaultcenterURL) == "" {
 		result.Warnings = append(result.Warnings, "vaultcenter_url is empty; post-install verification may be limited")
 	}
@@ -208,6 +205,7 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	result.CommandPreview = installCommand(result.ResolvedScript, cfg)
 	return result
 }
+
 func isDangerousInstallRoot(root string) bool {
 	root = filepath.Clean(strings.TrimSpace(root))
 	return root == "/" || root == ""
@@ -238,7 +236,7 @@ func installHTTPClient(caPath string) *http.Client {
 	if caPath == "" {
 		return &http.Client{Timeout: 15 * time.Second}
 	}
-	client, err := NewTLSHTTPClient(caPath, false)
+	client, err := newTLSHTTPClient(caPath)
 	if err != nil {
 		return &http.Client{Timeout: 15 * time.Second}
 	}
@@ -261,7 +259,6 @@ func checkHealthEndpoint(client *http.Client, rawURL string) error {
 	}
 	return nil
 }
-
 
 func encodeJSON(v any, fallback string) string {
 	data, err := json.Marshal(v)
@@ -293,25 +290,13 @@ func installRunToPayload(run *db.InstallRun) installRunPayload {
 	}
 }
 
-func (s *Server) snapshotInstallApply() installApplyState {
-	s.installMu.RLock()
-	defer s.installMu.RUnlock()
-	return s.installState
-}
-
-func (s *Server) setInstallApplyState(state installApplyState) {
-	s.installMu.Lock()
-	s.installState = state
-	s.installMu.Unlock()
-}
-
-func (s *Server) handleGetInstallApply(w http.ResponseWriter, r *http.Request) {
-	cfg, err := s.db.GetOrCreateUIConfig()
+func (h *Handler) handleGetInstallApply(w http.ResponseWriter, r *http.Request) {
+	cfg, err := h.db.GetOrCreateUIConfig()
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
+		respondErr(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
-	state := s.snapshotInstallApply()
+	state := h.snapshotState()
 	payload := installApplyPayload{
 		InstallEnabled: installScriptPath(cfg) != "" && isAllowlistedInstallScript(installScriptPath(cfg)),
 		InstallRunning: state.Status == "running",
@@ -321,35 +306,35 @@ func (s *Server) handleGetInstallApply(w http.ResponseWriter, r *http.Request) {
 		InstallRoot:    strings.TrimSpace(cfg.InstallRoot),
 		State:          state,
 	}
-	s.respondJSON(w, http.StatusOK, payload)
+	respond(w, http.StatusOK, payload)
 }
 
-func (s *Server) handleGetInstallRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := s.db.ListInstallRuns(20)
+func (h *Handler) handleGetInstallRuns(w http.ResponseWriter, r *http.Request) {
+	runs, err := h.db.ListInstallRuns(20)
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to list install runs")
+		respondErr(w, http.StatusInternalServerError, "failed to list install runs")
 		return
 	}
 	payload := make([]installRunPayload, 0, len(runs))
 	for i := range runs {
-		run := runs[i]
-		payload = append(payload, installRunToPayload(&run))
+		payload = append(payload, installRunToPayload(&runs[i]))
 	}
-	s.respondJSON(w, http.StatusOK, map[string]any{"runs": payload})
+	respond(w, http.StatusOK, map[string]any{"runs": payload})
 }
 
-func (s *Server) handleValidateInstallApply(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleValidateInstallApply(w http.ResponseWriter, r *http.Request) {
 	var req installValidateRequest
-	if err := decodeRequestJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	cfg, err := s.db.GetOrCreateUIConfig()
+	cfg, err := h.db.GetOrCreateUIConfig()
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
+		respondErr(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
 	result := validateInstallConfig(cfg, req)
+	now := time.Now().UTC()
 	run := &db.InstallRun{
 		RunID:          crypto.GenerateUUID(),
 		RunKind:        "validate",
@@ -360,8 +345,8 @@ func (s *Server) handleValidateInstallApply(w http.ResponseWriter, r *http.Reque
 		Workdir:        result.ResolvedWorkdir,
 		CommandJSON:    encodeJSON(result.CommandPreview, "[]"),
 		ValidationJSON: encodeJSON(result, "{}"),
-		StartedAt:      time.Now().UTC(),
-		CreatedAt:      time.Now().UTC(),
+		StartedAt:      now,
+		CreatedAt:      now,
 	}
 	finishedAt := time.Now().UTC()
 	run.FinishedAt = &finishedAt
@@ -369,43 +354,43 @@ func (s *Server) handleValidateInstallApply(w http.ResponseWriter, r *http.Reque
 		run.Status = "rejected"
 		run.LastError = strings.Join(result.Errors, "; ")
 	}
-	_ = s.db.SaveInstallRun(run)
+	_ = h.db.SaveInstallRun(run)
 	status := http.StatusOK
 	if !result.Valid {
 		status = http.StatusBadRequest
 	}
-	s.respondJSON(w, status, map[string]any{
+	respond(w, status, map[string]any{
 		"validation": result,
 		"run":        installRunToPayload(run),
 	})
 }
 
-func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
 	var req installValidateRequest
-	if err := decodeRequestJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	cfg, err := s.db.GetOrCreateUIConfig()
+	cfg, err := h.db.GetOrCreateUIConfig()
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to load install runtime config")
+		respondErr(w, http.StatusInternalServerError, "failed to load install runtime config")
 		return
 	}
 	validation := validateInstallConfig(cfg, req)
 	if !validation.Valid {
-		s.respondJSON(w, http.StatusBadRequest, map[string]any{"validation": validation})
+		respond(w, http.StatusBadRequest, map[string]any{"validation": validation})
 		return
 	}
 
-	s.installMu.Lock()
-	if s.installState.Status == "running" {
-		s.installMu.Unlock()
-		s.respondError(w, http.StatusConflict, "install apply is already running")
+	h.mu.Lock()
+	if h.state.Status == "running" {
+		h.mu.Unlock()
+		respondErr(w, http.StatusConflict, "install apply is already running")
 		return
 	}
 	startedAt := time.Now().UTC()
 	runID := crypto.GenerateUUID()
-	state := installApplyState{
+	h.state = installApplyState{
 		Status:        "running",
 		LastStartedAt: &startedAt,
 		LastProfile:   validation.ResolvedProfile,
@@ -414,8 +399,7 @@ func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
 		LastCommand:   append([]string(nil), validation.CommandPreview...),
 		LastRunID:     runID,
 	}
-	s.installState = state
-	s.installMu.Unlock()
+	h.mu.Unlock()
 
 	run := &db.InstallRun{
 		RunID:          runID,
@@ -430,26 +414,22 @@ func (s *Server) handleRunInstallApply(w http.ResponseWriter, r *http.Request) {
 		StartedAt:      startedAt,
 		CreatedAt:      startedAt,
 	}
-	_ = s.db.SaveInstallRun(run)
+	_ = h.db.SaveInstallRun(run)
 
-	go s.runInstallApply(cfg, validation, runID)
+	go h.runInstallApply(cfg, validation, runID)
 
-	s.respondJSON(w, http.StatusAccepted, map[string]any{
+	respond(w, http.StatusAccepted, map[string]any{
 		"status":     "started",
 		"validation": validation,
 		"run":        installRunToPayload(run),
 	})
 }
 
-func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationResult, runID string) {
+func (h *Handler) runInstallApply(cfg *db.UIConfig, validation installValidationResult, runID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), installTimeout())
 	defer cancel()
 
-	s.markInstallApplyStarted()
-	var (
-		outputTail string
-		err        error
-	)
+	h.markInstallApplyStarted()
 	command := validation.CommandPreview
 	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	if validation.ResolvedWorkdir != "" {
@@ -467,24 +447,24 @@ func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationR
 		"VEILKEY_TLS_CA="+strings.TrimSpace(cfg.TLSCAPath),
 	)
 	output, cmdErr := cmd.CombinedOutput()
-	err = cmdErr
-	outputTail = trimCommandOutput(output)
+	outputTail := trimCommandOutput(output)
+	var runErr error = cmdErr
 	client := installHTTPClient(cfg.TLSCAPath)
-	if err == nil {
-		if healthErr := checkHealthEndpoint(client, cfg.VaultcenterURL); healthErr != nil {
-			err = healthErr
+	if runErr == nil {
+		if err := checkHealthEndpoint(client, cfg.VaultcenterURL); err != nil {
+			runErr = err
 		}
 	}
-	if err == nil && strings.TrimSpace(cfg.LocalvaultURL) != "" {
-		if healthErr := checkHealthEndpoint(client, cfg.LocalvaultURL); healthErr != nil {
-			err = healthErr
+	if runErr == nil && strings.TrimSpace(cfg.LocalvaultURL) != "" {
+		if err := checkHealthEndpoint(client, cfg.LocalvaultURL); err != nil {
+			runErr = err
 		}
 	}
 
 	finishedAt := time.Now().UTC()
 	next := installApplyState{
 		Status:         "succeeded",
-		LastStartedAt:  s.snapshotInstallApply().LastStartedAt,
+		LastStartedAt:  h.snapshotState().LastStartedAt,
 		LastFinishedAt: &finishedAt,
 		LastProfile:    validation.ResolvedProfile,
 		LastRoot:       validation.ResolvedRoot,
@@ -493,56 +473,56 @@ func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationR
 		LastOutput:     outputTail,
 		LastRunID:      runID,
 	}
-	run, loadErr := s.db.GetInstallRun(runID)
+	run, loadErr := h.db.GetInstallRun(runID)
 	if loadErr == nil && run != nil {
 		run.Status = "succeeded"
 		run.OutputTail = outputTail
 		run.FinishedAt = &finishedAt
 	}
 
-	if err != nil {
+	if runErr != nil {
 		next.Status = "failed"
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			next.LastError = "install apply command timed out"
 		} else {
-			next.LastError = err.Error()
+			next.LastError = runErr.Error()
 		}
 		if loadErr == nil && run != nil {
 			run.Status = "failed"
 			run.LastError = next.LastError
 			run.OutputTail = outputTail
 			run.FinishedAt = &finishedAt
-			_ = s.db.SaveInstallRun(run)
+			_ = h.db.SaveInstallRun(run)
 		}
-		s.setInstallApplyState(next)
+		h.setState(next)
 		return
 	}
 
-	_ = s.markInstallApplyCompleted()
+	_ = h.markInstallApplyCompleted()
 	if loadErr == nil && run != nil {
-		_ = s.db.SaveInstallRun(run)
+		_ = h.db.SaveInstallRun(run)
 	}
-	s.setInstallApplyState(next)
+	h.setState(next)
 }
 
-func (s *Server) markInstallApplyStarted() {
-	session, err := s.db.GetLatestInstallSession()
+func (h *Handler) markInstallApplyStarted() {
+	session, err := h.db.GetLatestInstallSession()
 	if err != nil || session == nil {
 		return
 	}
 	if strings.TrimSpace(session.LastStage) == "" || strings.EqualFold(strings.TrimSpace(session.LastStage), "language") {
 		session.LastStage = "apply_started"
-		_ = s.db.SaveInstallSession(session)
+		_ = h.db.SaveInstallSession(session)
 	}
 }
 
-func (s *Server) markInstallApplyCompleted() error {
-	session, err := s.db.GetLatestInstallSession()
+func (h *Handler) markInstallApplyCompleted() error {
+	session, err := h.db.GetLatestInstallSession()
 	if err != nil || session == nil {
 		return err
 	}
-	planned := decodeStringList(session.PlannedStagesJSON)
-	completed := decodeStringList(session.CompletedStagesJSON)
+	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
+	completed := httputil.DecodeStringList(session.CompletedStagesJSON)
 	done := map[string]bool{}
 	for _, stage := range completed {
 		stage = strings.TrimSpace(stage)
@@ -561,7 +541,7 @@ func (s *Server) markInstallApplyCompleted() error {
 	if !done["final_smoke"] {
 		completed = append(completed, "final_smoke")
 	}
-	session.CompletedStagesJSON = encodeStringList(completed)
+	session.CompletedStagesJSON = httputil.EncodeStringList(completed)
 	session.LastStage = "final_smoke"
-	return s.db.SaveInstallSession(session)
+	return h.db.SaveInstallSession(session)
 }

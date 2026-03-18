@@ -1,4 +1,4 @@
-package api
+package approval
 
 import (
 	"crypto/sha256"
@@ -11,6 +11,8 @@ import (
 
 	vcrypto "veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+	"veilkey-vaultcenter/internal/mailer"
 )
 
 type emailOTPRequest struct {
@@ -19,19 +21,19 @@ type emailOTPRequest struct {
 	BaseURL string `json:"base_url"`
 }
 
-func (s *Server) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Request) {
 	var req emailOTPRequest
-	if err := decodeJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if strings.TrimSpace(req.Email) == "" {
-		s.respondError(w, http.StatusBadRequest, "email is required")
+		respondErr(w, http.StatusBadRequest, "email is required")
 		return
 	}
 	email := strings.TrimSpace(req.Email)
 	if !strings.Contains(email, "@") || !strings.Contains(email[strings.Index(email, "@"):], ".") {
-		s.respondError(w, http.StatusBadRequest, "invalid email format")
+		respondErr(w, http.StatusBadRequest, "invalid email format")
 		return
 	}
 	token := vcrypto.GenerateUUID()
@@ -41,17 +43,17 @@ func (s *Server) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Re
 		Reason: strings.TrimSpace(req.Reason),
 		Status: "pending",
 	}
-	if err := s.db.SaveEmailOTPChallenge(challenge); err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+	if err := h.db.SaveEmailOTPChallenge(challenge); err != nil {
+		respondErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 	if baseURL == "" {
-		baseURL = requestBaseURL(r)
+		baseURL = httputil.RequestBaseURL(r)
 	}
 	link := baseURL + "/ui/approvals/email-otp?token=" + token
 	body := strings.Join([]string{
-		fmt.Sprintf("VeilKey verification link for %s", requestBaseURL(r)),
+		fmt.Sprintf("VeilKey verification link for %s", httputil.RequestBaseURL(r)),
 		"",
 		"Purpose: approve the current VeilKey sensitive action",
 		fmt.Sprintf("Action: %s", defaultEmailOTPReason(challenge.Reason)),
@@ -63,28 +65,28 @@ func (s *Server) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.Re
 		"3. Receive the 6-digit code and paste it into the web page",
 		"4. Re-run the original VeilKey command",
 	}, "\n")
-	if err := sendInstallMail(challenge.Email, "VeilKey verification code", body); err != nil {
-		s.respondError(w, http.StatusBadGateway, err.Error())
+	if err := mailer.Send(challenge.Email, "VeilKey verification code", body); err != nil {
+		respondErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusCreated, map[string]any{
+	respond(w, http.StatusCreated, map[string]any{
 		"token": token,
 		"link":  link,
 	})
 }
 
-func (s *Server) handleEmailOTPState(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleEmailOTPState(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	challenge, err := s.db.GetEmailOTPChallenge(token)
+	challenge, err := h.db.GetEmailOTPChallenge(token)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusOK, map[string]any{
+	respond(w, http.StatusOK, map[string]any{
 		"token":  challenge.Token,
 		"email":  challenge.Email,
 		"reason": challenge.Reason,
@@ -92,15 +94,15 @@ func (s *Server) handleEmailOTPState(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) handleEmailOTPPage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleEmailOTPPage(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	challenge, err := s.db.GetEmailOTPChallenge(token)
+	challenge, err := h.db.GetEmailOTPChallenge(token)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if challenge.Status == "verified" {
@@ -112,33 +114,33 @@ func (s *Server) handleEmailOTPPage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, emailOTPHTML, challenge.Email, defaultEmailOTPReason(challenge.Reason), token)
 }
 
-func (s *Server) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid form body")
+		respondErr(w, http.StatusBadRequest, "invalid form body")
 		return
 	}
 	token := strings.TrimSpace(r.FormValue("token"))
 	action := strings.TrimSpace(r.FormValue("action"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	challenge, err := s.db.GetEmailOTPChallenge(token)
+	challenge, err := h.db.GetEmailOTPChallenge(token)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	switch action {
 	case "send-code":
 		code := fmt.Sprintf("%06d", rand.IntN(1000000))
 		expiresAt := time.Now().UTC().Add(5 * time.Minute)
-		if _, err := s.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
-			s.respondError(w, http.StatusInternalServerError, err.Error())
+		if _, err := h.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
+			respondErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: 300 seconds\n", code)
-		if err := sendInstallMail(challenge.Email, "VeilKey one-time code", body); err != nil {
-			s.respondError(w, http.StatusBadGateway, err.Error())
+		if err := mailer.Send(challenge.Email, "VeilKey one-time code", body); err != nil {
+			respondErr(w, http.StatusBadGateway, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -146,17 +148,17 @@ func (s *Server) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 	case "verify":
 		code := strings.TrimSpace(r.FormValue("code"))
 		if !validateEmailOTPChallenge(challenge, code) {
-			s.respondError(w, http.StatusForbidden, "code is invalid or expired")
+			respondErr(w, http.StatusForbidden, "code is invalid or expired")
 			return
 		}
-		if _, err := s.db.MarkEmailOTPVerified(token); err != nil {
-			s.respondError(w, http.StatusInternalServerError, err.Error())
+		if _, err := h.db.MarkEmailOTPVerified(token); err != nil {
+			respondErr(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		fmt.Fprint(w, emailOTPSuccessHTML)
 	default:
-		s.respondError(w, http.StatusBadRequest, "unsupported action")
+		respondErr(w, http.StatusBadRequest, "unsupported action")
 	}
 }
 

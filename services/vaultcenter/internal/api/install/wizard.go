@@ -1,10 +1,8 @@
-package api
+package install
 
-import (
-	"net/http"
-)
+import "net/http"
 
-func renderInstallWizard(s *Server, w http.ResponseWriter) {
+func RenderInstallWizard(w http.ResponseWriter) {
 	body, ok := embeddedInstallIndex()
 	if !ok {
 		http.Error(w, "install wizard UI not available", http.StatusServiceUnavailable)

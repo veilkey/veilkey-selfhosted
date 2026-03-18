@@ -1,8 +1,8 @@
-package api
+package approval
 
 import "net/http"
 
-func (s *Server) handleApprovalHub(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleHub(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(approvalHubHTML))
 }
@@ -129,4 +129,4 @@ const approvalHubHTML = `<!DOCTYPE html>
 <script src="/assets/approval-console.js"></script>
 </body>
 </html>
-` + "\n"
+`

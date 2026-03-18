@@ -1,10 +1,11 @@
-package api
+package install
 
 import (
-	"encoding/json"
 	"net/http"
+
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type installStatePayload struct {
@@ -39,28 +40,6 @@ type installStatePatchRequest struct {
 	LastStage       *string   `json:"last_stage"`
 }
 
-func encodeStringList(items []string) string {
-	if items == nil {
-		items = []string{}
-	}
-	b, err := json.Marshal(items)
-	if err != nil {
-		return "[]"
-	}
-	return string(b)
-}
-
-func decodeStringList(raw string) []string {
-	if raw == "" {
-		return []string{}
-	}
-	var out []string
-	if err := json.Unmarshal([]byte(raw), &out); err != nil {
-		return []string{}
-	}
-	return out
-}
-
 func installStateToPayload(session *db.InstallSession) installStatePayload {
 	return installStatePayload{
 		SessionID:       session.SessionID,
@@ -72,8 +51,8 @@ func installStateToPayload(session *db.InstallSession) installStatePayload {
 		InstallScope:    session.InstallScope,
 		BootstrapMode:   session.BootstrapMode,
 		MailTransport:   session.MailTransport,
-		PlannedStages:   decodeStringList(session.PlannedStagesJSON),
-		CompletedStages: decodeStringList(session.CompletedStagesJSON),
+		PlannedStages:   httputil.DecodeStringList(session.PlannedStagesJSON),
+		CompletedStages: httputil.DecodeStringList(session.CompletedStagesJSON),
 		LastStage:       session.LastStage,
 		CreatedAt:       session.CreatedAt.UTC().Format(http.TimeFormat),
 		UpdatedAt:       session.UpdatedAt.UTC().Format(http.TimeFormat),
@@ -91,72 +70,72 @@ func installStateFromPayload(req installStatePayload) *db.InstallSession {
 		InstallScope:        req.InstallScope,
 		BootstrapMode:       req.BootstrapMode,
 		MailTransport:       req.MailTransport,
-		PlannedStagesJSON:   encodeStringList(req.PlannedStages),
-		CompletedStagesJSON: encodeStringList(req.CompletedStages),
+		PlannedStagesJSON:   httputil.EncodeStringList(req.PlannedStages),
+		CompletedStagesJSON: httputil.EncodeStringList(req.CompletedStages),
 		LastStage:           req.LastStage,
 	}
 }
 
-func (s *Server) handleCreateInstallSession(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleCreateInstallSession(w http.ResponseWriter, r *http.Request) {
 	var req installStatePayload
-	if err := decodeJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.SessionID == "" {
 		req.SessionID = crypto.GenerateUUID()
 	}
 	session := installStateFromPayload(req)
-	if err := s.db.SaveInstallSession(session); err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+	if err := h.db.SaveInstallSession(session); err != nil {
+		respondErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	saved, err := s.db.GetInstallSession(req.SessionID)
+	saved, err := h.db.GetInstallSession(req.SessionID)
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to reload install session")
+		respondErr(w, http.StatusInternalServerError, "failed to reload install session")
 		return
 	}
-	s.respondJSON(w, http.StatusCreated, map[string]interface{}{
+	respond(w, http.StatusCreated, map[string]interface{}{
 		"session": installStateToPayload(saved),
 	})
 }
 
-func (s *Server) handleGetInstallState(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleGetInstallState(w http.ResponseWriter, r *http.Request) {
 	sessionID := r.URL.Query().Get("session_id")
 	var (
 		session *db.InstallSession
 		err     error
 	)
 	if sessionID != "" {
-		session, err = s.db.GetInstallSession(sessionID)
+		session, err = h.db.GetInstallSession(sessionID)
 	} else {
-		session, err = s.db.GetLatestInstallSession()
+		session, err = h.db.GetLatestInstallSession()
 	}
 	if err != nil {
-		s.respondJSON(w, http.StatusOK, map[string]interface{}{
+		respond(w, http.StatusOK, map[string]interface{}{
 			"exists": false,
 		})
 		return
 	}
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	respond(w, http.StatusOK, map[string]interface{}{
 		"exists":  true,
 		"session": installStateToPayload(session),
 	})
 }
 
-func (s *Server) handlePatchInstallState(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handlePatchInstallState(w http.ResponseWriter, r *http.Request) {
 	var req installStatePatchRequest
-	if err := decodeJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.SessionID == "" {
-		s.respondError(w, http.StatusBadRequest, "session_id is required")
+		respondErr(w, http.StatusBadRequest, "session_id is required")
 		return
 	}
-	session, err := s.db.GetInstallSession(req.SessionID)
+	session, err := h.db.GetInstallSession(req.SessionID)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if req.Version != nil {
@@ -184,19 +163,19 @@ func (s *Server) handlePatchInstallState(w http.ResponseWriter, r *http.Request)
 		session.MailTransport = *req.MailTransport
 	}
 	if req.PlannedStages != nil {
-		session.PlannedStagesJSON = encodeStringList(*req.PlannedStages)
+		session.PlannedStagesJSON = httputil.EncodeStringList(*req.PlannedStages)
 	}
 	if req.CompletedStages != nil {
-		session.CompletedStagesJSON = encodeStringList(*req.CompletedStages)
+		session.CompletedStagesJSON = httputil.EncodeStringList(*req.CompletedStages)
 	}
 	if req.LastStage != nil {
 		session.LastStage = *req.LastStage
 	}
-	if err := s.db.SaveInstallSession(session); err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+	if err := h.db.SaveInstallSession(session); err != nil {
+		respondErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.respondJSON(w, http.StatusOK, map[string]interface{}{
+	respond(w, http.StatusOK, map[string]interface{}{
 		"session": installStateToPayload(session),
 	})
 }

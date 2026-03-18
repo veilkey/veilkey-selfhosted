@@ -1,4 +1,4 @@
-package api
+package install
 
 import (
 	"embed"
@@ -15,4 +15,3 @@ func embeddedInstallIndex() ([]byte, bool) {
 	}
 	return body, true
 }
-

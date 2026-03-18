@@ -10,8 +10,11 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/api/approval"
+	"veilkey-vaultcenter/internal/api/install"
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type NodeIdentity struct {
@@ -38,22 +41,22 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db            *db.DB
-	kek           []byte
-	kekMu         sync.RWMutex
-	locked        bool
-	salt          []byte
-	trustedIPs    map[string]bool
-	trustedCIDRs  []*net.IPNet
-	identity      *NodeIdentity
-	timeouts      Timeouts
-	unlockLimiter *UnlockRateLimiter
-	httpClient    *http.Client
-	bulkApplyDir  string
-	updateMu      sync.RWMutex
-	updateState   systemUpdateState
-	installMu     sync.RWMutex
-	installState  installApplyState
+	db             *db.DB
+	kek            []byte
+	kekMu          sync.RWMutex
+	locked         bool
+	salt           []byte
+	trustedIPs     map[string]bool
+	trustedCIDRs   []*net.IPNet
+	identity       *NodeIdentity
+	timeouts       Timeouts
+	unlockLimiter  *UnlockRateLimiter
+	httpClient     *http.Client
+	bulkApplyDir   string
+	updateMu       sync.RWMutex
+	updateState    systemUpdateState
+	installHandler  *install.Handler
+	approvalHandler *approval.Handler
 }
 
 func (s *Server) isTrustedIPString(value string) bool {
@@ -144,6 +147,8 @@ func (s *Server) BulkApplyDir() string {
 
 func (s *Server) SetSalt(salt []byte) {
 	s.salt = salt
+	s.installHandler = install.NewHandler(s.db, salt)
+	s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient, s.installHandler)
 }
 
 func (s *Server) Unlock(kek []byte) error {
@@ -187,13 +192,13 @@ func (s *Server) installGateState() (bool, *db.InstallSession) {
 	}
 
 	completed := make(map[string]bool)
-	for _, stage := range decodeStringList(session.CompletedStagesJSON) {
+	for _, stage := range httputil.DecodeStringList(session.CompletedStagesJSON) {
 		stage = strings.TrimSpace(strings.ToLower(stage))
 		if stage != "" {
 			completed[stage] = true
 		}
 	}
-	planned := decodeStringList(session.PlannedStagesJSON)
+	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
 	if len(planned) > 0 {
 		allPlannedDone := true
 		for _, stage := range planned {
@@ -225,8 +230,8 @@ func (s *Server) currentInstallAccessState() installAccessState {
 		return installAccessState{Exists: false, Complete: complete}
 	}
 
-	planned := decodeStringList(session.PlannedStagesJSON)
-	completed := decodeStringList(session.CompletedStagesJSON)
+	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
+	completed := httputil.DecodeStringList(session.CompletedStagesJSON)
 	finalStage := ""
 	if len(planned) > 0 {
 		finalStage = planned[len(planned)-1]
@@ -369,6 +374,8 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
+	s.installHandler.Register(mux, s.requireTrustedIP, s.requireUnlocked)
+	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)
 	s.SetupAdminRoutes(mux)
 	if s.IsHKM() {

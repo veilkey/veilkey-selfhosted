@@ -1,4 +1,4 @@
-package api
+package approval
 
 import (
 	"bytes"
@@ -10,6 +10,7 @@ import (
 
 	vcrypto "veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type secretInputRequest struct {
@@ -27,10 +28,10 @@ type secretInputSubmitRequest struct {
 	Confirm string `json:"confirm"`
 }
 
-func (s *Server) handleCreateSecretInputChallenge(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleCreateSecretInputChallenge(w http.ResponseWriter, r *http.Request) {
 	var req secretInputRequest
-	if err := decodeJSON(r, &req); err != nil {
-		s.respondError(w, http.StatusBadRequest, "invalid request body")
+	if err := httputil.DecodeJSON(r, &req); err != nil {
+		respondErr(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	req.Email = strings.TrimSpace(req.Email)
@@ -38,7 +39,7 @@ func (s *Server) handleCreateSecretInputChallenge(w http.ResponseWriter, r *http
 	req.Vault = strings.TrimSpace(req.Vault)
 	req.SecretName = strings.TrimSpace(req.SecretName)
 	if req.Endpoint == "" || req.Vault == "" || req.SecretName == "" {
-		s.respondError(w, http.StatusBadRequest, "endpoint, vault and secret_name are required")
+		respondErr(w, http.StatusBadRequest, "endpoint, vault and secret_name are required")
 		return
 	}
 	token := vcrypto.GenerateUUID()
@@ -51,33 +52,33 @@ func (s *Server) handleCreateSecretInputChallenge(w http.ResponseWriter, r *http
 		Reason:     strings.TrimSpace(req.Reason),
 		Status:     "pending",
 	}
-	if err := s.db.SaveSecretInputChallenge(challenge); err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+	if err := h.db.SaveSecretInputChallenge(challenge); err != nil {
+		respondErr(w, http.StatusBadRequest, err.Error())
 		return
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 	if baseURL == "" {
-		baseURL = requestBaseURL(r)
+		baseURL = httputil.RequestBaseURL(r)
 	}
-	s.respondJSON(w, http.StatusCreated, map[string]any{
+	respond(w, http.StatusCreated, map[string]any{
 		"token": token,
 		"link":  baseURL + "/ui/approvals/secret-input?token=" + token,
 	})
 }
 
-func (s *Server) handleSecretInputPage(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleSecretInputPage(w http.ResponseWriter, r *http.Request) {
 	token := strings.TrimSpace(r.URL.Query().Get("token"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	challenge, err := s.db.GetSecretInputChallenge(token)
+	challenge, err := h.db.GetSecretInputChallenge(token)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if challenge.Status == "submitted" {
-		s.respondError(w, http.StatusGone, "challenge already used")
+		respondErr(w, http.StatusGone, "challenge already used")
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -88,16 +89,16 @@ func (s *Server) handleSecretInputPage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, secretInputHTML, emailLabel, challenge.Vault, challenge.SecretName, defaultSecretInputReason(challenge.Reason), token)
 }
 
-func (s *Server) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request) {
 	var req secretInputSubmitRequest
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		if err := decodeJSON(r, &req); err != nil {
-			s.respondError(w, http.StatusBadRequest, "invalid request body")
+		if err := httputil.DecodeJSON(r, &req); err != nil {
+			respondErr(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
 	} else {
 		if err := r.ParseForm(); err != nil {
-			s.respondError(w, http.StatusBadRequest, "invalid form body")
+			respondErr(w, http.StatusBadRequest, "invalid form body")
 			return
 		}
 		req.Token = r.FormValue("token")
@@ -105,31 +106,31 @@ func (s *Server) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request)
 		req.Confirm = r.FormValue("confirm")
 	}
 	if strings.TrimSpace(req.Token) == "" || req.Value == "" || req.Confirm == "" {
-		s.respondError(w, http.StatusBadRequest, "token, value and confirm are required")
+		respondErr(w, http.StatusBadRequest, "token, value and confirm are required")
 		return
 	}
 	if req.Value != req.Confirm {
-		s.respondError(w, http.StatusBadRequest, "value and confirm must match")
+		respondErr(w, http.StatusBadRequest, "value and confirm must match")
 		return
 	}
-	challenge, err := s.db.GetSecretInputChallenge(strings.TrimSpace(req.Token))
+	challenge, err := h.db.GetSecretInputChallenge(strings.TrimSpace(req.Token))
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		respondErr(w, http.StatusNotFound, err.Error())
 		return
 	}
 	if challenge.Status == "submitted" {
-		s.respondError(w, http.StatusGone, "challenge already used")
+		respondErr(w, http.StatusGone, "challenge already used")
 		return
 	}
-	if err := storeSecretViaAgentEndpoint(challenge.Endpoint, challenge.SecretName, req.Value); err != nil {
-		s.respondError(w, http.StatusBadGateway, err.Error())
+	if err := h.storeSecretViaAgentEndpoint(challenge.Endpoint, challenge.SecretName, req.Value); err != nil {
+		respondErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	if _, err := s.db.CompleteSecretInputChallenge(challenge.Token); err != nil {
-		s.respondError(w, http.StatusInternalServerError, err.Error())
+	if _, err := h.db.CompleteSecretInputChallenge(challenge.Token); err != nil {
+		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = s.db.SaveAuditEvent(&db.AuditEvent{
+	_ = h.db.SaveAuditEvent(&db.AuditEvent{
 		EventID:    vcrypto.GenerateUUID(),
 		EntityType: "secret_input",
 		EntityID:   challenge.Token,
@@ -140,7 +141,7 @@ func (s *Server) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request)
 		Source:     "vaultcenter_ui",
 	})
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		s.respondJSON(w, http.StatusOK, map[string]any{
+		respond(w, http.StatusOK, map[string]any{
 			"status":      "submitted",
 			"secret_name": challenge.SecretName,
 			"vault":       challenge.Vault,
@@ -151,7 +152,7 @@ func (s *Server) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request)
 	fmt.Fprint(w, secretInputSuccessHTML)
 }
 
-func storeSecretViaAgentEndpoint(endpoint, name, value string) error {
+func (h *Handler) storeSecretViaAgentEndpoint(endpoint, name, value string) error {
 	target := strings.TrimRight(strings.TrimSpace(endpoint), "/")
 	if !strings.Contains(target, "/api/agents/") {
 		return fmt.Errorf("secret input requires a vaultcenter agent endpoint")
@@ -168,7 +169,7 @@ func storeSecretViaAgentEndpoint(endpoint, name, value string) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	resp, err := InitHTTPClientFromEnv().Do(req)
+	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return err
 	}

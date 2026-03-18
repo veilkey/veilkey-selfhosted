@@ -1,4 +1,4 @@
-package api
+package approval
 
 import (
 	"crypto/sha256"
@@ -10,6 +10,7 @@ import (
 
 	vcrypto "veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type approvalTokenSubmitRequest struct {
@@ -17,22 +18,22 @@ type approvalTokenSubmitRequest struct {
 	Value string `json:"value"`
 }
 
-func (s *Server) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request) {
-	token := pathVal(r, "token")
+func (h *Handler) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.PathValue("token"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	if challenge, err := s.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
+	if challenge, err := h.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
 		q := r.URL.Query()
 		q.Set("token", token)
 		r.URL.RawQuery = q.Encode()
-		s.handleInstallCustodyPage(w, r)
+		h.custody.HandleInstallCustodyPage(w, r)
 		return
 	}
-	if challenge, err := s.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
+	if challenge, err := h.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
 		if challenge.Status == "submitted" {
-			s.respondError(w, http.StatusGone, "challenge already used")
+			respondErr(w, http.StatusGone, "challenge already used")
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -51,44 +52,44 @@ func (s *Server) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request)
 	fmt.Fprintf(w, approvalTokenPlaceholderHTML, escapeApprovalHTML(token))
 }
 
-func (s *Server) handleApprovalTokenSubmit(w http.ResponseWriter, r *http.Request) {
-	token := pathVal(r, "token")
+func (h *Handler) handleApprovalTokenSubmit(w http.ResponseWriter, r *http.Request) {
+	token := strings.TrimSpace(r.PathValue("token"))
 	if token == "" {
-		s.respondError(w, http.StatusBadRequest, "token is required")
+		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	if challenge, err := s.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
+	if challenge, err := h.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
 		if err := r.ParseForm(); err == nil {
 			if strings.TrimSpace(r.FormValue("token")) == "" {
 				r.Form.Set("token", token)
 			}
 		}
-		s.handleSubmitInstallCustody(w, r)
+		h.custody.HandleSubmitInstallCustody(w, r)
 		_ = challenge
 		return
 	}
-	if challenge, err := s.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
-		s.handleApprovalTokenChallengeSubmit(w, r, challenge)
+	if challenge, err := h.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
+		h.handleApprovalTokenChallengeSubmit(w, r, challenge)
 		return
 	}
-	s.respondError(w, http.StatusNotFound, "approval token not found")
+	respondErr(w, http.StatusNotFound, "approval token not found")
 }
 
-func (s *Server) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *http.Request, challenge *db.ApprovalTokenChallenge) {
+func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *http.Request, challenge *db.ApprovalTokenChallenge) {
 	if challenge.Status == "submitted" {
-		s.respondError(w, http.StatusGone, "challenge already used")
+		respondErr(w, http.StatusGone, "challenge already used")
 		return
 	}
 
 	var req approvalTokenSubmitRequest
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		if err := decodeJSON(r, &req); err != nil {
-			s.respondError(w, http.StatusBadRequest, "invalid request body")
+		if err := httputil.DecodeJSON(r, &req); err != nil {
+			respondErr(w, http.StatusBadRequest, "invalid request body")
 			return
 		}
 	} else {
 		if err := r.ParseForm(); err != nil {
-			s.respondError(w, http.StatusBadRequest, "invalid form body")
+			respondErr(w, http.StatusBadRequest, "invalid form body")
 			return
 		}
 		req.Token = strings.TrimSpace(r.FormValue("token"))
@@ -98,25 +99,25 @@ func (s *Server) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *ht
 		req.Token = challenge.Token
 	}
 	if req.Token != challenge.Token || strings.TrimSpace(req.Value) == "" {
-		s.respondError(w, http.StatusBadRequest, "token and value are required")
+		respondErr(w, http.StatusBadRequest, "token and value are required")
 		return
 	}
-	key := deriveApprovalTokenKey(s.salt, challenge.Token, challenge.Kind)
+	key := deriveApprovalTokenKey(h.salt, challenge.Token, challenge.Kind)
 	ciphertext, nonce, err := vcrypto.Encrypt(key, []byte(req.Value))
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to protect submitted value")
+		respondErr(w, http.StatusInternalServerError, "failed to protect submitted value")
 		return
 	}
-	if _, err := s.db.CompleteApprovalTokenChallenge(challenge.Token, ciphertext, nonce); err != nil {
-		s.respondError(w, http.StatusInternalServerError, err.Error())
+	if _, err := h.db.CompleteApprovalTokenChallenge(challenge.Token, ciphertext, nonce); err != nil {
+		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if challenge.Kind == "install_bootstrap" && challenge.TargetName != "" {
-		if session, err := s.db.GetInstallSession(challenge.TargetName); err == nil {
-			completed := appendUnique(decodeStringList(session.CompletedStagesJSON), "bootstrap")
-			session.CompletedStagesJSON = encodeStringList(completed)
+		if session, err := h.db.GetInstallSession(challenge.TargetName); err == nil {
+			completed := appendUniqueStage(httputil.DecodeStringList(session.CompletedStagesJSON), "bootstrap")
+			session.CompletedStagesJSON = httputil.EncodeStringList(completed)
 			session.LastStage = "bootstrap"
-			_ = s.db.SaveInstallSession(session)
+			_ = h.db.SaveInstallSession(session)
 		}
 	}
 	after := map[string]any{
@@ -125,22 +126,22 @@ func (s *Server) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *ht
 		"status":      "submitted",
 		"used_at":     time.Now().UTC().Format(time.RFC3339),
 	}
-	_ = s.db.SaveAuditEvent(&db.AuditEvent{
+	_ = h.db.SaveAuditEvent(&db.AuditEvent{
 		EventID:             vcrypto.GenerateUUID(),
 		EntityType:          "approval_token",
 		EntityID:            challenge.Token,
 		Action:              "submit",
 		ActorType:           "user",
-		ActorID:             actorIDForRequest(r),
+		ActorID:             httputil.ActorIDForRequest(r),
 		Reason:              challenge.Kind,
 		Source:              "approval_token",
 		ApprovalChallengeID: challenge.Token,
 		BeforeJSON:          "{}",
-		AfterJSON:           mustMarshalAuditJSON(after),
+		AfterJSON:           mustMarshalJSON(after),
 		CreatedAt:           time.Now().UTC(),
 	})
 	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
-		s.respondJSON(w, http.StatusOK, map[string]any{
+		respond(w, http.StatusOK, map[string]any{
 			"status":      "submitted",
 			"token":       challenge.Token,
 			"kind":        challenge.Kind,
@@ -152,12 +153,21 @@ func (s *Server) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *ht
 	fmt.Fprintf(w, secureInputApprovalSuccessHTML, escapeApprovalHTML(challenge.Title), escapeApprovalHTML(challenge.Title))
 }
 
+func appendUniqueStage(items []string, value string) []string {
+	for _, item := range items {
+		if item == value {
+			return items
+		}
+	}
+	return append(items, value)
+}
+
 func deriveApprovalTokenKey(salt []byte, token, kind string) []byte {
 	sum := sha256.Sum256(append(append(append([]byte{}, salt...), []byte(kind)...), []byte(token)...))
 	return sum[:]
 }
 
-func mustMarshalAuditJSON(value map[string]any) string {
+func mustMarshalJSON(value map[string]any) string {
 	if len(value) == 0 {
 		return "{}"
 	}

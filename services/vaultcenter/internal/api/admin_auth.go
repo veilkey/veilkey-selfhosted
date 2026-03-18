@@ -15,6 +15,7 @@ import (
 	"time"
 	"veilkey-vaultcenter/internal/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 const (
@@ -100,7 +101,7 @@ func (s *Server) handleAdminCreateSecureInputChallenge(w http.ResponseWriter, r 
 	}
 	baseURL := strings.TrimRight(strings.TrimSpace(req.BaseURL), "/")
 	if baseURL == "" {
-		baseURL = requestBaseURL(r)
+		baseURL = httputil.RequestBaseURL(r)
 	}
 	link := baseURL + "/approve/t/" + token
 	s.saveAuditEvent("approval_token", token, "create", "admin", actorIDForRequest(r), "secure_input", "admin_approval_token", nil, map[string]any{
@@ -133,7 +134,7 @@ func (s *Server) handleAdminListApprovalChallenges(w http.ResponseWriter, r *htt
 		s.respondError(w, http.StatusInternalServerError, "failed to load approval challenges")
 		return
 	}
-	baseURL := requestBaseURL(r)
+	baseURL := httputil.RequestBaseURL(r)
 	items := make([]map[string]any, 0, len(rows))
 	for _, row := range rows {
 		items = append(items, map[string]any{

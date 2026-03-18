@@ -2,16 +2,17 @@ package api
 
 import (
 	"net/http"
-)
 
+	"veilkey-vaultcenter/internal/api/install"
+)
 
 func (s *Server) handleOperatorShellEntry(w http.ResponseWriter, r *http.Request) {
 	if s.IsLocked() {
-		renderInstallWizard(s, w)
+		install.RenderInstallWizard(w)
 		return
 	}
 	if complete, _ := s.installGateState(); !complete {
-		renderInstallWizard(s, w)
+		install.RenderInstallWizard(w)
 		return
 	}
 	s.handleDashboard(w, r)
