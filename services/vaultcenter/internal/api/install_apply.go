@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -137,39 +136,10 @@ func isAllowlistedInstallScript(path string) bool {
 }
 
 func resolveInstallProfile(cfg *db.UIConfig) string {
-	targetType := strings.TrimSpace(cfg.TargetType)
-	profile := strings.TrimSpace(cfg.InstallProfile)
-	if targetType == "lxc-allinone" && profile == "" {
-		return "proxmox-lxc-allinone"
-	}
-	switch profile {
-	case "", "linux-host":
-		if strings.TrimSpace(cfg.LocalvaultURL) != "" {
-			return "proxmox-host-localvault"
-		}
-		return "proxmox-host"
-	case "lxc-allinone", "all-in-one", "linux-all-in-one":
-		return "proxmox-lxc-allinone"
-	default:
+	if profile := strings.TrimSpace(cfg.InstallProfile); profile != "" {
 		return profile
 	}
-}
-
-func installTargetLabel(cfg *db.UIConfig) string {
-	if strings.TrimSpace(cfg.TargetType) != "" {
-		return strings.TrimSpace(cfg.TargetType)
-	}
-	switch resolveInstallProfile(cfg) {
-	case "proxmox-lxc-allinone":
-		return "lxc-allinone"
-	case "proxmox-host-localvault":
-		return "host-localvault"
-	default:
-		if strings.TrimSpace(cfg.LocalvaultURL) != "" {
-			return "host-existing-localvault"
-		}
-		return "linux-host"
-	}
+	return "linux-host"
 }
 
 func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) installValidationResult {
@@ -185,52 +155,6 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	}
 	if result.ResolvedWorkdir == "" && result.ResolvedScript != "" {
 		result.ResolvedWorkdir = filepath.Dir(result.ResolvedScript)
-	}
-
-	target := installTargetLabel(cfg)
-	if target == "lxc-allinone" {
-		result.ResolvedRoot = "/"
-	}
-	if target == "linux-host" {
-		result.Warnings = append(result.Warnings, "linux-host quick path is not yet a validated production install target; prefer lxc-allinone or host-localvault")
-	}
-	if target == "lxc-allinone" {
-		if strings.TrimSpace(cfg.TargetMode) == "" {
-			result.Valid = false
-			result.Errors = append(result.Errors, "lxc-allinone requires target_mode=new or existing")
-		}
-		if strings.TrimSpace(cfg.TargetVMID) == "" {
-			result.Valid = false
-			result.Errors = append(result.Errors, "lxc-allinone requires target_vmid")
-		}
-		if strings.TrimSpace(cfg.TargetNode) == "" {
-			result.Warnings = append(result.Warnings, "target_node is empty; proxmox node selection should be explicit")
-		}
-		for _, passwordPath := range []string{
-			proxmoxLXCPasswordFile("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password"),
-			proxmoxLXCPasswordFile("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", "/etc/veilkey/localvault.password"),
-		} {
-			if _, err := os.Stat(passwordPath); err != nil {
-				result.Valid = false
-				result.Errors = append(result.Errors, "required password file is not available: "+passwordPath)
-			}
-		}
-		if strings.TrimSpace(cfg.TargetMode) == "new" {
-			if proxmoxLXCTemplateVMID() == "" {
-				result.Valid = false
-				result.Errors = append(result.Errors, "new lxc provisioning requires VEILKEY_PROXMOX_LXC_TEMPLATE_VMID")
-			}
-			if proxmoxLXCNet0Template() == "" {
-				result.Valid = false
-				result.Errors = append(result.Errors, "new lxc provisioning requires VEILKEY_PROXMOX_LXC_NET0_TEMPLATE")
-			}
-		}
-		if strings.TrimSpace(cfg.VaultcenterURL) != "" {
-			result.Warnings = append(result.Warnings, "vaultcenter_url is set before provisioning; prefer public_base_url preview until the target LXC exists")
-		}
-	}
-	if target == "host-localvault" && strings.TrimSpace(cfg.VaultcenterURL) == "" {
-		result.Warnings = append(result.Warnings, "host-localvault install usually expects vaultcenter_url to be set before activation")
 	}
 
 	if result.ResolvedScript == "" {
@@ -263,10 +187,6 @@ func validateInstallConfig(cfg *db.UIConfig, req installValidateRequest) install
 	}
 
 	result.DangerousRoot = isDangerousInstallRoot(result.ResolvedRoot)
-	if target == "lxc-allinone" {
-		result.DangerousRoot = false
-		result.NeedsConfirmation = false
-	}
 	if result.DangerousRoot {
 		result.Warnings = append(result.Warnings, "install_root targets the live filesystem root")
 		if !req.ConfirmDangerousRoot {
@@ -342,225 +262,6 @@ func checkHealthEndpoint(client *http.Client, rawURL string) error {
 	return nil
 }
 
-func proxmoxLXCPasswordFile(envName, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(envName)); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func proxmoxLXCTemplateVMID() string {
-	return strings.TrimSpace(os.Getenv("VEILKEY_PROXMOX_LXC_TEMPLATE_VMID"))
-}
-
-func proxmoxLXCNet0Template() string {
-	return strings.TrimSpace(os.Getenv("VEILKEY_PROXMOX_LXC_NET0_TEMPLATE"))
-}
-
-func proxmoxHostRoot() string {
-	if value := strings.TrimSpace(os.Getenv("VEILKEY_PROXMOX_HOST_ROOT")); value != "" {
-		return value
-	}
-	return "/"
-}
-
-func proxmoxLXCAPIBase(workdir string) string {
-	if value := strings.TrimSpace(os.Getenv("VEILKEY_INSTALLER_GITLAB_API_BASE")); value != "" {
-		return value
-	}
-	cmd := exec.Command("git", "config", "--get", "remote.origin.url")
-	cmd.Dir = workdir
-	out, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	raw := strings.TrimSpace(string(out))
-	raw = strings.TrimSuffix(raw, ".git")
-	raw = strings.TrimPrefix(raw, "https://")
-	if idx := strings.Index(raw, "/"); idx > 0 {
-		return "https://" + raw[:idx] + "/api/v4"
-	}
-	return ""
-}
-
-func proxmoxLXCGitLabHost(apiBase string) string {
-	apiBase = strings.TrimSpace(apiBase)
-	apiBase = strings.TrimPrefix(apiBase, "https://")
-	apiBase = strings.TrimPrefix(apiBase, "http://")
-	if idx := strings.Index(apiBase, "/"); idx > 0 {
-		return apiBase[:idx]
-	}
-	return ""
-}
-
-func installShellQuote(value string) string {
-	return "'" + strings.ReplaceAll(value, "'", `'"'"'`) + "'"
-}
-
-func runCommand(ctx context.Context, output *strings.Builder, name string, args ...string) error {
-	output.WriteString("$ " + name)
-	for _, arg := range args {
-		output.WriteString(" " + installShellQuote(arg))
-	}
-	output.WriteString("\n")
-	cmd := exec.CommandContext(ctx, name, args...)
-	data, err := cmd.CombinedOutput()
-	if len(data) > 0 {
-		output.Write(data)
-		if data[len(data)-1] != '\n' {
-			output.WriteByte('\n')
-		}
-	}
-	return err
-}
-
-func appendHostCompanionFailureGuidance(output *strings.Builder, workdir, bundleRoot string, err error) error {
-	guidance := "LXC install succeeded but host companion failed — run proxmox-host-cli-install.sh manually"
-	if output != nil {
-		output.WriteString(guidance)
-		if bundleRoot != "" {
-			output.WriteString(" with bundle ")
-			output.WriteString(bundleRoot)
-		}
-		output.WriteString("\n")
-		output.WriteString("Suggested command: ")
-		output.WriteString(filepath.Join(workdir, "scripts", "proxmox-host-cli-install.sh"))
-		output.WriteString(" ")
-		output.WriteString(proxmoxHostRoot())
-		if bundleRoot != "" {
-			output.WriteString(" ")
-			output.WriteString(bundleRoot)
-		}
-		output.WriteString("\n")
-	}
-	if err == nil {
-		return errors.New(guidance)
-	}
-	return fmt.Errorf("%s: %w", guidance, err)
-}
-
-func runProxmoxLXCInstall(ctx context.Context, cfg *db.UIConfig, validation installValidationResult, runID string) (string, error) {
-	vmid := strings.TrimSpace(cfg.TargetVMID)
-	if vmid == "" {
-		return "", fmt.Errorf("target_vmid is required")
-	}
-	if _, err := strconv.Atoi(vmid); err != nil {
-		return "", fmt.Errorf("target_vmid must be numeric")
-	}
-
-	workdir := validation.ResolvedWorkdir
-	if workdir == "" {
-		workdir = installWorkdir(cfg)
-	}
-	if workdir == "" {
-		return "", fmt.Errorf("install workdir is not configured")
-	}
-
-	vaultcenterPasswordFile := proxmoxLXCPasswordFile("VEILKEY_INSTALL_VAULTCENTER_PASSWORD_FILE", "/etc/veilkey/vaultcenter.password")
-	localvaultPasswordFile := proxmoxLXCPasswordFile("VEILKEY_INSTALL_LOCALVAULT_PASSWORD_FILE", "/etc/veilkey/localvault.password")
-	vaultcenterPassword, err := os.ReadFile(vaultcenterPasswordFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to read vaultcenter password file: %w", err)
-	}
-	localvaultPassword, err := os.ReadFile(localvaultPasswordFile)
-	if err != nil {
-		return "", fmt.Errorf("failed to read localvault password file: %w", err)
-	}
-
-	tmpRoot := filepath.Join(os.TempDir(), "veilkey-install-runs", runID)
-	if err := os.MkdirAll(tmpRoot, 0700); err != nil {
-		return "", err
-	}
-	installerArchive := filepath.Join(tmpRoot, "installer.tgz")
-	bundleRoot := filepath.Join(tmpRoot, "bundle")
-	bundleArchive := filepath.Join(tmpRoot, "bundle.tgz")
-	hostBundleRoot := filepath.Join(tmpRoot, "host-cli-bundle")
-	passwordFile := filepath.Join(tmpRoot, "password")
-
-	installerRoot := filepath.Clean(filepath.Join(workdir, ".."))
-	if err := os.WriteFile(passwordFile, []byte("VEILKEY_VAULTCENTER_PASSWORD="+strings.TrimSpace(string(vaultcenterPassword))+"\nVEILKEY_LOCALVAULT_PASSWORD="+strings.TrimSpace(string(localvaultPassword))+"\n"), 0600); err != nil {
-		return "", err
-	}
-
-	apiBase := proxmoxLXCAPIBase(workdir)
-	bundleCmd := exec.CommandContext(ctx, filepath.Join(workdir, "install.sh"), "bundle", validation.ResolvedProfile, bundleRoot)
-	bundleCmd.Dir = workdir
-	bundleCmd.Env = append(os.Environ(),
-		"VEILKEY_INSTALLER_GITLAB_API_BASE="+apiBase,
-		"VEILKEY_GITLAB_HOST="+proxmoxLXCGitLabHost(apiBase),
-	)
-	bundleOut, err := bundleCmd.CombinedOutput()
-	logOutput := strings.Builder{}
-	logOutput.WriteString("$ " + filepath.Join(workdir, "install.sh") + " bundle " + validation.ResolvedProfile + " " + bundleRoot + "\n")
-	logOutput.Write(bundleOut)
-	if err != nil {
-		return logOutput.String(), err
-	}
-
-	if err := runCommand(ctx, &logOutput, "tar", "-C", installerRoot, "-czf", installerArchive, "installer"); err != nil {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "tar", "-C", tmpRoot, "-czf", bundleArchive, "bundle"); err != nil {
-		return logOutput.String(), err
-	}
-	if strings.TrimSpace(cfg.TargetType) == "lxc-allinone" && strings.TrimSpace(cfg.TargetMode) == "new" {
-		templateVMID := proxmoxLXCTemplateVMID()
-		net0 := proxmoxLXCNet0Template()
-		if templateVMID == "" || net0 == "" {
-			return logOutput.String(), fmt.Errorf("new lxc provisioning requires VEILKEY_PROXMOX_LXC_TEMPLATE_VMID and VEILKEY_PROXMOX_LXC_NET0_TEMPLATE")
-		}
-		net0 = strings.ReplaceAll(net0, "%VMID%", vmid)
-		if err := runCommand(ctx, &logOutput, "pct", "clone", templateVMID, vmid, "--hostname", "veilkey-install-"+vmid, "--full", "1"); err != nil {
-			return logOutput.String(), err
-		}
-		if err := runCommand(ctx, &logOutput, "pct", "set", vmid, "-net0", net0); err != nil {
-			return logOutput.String(), err
-		}
-	}
-
-	if err := runCommand(ctx, &logOutput, "pct", "start", vmid); err != nil && !strings.Contains(logOutput.String(), "already running") {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "pct", "push", vmid, installerArchive, "/root/veilkey-installer.tgz"); err != nil {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "pct", "push", vmid, bundleArchive, "/root/veilkey-bundle.tgz"); err != nil {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "pct", "push", vmid, passwordFile, "/root/veilkey-password"); err != nil {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", "mkdir -p /opt/veilkey/data /root/veilkey-installer /root/veilkey-bundle && mv /root/veilkey-password /opt/veilkey/data/password && tar -xzf /root/veilkey-installer.tgz -C /root/veilkey-installer && tar -xzf /root/veilkey-bundle.tgz -C /root/veilkey-bundle && chmod 600 /opt/veilkey/data/password"); err != nil {
-		return logOutput.String(), err
-	}
-	installScript := "cd /root/veilkey-installer/installer && ./scripts/proxmox-lxc-allinone-install.sh --activate / /root/veilkey-bundle/bundle"
-	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", installScript); err != nil {
-		return logOutput.String(), err
-	}
-	if err := runCommand(ctx, &logOutput, "pct", "exec", vmid, "--", "bash", "-lc", "curl -fsSk https://127.0.0.1:10181/health && echo && curl -fsSk https://127.0.0.1:10180/health && echo"); err != nil {
-		return logOutput.String(), err
-	}
-	if cfg.HostCompanion {
-		hostBundleCmd := exec.CommandContext(ctx, filepath.Join(workdir, "install.sh"), "bundle", "proxmox-host-cli", hostBundleRoot)
-		hostBundleCmd.Dir = workdir
-		hostBundleCmd.Env = append(os.Environ(),
-			"VEILKEY_INSTALLER_GITLAB_API_BASE="+apiBase,
-			"VEILKEY_GITLAB_HOST="+proxmoxLXCGitLabHost(apiBase),
-		)
-		hostBundleOut, bundleErr := hostBundleCmd.CombinedOutput()
-		logOutput.WriteString("$ " + filepath.Join(workdir, "install.sh") + " bundle proxmox-host-cli " + hostBundleRoot + "\n")
-		logOutput.Write(hostBundleOut)
-		if bundleErr != nil {
-			return logOutput.String(), appendHostCompanionFailureGuidance(&logOutput, workdir, hostBundleRoot, bundleErr)
-		}
-		hostCompanionScript := filepath.Join(workdir, "scripts", "proxmox-host-cli-install.sh")
-		hostArgs := []string{hostCompanionScript, proxmoxHostRoot(), hostBundleRoot}
-		if err := runCommand(ctx, &logOutput, hostArgs[0], hostArgs[1:]...); err != nil {
-			return logOutput.String(), appendHostCompanionFailureGuidance(&logOutput, workdir, hostBundleRoot, err)
-		}
-	}
-	return logOutput.String(), nil
-}
 
 func encodeJSON(v any, fallback string) string {
 	data, err := json.Marshal(v)
@@ -749,41 +450,34 @@ func (s *Server) runInstallApply(cfg *db.UIConfig, validation installValidationR
 		outputTail string
 		err        error
 	)
-	if strings.TrimSpace(cfg.TargetType) == "lxc-allinone" {
-		var output string
-		output, err = runProxmoxLXCInstall(ctx, cfg, validation, runID)
-		outputTail = trimCommandOutput([]byte(output))
-	} else {
-		command := validation.CommandPreview
-		cmd := exec.CommandContext(ctx, command[0], command[1:]...)
-		if validation.ResolvedWorkdir != "" {
-			cmd.Dir = validation.ResolvedWorkdir
+	command := validation.CommandPreview
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	if validation.ResolvedWorkdir != "" {
+		cmd.Dir = validation.ResolvedWorkdir
+	}
+	cmd.Env = append(os.Environ(),
+		"VEILKEY_INSTALL_PROFILE="+validation.ResolvedProfile,
+		"VEILKEY_INSTALL_ROOT="+validation.ResolvedRoot,
+		"VEILKEY_INSTALL_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
+		"VEILKEY_INSTALL_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
+		"VEILKEY_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
+		"VEILKEY_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
+		"VEILKEY_TLS_CERT="+strings.TrimSpace(cfg.TLSCertPath),
+		"VEILKEY_TLS_KEY="+strings.TrimSpace(cfg.TLSKeyPath),
+		"VEILKEY_TLS_CA="+strings.TrimSpace(cfg.TLSCAPath),
+	)
+	output, cmdErr := cmd.CombinedOutput()
+	err = cmdErr
+	outputTail = trimCommandOutput(output)
+	client := installHTTPClient(cfg.TLSCAPath)
+	if err == nil {
+		if healthErr := checkHealthEndpoint(client, cfg.VaultcenterURL); healthErr != nil {
+			err = healthErr
 		}
-		cmd.Env = append(os.Environ(),
-			"VEILKEY_INSTALL_PROFILE="+validation.ResolvedProfile,
-			"VEILKEY_INSTALL_ROOT="+validation.ResolvedRoot,
-			"VEILKEY_INSTALL_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
-			"VEILKEY_INSTALL_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
-			"VEILKEY_VAULTCENTER_URL="+strings.TrimSpace(cfg.VaultcenterURL),
-			"VEILKEY_LOCALVAULT_URL="+strings.TrimSpace(cfg.LocalvaultURL),
-			"VEILKEY_TLS_CERT="+strings.TrimSpace(cfg.TLSCertPath),
-			"VEILKEY_TLS_KEY="+strings.TrimSpace(cfg.TLSKeyPath),
-			"VEILKEY_TLS_CA="+strings.TrimSpace(cfg.TLSCAPath),
-		)
-
-		output, cmdErr := cmd.CombinedOutput()
-		err = cmdErr
-		outputTail = trimCommandOutput(output)
-		client := installHTTPClient(cfg.TLSCAPath)
-		if err == nil {
-			if healthErr := checkHealthEndpoint(client, cfg.VaultcenterURL); healthErr != nil {
-				err = healthErr
-			}
-		}
-		if err == nil && strings.TrimSpace(cfg.LocalvaultURL) != "" {
-			if healthErr := checkHealthEndpoint(client, cfg.LocalvaultURL); healthErr != nil {
-				err = healthErr
-			}
+	}
+	if err == nil && strings.TrimSpace(cfg.LocalvaultURL) != "" {
+		if healthErr := checkHealthEndpoint(client, cfg.LocalvaultURL); healthErr != nil {
+			err = healthErr
 		}
 	}
 

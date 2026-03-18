@@ -1,1 +1,0 @@
-../../../shared/tests/test_deploy_lxc.sh

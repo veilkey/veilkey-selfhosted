@@ -114,11 +114,7 @@ changelog:
       - "^test:"
       - "^ci:"
 
-gitlab_urls:
-  api: "{{ if index .Env \"CI_API_V4_URL\" }}{{ .Env.CI_API_V4_URL }}{{ else }}https://gitlab.com/api/v4{{ end }}"
-  download: "{{ if index .Env \"CI_SERVER_URL\" }}{{ .Env.CI_SERVER_URL }}{{ else }}https://gitlab.com{{ end }}"
-
 release:
-  gitlab:
-    owner: "{{ .Env.CI_PROJECT_NAMESPACE }}"
-    name: "{{ .Env.CI_PROJECT_NAME }}"
+  github:
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
+    name: "{{ .Env.GITHUB_REPOSITORY_NAME }}"

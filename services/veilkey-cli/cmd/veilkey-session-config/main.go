@@ -104,7 +104,7 @@ func (c *config) veilkeyLocalvaultURL() string {
 
 func (c *config) veilkeyVaultcenterURL() string {
 	return getenvFirst(
-		os.Getenv("VEILKEY_KEYCENTER_URL"),
+		os.Getenv("VEILKEY_VAULTCENTER_URL"),
 		c.Veilkey.VaultcenterURL,
 	)
 }
@@ -363,7 +363,7 @@ func main() {
 			{"ALL_PROXY", proxyURL},
 			{"NO_PROXY", cfg.mergedNoProxy(cfg.Proxy.Default.NoProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
-			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyVaultcenterURL()},
+			{"VEILKEY_VAULTCENTER_URL", cfg.veilkeyVaultcenterURL()},
 		})
 	case "tool-shell-exports":
 		if len(cmdArgs) < 1 {
@@ -387,7 +387,7 @@ func main() {
 			{"ALL_PROXY", proxyURL},
 			{"NO_PROXY", cfg.mergedNoProxy(noProxy)},
 			{"VEILKEY_LOCALVAULT_URL", cfg.veilkeyLocalvaultURL()},
-			{"VEILKEY_KEYCENTER_URL", cfg.veilkeyVaultcenterURL()},
+			{"VEILKEY_VAULTCENTER_URL", cfg.veilkeyVaultcenterURL()},
 		})
 	case "session-default-profile":
 		value, err := chooseProfileValue(cfg.Session.DefaultProfile, cfg.RootAI.DefaultProfile, "session.default_profile")
