@@ -1,0 +1,57 @@
+stages:
+  - validate
+
+default:
+  image: alpine:3.20
+  before_script:
+    - apk add --no-cache bash coreutils grep git
+
+docs:doctor:
+  stage: validate
+  script:
+    - bash docs/tools/doctor.sh
+  rules:
+    - changes:
+        - docs/**/*
+        - VERSION
+        - VERSIONING.md
+        - facts/**/*
+      if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - docs/**/*
+        - VERSION
+        - VERSIONING.md
+        - facts/**/*
+docs:generate:
+  stage: validate
+  script:
+    - bash docs/tools/generate.sh
+    - test -d docs/generated
+    - test -f docs/generated/inventory.md
+    - test -f docs/generated/terminology.md
+    - |
+      if [ -n "$(git diff --name-only -- docs/generated/)" ]; then
+        echo "ERROR: docs/tools/generate.sh produced changes not committed to the repo."
+        echo "Run 'bash docs/tools/generate.sh' locally and commit the results."
+        git diff --stat -- docs/generated/
+        exit 1
+      fi
+    - echo "docs:generate output verified — no uncommitted changes"
+  artifacts:
+    paths:
+      - docs/generated/
+    expire_in: 1 week
+  rules:
+    - changes:
+        - docs/**/*
+        - VERSION
+        - VERSIONING.md
+        - facts/**/*
+      if: $CI_COMMIT_BRANCH
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        - docs/**/*
+        - VERSION
+        - VERSIONING.md
+        - facts/**/*
