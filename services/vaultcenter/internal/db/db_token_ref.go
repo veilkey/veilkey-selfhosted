@@ -15,7 +15,12 @@ type RefParts struct {
 }
 
 func (r RefParts) Canonical() string {
-	return r.Family + ":" + r.Scope + ":" + r.ID
+	return r.Family + RefSep + r.Scope + RefSep + r.ID
+}
+
+// MakeRef constructs a canonical ref string from its components.
+func MakeRef(family, scope, id string) string {
+	return RefParts{Family: family, Scope: scope, ID: id}.Canonical()
 }
 
 func ParseCanonicalRef(canonical string) (RefParts, error) {

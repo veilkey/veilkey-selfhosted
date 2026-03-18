@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// RefSep is the canonical separator between family, scope, and ID components.
+const RefSep = ":"
+
 // Ref family identifiers.
 const (
 	RefFamilyVK = "VK" // secret refs

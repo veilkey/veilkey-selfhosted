@@ -44,7 +44,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 						cfg["ref"] = "VE:" + scope + ":" + key
 						cfg["scope"] = scope
 						cfg["status"] = status
-						_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+						_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
 					}
 				}
 			}

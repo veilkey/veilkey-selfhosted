@@ -69,10 +69,10 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 			respData["status"] = status
 			respData["vault"] = agent.Label
 			setRuntimeHashAliases(respData, agent.AgentHash)
-			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				refFamilyVE+":"+scope+":"+key,
+				makeRef(refFamilyVE, scope, key),
 				"save",
 				"agent",
 				agent.AgentHash,

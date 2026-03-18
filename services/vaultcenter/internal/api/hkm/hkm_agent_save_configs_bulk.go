@@ -56,10 +56,10 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 	}
 	if resp.StatusCode == http.StatusOK {
 		for key := range reqData.Configs {
-			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				refFamilyVE+":"+scope+":"+key,
+				makeRef(refFamilyVE, scope, key),
 				"save",
 				"agent",
 				agent.AgentHash,

@@ -14,3 +14,6 @@ const (
 	refStatusActive = db.RefStatusActive
 	refStatusTemp   = db.RefStatusTemp
 )
+
+// makeRef constructs a canonical ref string from its components.
+func makeRef(family, scope, id string) string { return db.MakeRef(family, scope, id) }

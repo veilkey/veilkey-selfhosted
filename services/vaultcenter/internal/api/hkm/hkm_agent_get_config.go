@@ -44,7 +44,7 @@ func (h *Handler) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 			data["status"] = status
 			data["vault"] = agent.Label
 			setRuntimeHashAliases(data, agent.AgentHash)
-			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
 			if marshaled, marshalErr := json.Marshal(data); marshalErr == nil {
 				body = marshaled
 			}
