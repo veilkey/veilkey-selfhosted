@@ -30,17 +30,27 @@ for val in "${BANNED[@]}"; do
   fi
 done
 
-# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외, display-only 레이블 제외)
-sh_fallbacks=$(grep -rn --include="*.sh" \
-  'VEILKEY_[A-Z_]*:-[^}]' $ALL_SERVICES 2>/dev/null | \
-  grep -v 'VEILKEY_VEIL_PROMPT_LABEL' || true)
+# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외, 예외 목록 제외)
+# *.sh 파일 + 서비스 내 scripts/ 하위의 확장자 없는 스크립트도 포함
+_sh_files=$(find $ALL_SERVICES -name "*.sh" -o \( -path "*/scripts/*" -type f ! -name "*.*" \) 2>/dev/null | sort)
+sh_fallbacks=$(echo "$_sh_files" | xargs grep -n 'VEILKEY_[A-Z_]*:-[^}]' 2>/dev/null | \
+  grep -v 'VEILKEY_VEIL_PROMPT_LABEL\|VEILKEY_STATE_DIR' || true)
 if [[ -n "$sh_fallbacks" ]]; then
   echo "❌ sh fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
   echo "$sh_fallbacks"
   found=1
 fi
 
-# 3. Dockerfile ENV 기본값 차단
+# 3. Go envDefault("VEILKEY_", "value") 패턴 차단 — os.Getenv + 명명된 상수로 대체하세요
+go_envdefault=$(grep -rn --include="*.go" \
+  'envDefault("VEILKEY_' $ALL_SERVICES 2>/dev/null || true)
+if [[ -n "$go_envdefault" ]]; then
+  echo "❌ envDefault() 금지: os.Getenv + named const로 대체하세요"
+  echo "$go_envdefault"
+  found=1
+fi
+
+# 5. Dockerfile ENV 기본값 차단
 dockerfile_envs=$(grep -rn --include="Dockerfile" \
   '^ENV VEILKEY_' $ALL_SERVICES 2>/dev/null || true)
 if [[ -n "$dockerfile_envs" ]]; then
@@ -49,7 +59,7 @@ if [[ -n "$dockerfile_envs" ]]; then
   found=1
 fi
 
-# 4. Rust에서 VEILKEY_* env var에 비어있지 않은 unwrap_or 기본값 차단
+# 6. Rust에서 VEILKEY_* env var에 비어있지 않은 unwrap_or 기본값 차단
 # env::var("VEILKEY_FOO").unwrap_or("...") 또는 unwrap_or_else(|_| "...".to_string()) 패턴
 rs_fallbacks=$(grep -rn --include="*.rs" \
   'VEILKEY_[A-Z_]*.*\.unwrap_or\b' $RUST_SERVICES 2>/dev/null | \
@@ -65,7 +75,7 @@ if [[ -n "$rs_fallbacks" || -n "$rs_multiline" ]]; then
   found=1
 fi
 
-# 5. .env.example에 없는 VEILKEY_* 변수 차단 (Go + sh)
+# 7. .env.example에 없는 VEILKEY_* 변수 차단 (Go + sh)
 check_env_documented() {
   local service="$1"
   local env_example="services/${service}/.env.example"
@@ -87,7 +97,7 @@ check_env_documented() {
   done <<< "$used"
 }
 
-# 6. docker-compose.yml VEILKEY_* 기본값 차단 (${VEILKEY_FOO:-value} 패턴)
+# 8. docker-compose.yml VEILKEY_* 기본값 차단 (${VEILKEY_FOO:-value} 패턴)
 compose_fallbacks=$(grep -n \
   'VEILKEY_[A-Z_]*:-[^}]' docker-compose.yml 2>/dev/null || true)
 if [[ -n "$compose_fallbacks" ]]; then
