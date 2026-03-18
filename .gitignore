@@ -1,0 +1,26 @@
+# Build outputs
+bin/
+dist/
+.tmp/
+*.log
+
+# Go
+coverage.out
+
+# Database / data
+*.db
+data/
+
+# Secrets
+.env
+secrets/password
+
+# Node
+node_modules/
+
+# Compiled binaries
+veilkey-localvault
+veilkey-vaultcenter
+veilkey-proxy
+veilkey-cli
+veil-cli
