@@ -9,6 +9,10 @@ import (
 
 // handleStatus returns current key version info
 func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
+	if s.IsLocked() {
+		s.respondJSON(w, http.StatusOK, map[string]interface{}{"locked": true})
+		return
+	}
 	if s.hkmHandler == nil {
 		s.respondError(w, http.StatusInternalServerError, "node info not available")
 		return
@@ -19,7 +23,7 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	resp["supported_features"] = localSupportedFeatures()
-	resp["locked"] = s.IsLocked()
+	resp["locked"] = false
 	s.respondJSON(w, http.StatusOK, resp)
 }
 
@@ -49,7 +53,7 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 
 	mux.HandleFunc("POST /api/encrypt", s.requireTrustedIP(s.requireUnlocked(s.handleTempEncrypt)))
 	mux.HandleFunc("POST /api/lookup/exact", s.requireTrustedIP(s.requireReadyForOps(s.handleExactLookup)))
-	mux.HandleFunc("GET /api/status", s.requireUnlocked(s.handleStatus))
+	mux.HandleFunc("GET /api/status", s.handleStatus)
 	mux.HandleFunc("GET /api/configs", s.requireUnlocked(s.handleListConfigs))
 	mux.HandleFunc("GET /api/configs/{key}", s.requireUnlocked(s.handleGetConfig))
 	mux.HandleFunc("POST /api/configs", s.requireTrustedIP(s.requireUnlocked(s.handleSaveConfig)))

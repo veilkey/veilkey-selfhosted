@@ -89,7 +89,9 @@ const state = reactive({
         leftVisible: true,
         centerHTML: '',
         rightHTML: '',
-        twoPane: false
+        twoPane: false,
+        locked: false,
+        unlockError: ''
     }
 });
 
@@ -2565,9 +2567,30 @@ async function handleAction(action, dataset) {
     syncPageData();
   }
 
+async function unlock(password) {
+    state.ui.unlockError = '';
+    try {
+        await request('/api/unlock', { method: 'POST', body: JSON.stringify({ password }) });
+        state.ui.locked = false;
+        await loadUIConfig();
+        await loadVaults();
+        await loadConfigsSummary();
+        await loadFunctions();
+        await loadTrackedRefAudit();
+        await syncPageData();
+        render();
+    } catch (err) {
+        state.ui.unlockError = err.message || '비밀번호가 올바르지 않습니다.';
+    }
+}
+
 async function boot() {
     applyRoute(window.location.pathname, window.location.search);
     await loadStatus();
+    if (state.status?.locked) {
+        state.ui.locked = true;
+        return;
+    }
     await loadUIConfig();
     await loadVaults();
     await loadConfigsSummary();
@@ -2595,6 +2618,7 @@ async function boot() {
 
 return {
                 state,
+                unlock,
                 onGlobalSearchInput,
                 routePath,
                 activeTab,

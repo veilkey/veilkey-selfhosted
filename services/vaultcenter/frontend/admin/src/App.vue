@@ -1,5 +1,17 @@
 <template>
-<div class="app" data-app="vaultcenter-admin-shell">
+<div v-if="state.ui.locked" class="unlock-shell">
+    <div class="unlock-card">
+        <div class="unlock-brand"><span class="brand-mark">VK</span><span class="brand-name">VeilKey</span></div>
+        <h1 class="unlock-heading">잠금 해제</h1>
+        <p class="unlock-desc">마스터 비밀번호를 입력하세요.</p>
+        <div v-if="state.ui.unlockError" class="unlock-error">{{ state.ui.unlockError }}</div>
+        <form class="unlock-form" @submit.prevent="(e) => unlock(e.target.password.value)">
+            <input class="unlock-input" type="password" name="password" placeholder="비밀번호" autocomplete="current-password" autofocus required />
+            <button class="unlock-btn" type="submit">잠금 해제</button>
+        </form>
+    </div>
+</div>
+<div v-else class="app" data-app="vaultcenter-admin-shell">
     <header class="topbar">
         <div class="topbar-brand">
             <span class="topbar-brand-mark">VK</span>
@@ -868,6 +880,76 @@
 </div>
 </template>
 
+<style scoped>
+.unlock-shell {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #0f1117;
+}
+.unlock-card {
+    background: #1a1d27;
+    border: 1px solid #2a2d3a;
+    border-radius: 12px;
+    padding: 40px;
+    width: 360px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.unlock-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 4px;
+}
+.brand-mark {
+    background: #3b82f6;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    padding: 3px 7px;
+    border-radius: 6px;
+}
+.brand-name { color: #e2e8f0; font-weight: 600; font-size: 15px; }
+.unlock-heading { color: #f1f5f9; font-size: 20px; font-weight: 700; margin: 0; }
+.unlock-desc { color: #94a3b8; font-size: 14px; margin: 0; }
+.unlock-error {
+    background: #3b1212;
+    border: 1px solid #7f1d1d;
+    color: #fca5a5;
+    border-radius: 6px;
+    padding: 10px 14px;
+    font-size: 13px;
+}
+.unlock-form { display: flex; flex-direction: column; gap: 10px; }
+.unlock-input {
+    background: #0f1117;
+    border: 1px solid #2a2d3a;
+    border-radius: 8px;
+    color: #f1f5f9;
+    font-size: 14px;
+    padding: 10px 14px;
+    outline: none;
+    width: 100%;
+    box-sizing: border-box;
+}
+.unlock-input:focus { border-color: #3b82f6; }
+.unlock-btn {
+    background: #3b82f6;
+    border: none;
+    border-radius: 8px;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 10px;
+    width: 100%;
+}
+.unlock-btn:hover { background: #2563eb; }
+</style>
+
 <script setup>
 import { pageConfig } from './adminConfig';
 import { useAdminApp } from './useAdminApp';
@@ -910,6 +992,7 @@ const {
   auditVaultCount,
   auditTotalCount,
   auditSelectedVault,
+  unlock,
   encodeURIComponent
 } = useAdminApp();
 </script>
