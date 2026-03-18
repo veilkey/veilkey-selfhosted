@@ -30,13 +30,28 @@ ensure_cue() {
     return
   fi
 
-  if command -v go >/dev/null 2>&1; then
-    mkdir -p "$REPO_ROOT/.tmp/bin"
-    GOBIN="$REPO_ROOT/.tmp/bin" go install cuelang.org/go/cmd/cue@v0.14.0 >/dev/null 2>&1
-    if [[ -x "$REPO_ROOT/.tmp/bin/cue" ]]; then
-      echo "$REPO_ROOT/.tmp/bin/cue"
-      return
-    fi
+  # Download pre-built CUE binary (no Go toolchain required)
+  local cue_bin="$REPO_ROOT/.tmp/bin/cue"
+  local cue_version="v0.14.0"
+  local os arch tarball
+  os="$(uname -s | tr '[:upper:]' '[:lower:]')"
+  arch="$(uname -m)"
+  [[ "$arch" == "x86_64" ]] && arch="amd64"
+  [[ "$arch" == "aarch64" ]] && arch="arm64"
+  tarball="cue_${cue_version}_${os}_${arch}.tar.gz"
+
+  mkdir -p "$REPO_ROOT/.tmp/bin"
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "https://github.com/cue-lang/cue/releases/download/${cue_version}/${tarball}" \
+      | tar xz -C "$REPO_ROOT/.tmp/bin" cue 2>/dev/null
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- "https://github.com/cue-lang/cue/releases/download/${cue_version}/${tarball}" \
+      | tar xz -C "$REPO_ROOT/.tmp/bin" cue 2>/dev/null
+  fi
+
+  if [[ -x "$cue_bin" ]]; then
+    echo "$cue_bin"
+    return
   fi
 
   return 1
