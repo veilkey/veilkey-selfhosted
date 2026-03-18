@@ -19,18 +19,16 @@ type DB struct {
 func New(dbPath string) (*DB, error) {
 	dsn := dbPath + "?_journal_mode=wal&_busy_timeout=5000"
 
-	// SQLCipher: 환경변수로 DB 암호화 키가 설정된 경우 DSN에 _pragma_key 추가
 	if key := os.Getenv("VEILKEY_DB_KEY"); key != "" {
 		dsn += "&_pragma_key=" + url.QueryEscape(key)
 	}
 
-	// go-sqlcipher/v4가 등록한 "sqlite3" 드라이버로 직접 연결 후 GORM에 전달
+	// go-sqlcipher/v4 registers as "sqlite3"; open raw connection then hand to GORM
 	sqlDB, err := sql.Open("sqlite3", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	// SQLCipher 키가 설정된 경우, 드라이버 지원 여부와 DB 접근 가능 여부를 함께 검증
 	if os.Getenv("VEILKEY_DB_KEY") != "" {
 		version, verErr := sqlCipherVersion(sqlDB)
 		if verErr != nil {

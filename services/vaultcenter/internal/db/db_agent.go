@@ -37,7 +37,6 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 	var existing Agent
 	err := d.conn.First(&existing, "node_id = ?", nodeID).Error
 	if err != nil {
-		// New agent
 		agent := Agent{
 			NodeID:       nodeID,
 			Label:        label,
@@ -58,7 +57,6 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 		}
 		return d.UpsertVaultInventoryFromAgent(&agent)
 	}
-	// Update existing
 	if strings.TrimSpace(existing.AgentRole) == "" {
 		existing.AgentRole = "agent"
 	}

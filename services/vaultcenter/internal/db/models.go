@@ -2,7 +2,6 @@ package db
 
 import "time"
 
-// EncryptionKey — encryption_keys 테이블
 type EncryptionKey struct {
 	Version      int        `gorm:"primaryKey;autoIncrement;column:version" json:"version"`
 	EncryptedDEK []byte     `gorm:"column:encrypted_dek;not null" json:"encrypted_dek"`
@@ -15,7 +14,6 @@ type EncryptionKey struct {
 
 func (EncryptionKey) TableName() string { return "encryption_keys" }
 
-// TokenRef — token_refs 테이블
 type TokenRef struct {
 	RefCanonical  string     `gorm:"primaryKey;column:ref_canonical;size:96" json:"ref_canonical"`
 	RefFamily     string     `gorm:"column:ref_family;size:16;not null;index:idx_token_refs_family_scope" json:"ref_family"`
@@ -33,7 +31,6 @@ type TokenRef struct {
 
 func (TokenRef) TableName() string { return "token_refs" }
 
-// NodeInfo — node_info 테이블
 type NodeInfo struct {
 	NodeID         string    `gorm:"primaryKey;column:node_id" json:"node_id"`
 	ParentURL      string    `gorm:"column:parent_url" json:"parent_url"`
@@ -47,7 +44,6 @@ type NodeInfo struct {
 
 func (NodeInfo) TableName() string { return "node_info" }
 
-// Child — children 테이블
 type Child struct {
 	NodeID       string     `gorm:"primaryKey;column:node_id" json:"node_id"`
 	Label        string     `gorm:"column:label" json:"label"`
@@ -61,7 +57,6 @@ type Child struct {
 
 func (Child) TableName() string { return "children" }
 
-// Secret — secrets 테이블
 type Secret struct {
 	ID         string    `gorm:"primaryKey;column:id" json:"id"`
 	Name       string    `gorm:"column:name;uniqueIndex;not null" json:"name"`
@@ -74,7 +69,6 @@ type Secret struct {
 
 func (Secret) TableName() string { return "secrets" }
 
-// VaultInventory — vault_inventory 테이블
 type VaultInventory struct {
 	VaultNodeUUID    string     `gorm:"primaryKey;column:vault_node_uuid" json:"vault_node_uuid"`
 	VaultRuntimeHash string     `gorm:"column:vault_runtime_hash;not null;uniqueIndex" json:"vault_runtime_hash"`
@@ -98,7 +92,6 @@ type VaultInventory struct {
 
 func (VaultInventory) TableName() string { return "vault_inventory" }
 
-// SecretCatalog — secret_catalog 테이블
 type SecretCatalog struct {
 	SecretCanonicalID string     `gorm:"primaryKey;column:secret_canonical_id" json:"secret_canonical_id"`
 	SecretName        string     `gorm:"column:secret_name;not null;index" json:"secret_name"`
@@ -121,7 +114,6 @@ type SecretCatalog struct {
 
 func (SecretCatalog) TableName() string { return "secret_catalog" }
 
-// Binding — bindings 테이블
 type Binding struct {
 	BindingID    string    `gorm:"primaryKey;column:binding_id" json:"binding_id"`
 	BindingType  string    `gorm:"column:binding_type;not null;index:idx_bindings_target" json:"binding_type"`
@@ -137,7 +129,6 @@ type Binding struct {
 
 func (Binding) TableName() string { return "bindings" }
 
-// AuditEvent — audit_events 테이블
 type AuditEvent struct {
 	EventID             string    `gorm:"primaryKey;column:event_id" json:"event_id"`
 	EntityType          string    `gorm:"column:entity_type;not null;index:idx_audit_events_entity" json:"entity_type"`
@@ -155,7 +146,6 @@ type AuditEvent struct {
 
 func (AuditEvent) TableName() string { return "audit_events" }
 
-// KeyRegistryEntry — key_registry 테이블
 type KeyRegistryEntry struct {
 	NodeID   string    `gorm:"primaryKey;column:node_id" json:"node_id"`
 	SecretID string    `gorm:"primaryKey;column:secret_id" json:"secret_id"`
@@ -168,7 +158,6 @@ func (KeyRegistryEntry) TableName() string { return "key_registry" }
 
 const DefaultAgentPort = 10180
 
-// Agent — agents 테이블 (heartbeat + 중앙 DEK 관리)
 type Agent struct {
 	NodeID           string     `gorm:"primaryKey;column:node_id" json:"node_id"`
 	Label            string     `gorm:"column:label;not null" json:"label"`
@@ -201,7 +190,6 @@ type Agent struct {
 
 func (Agent) TableName() string { return "agents" }
 
-// GlobalFunction — global_functions 테이블
 type GlobalFunction struct {
 	Name         string    `gorm:"primaryKey;column:name" json:"name"`
 	FunctionHash string    `gorm:"column:function_hash;uniqueIndex;not null" json:"function_hash"`
@@ -214,7 +202,6 @@ type GlobalFunction struct {
 
 func (GlobalFunction) TableName() string { return "global_functions" }
 
-// InstallSession — install_sessions 테이블
 type InstallSession struct {
 	SessionID           string    `gorm:"primaryKey;column:session_id" json:"session_id"`
 	Version             int       `gorm:"column:version;not null;default:1" json:"version"`
@@ -234,7 +221,6 @@ type InstallSession struct {
 
 func (InstallSession) TableName() string { return "install_sessions" }
 
-// InstallCustodyChallenge — install_custody_challenges 테이블
 type InstallCustodyChallenge struct {
 	Token      string     `gorm:"primaryKey;column:token" json:"token"`
 	SessionID  string     `gorm:"column:session_id;not null;index" json:"session_id"`
@@ -250,7 +236,6 @@ type InstallCustodyChallenge struct {
 
 func (InstallCustodyChallenge) TableName() string { return "install_custody_challenges" }
 
-// SecretInputChallenge — secret_input_challenges 테이블
 type SecretInputChallenge struct {
 	Token      string     `gorm:"primaryKey;column:token" json:"token"`
 	Email      string     `gorm:"column:email;not null" json:"email"`
@@ -266,7 +251,6 @@ type SecretInputChallenge struct {
 
 func (SecretInputChallenge) TableName() string { return "secret_input_challenges" }
 
-// EmailOTPChallenge — email_otp_challenges 테이블
 type EmailOTPChallenge struct {
 	Token         string     `gorm:"primaryKey;column:token" json:"token"`
 	Email         string     `gorm:"column:email;not null" json:"email"`
@@ -281,7 +265,6 @@ type EmailOTPChallenge struct {
 
 func (EmailOTPChallenge) TableName() string { return "email_otp_challenges" }
 
-// ApprovalTokenChallenge — approval_token_challenges 테이블
 type ApprovalTokenChallenge struct {
 	Token       string     `gorm:"primaryKey;column:token" json:"token"`
 	Kind        string     `gorm:"column:kind;not null;index" json:"kind"`
@@ -300,7 +283,6 @@ type ApprovalTokenChallenge struct {
 
 func (ApprovalTokenChallenge) TableName() string { return "approval_token_challenges" }
 
-// AdminAuthConfig — admin_auth_configs 테이블
 type AdminAuthConfig struct {
 	ConfigID                string     `gorm:"primaryKey;column:config_id" json:"config_id"`
 	TOTPEnabled             bool       `gorm:"column:totp_enabled;not null;default:false" json:"totp_enabled"`
@@ -315,7 +297,6 @@ type AdminAuthConfig struct {
 
 func (AdminAuthConfig) TableName() string { return "admin_auth_configs" }
 
-// AdminSession — admin_sessions 테이블
 type AdminSession struct {
 	SessionID     string     `gorm:"primaryKey;column:session_id" json:"session_id"`
 	TokenHash     string     `gorm:"column:token_hash;not null;uniqueIndex" json:"token_hash"`
@@ -331,7 +312,6 @@ type AdminSession struct {
 
 func (AdminSession) TableName() string { return "admin_sessions" }
 
-// UIConfig — ui_configs 테이블
 type UIConfig struct {
 	ConfigID       string    `gorm:"primaryKey;column:config_id" json:"config_id"`
 	Locale         string    `gorm:"column:locale;not null;default:ko" json:"locale"`
@@ -372,7 +352,6 @@ type InstallRun struct {
 
 func (InstallRun) TableName() string { return "install_runs" }
 
-// Config — configs 테이블
 type Config struct {
 	Key       string    `gorm:"primaryKey;column:key" json:"key"`
 	Value     string    `gorm:"column:value;type:text;not null;default:''" json:"value"`
@@ -383,7 +362,6 @@ type Config struct {
 
 func (Config) TableName() string { return "configs" }
 
-// BulkApplyTemplate — bulk_apply_templates 테이블
 type BulkApplyTemplate struct {
 	TemplateID       string    `gorm:"primaryKey;column:template_id" json:"template_id"`
 	VaultRuntimeHash string    `gorm:"column:vault_runtime_hash;not null;index:idx_bulk_apply_templates_vault_name,priority:1" json:"vault_runtime_hash"`
@@ -399,7 +377,6 @@ type BulkApplyTemplate struct {
 
 func (BulkApplyTemplate) TableName() string { return "bulk_apply_templates" }
 
-// BulkApplyRun — bulk_apply_runs 테이블
 type BulkApplyRun struct {
 	RunID            string    `gorm:"primaryKey;column:run_id" json:"run_id"`
 	VaultRuntimeHash string    `gorm:"column:vault_runtime_hash;not null;index:idx_bulk_apply_runs_vault_workflow_created,priority:1" json:"vault_runtime_hash"`
@@ -412,7 +389,6 @@ type BulkApplyRun struct {
 
 func (BulkApplyRun) TableName() string { return "bulk_apply_runs" }
 
-// Migration — migrations 테이블 (레거시 호환)
 type Migration struct {
 	Version   int       `gorm:"primaryKey;column:version" json:"version"`
 	AppliedAt time.Time `gorm:"column:applied_at;autoCreateTime" json:"applied_at"`

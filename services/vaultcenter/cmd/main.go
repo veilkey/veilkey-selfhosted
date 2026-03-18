@@ -69,7 +69,6 @@ func runServer() {
 	server := api.NewServer(database, nil, trustedIPs)
 	server.SetSalt(salt)
 
-	// Auto-detect HKM mode
 	if database.HasNodeInfo() {
 		info, err := database.GetNodeInfo()
 		if err != nil {
@@ -86,7 +85,6 @@ func runServer() {
 		log.Fatal("node info not found. Legacy centralized mode is no longer supported; initialize HKM root with 'init --root'.")
 	}
 
-	// Auto-unlock if VEILKEY_PASSWORD_FILE is set
 	if pw := readPasswordFromFileEnv(); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if err := server.Unlock(kek); err != nil {
@@ -152,12 +150,10 @@ func runHKMInit() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
-	// Check if already initialized
 	if _, err := os.Stat(saltFile); err == nil {
 		log.Fatal("Already initialized. Salt file exists: " + saltFile)
 	}
 
-	// Get password
 	if password == "" {
 		password = readPassword("Enter KEK password: ")
 		stat, _ := os.Stdin.Stat()
@@ -173,34 +169,29 @@ func runHKMInit() {
 		log.Fatal("Password must be at least 8 characters.")
 	}
 
-	// Generate salt + derive KEK
 	salt, err := crypto.GenerateSalt()
 	if err != nil {
 		log.Fatalf("Failed to generate salt: %v", err)
 	}
 	kek := crypto.DeriveKEK(password, salt)
 
-	// Initialize database
 	database, err := db.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	defer database.Close()
 
-	// Generate UUID + DEK
 	nodeID := crypto.GenerateUUID()
 	dek, err := crypto.GenerateKey()
 	if err != nil {
 		log.Fatalf("Failed to generate DEK: %v", err)
 	}
 
-	// Encrypt DEK with KEK
 	encDEK, encNonce, err := crypto.Encrypt(kek, dek)
 	if err != nil {
 		log.Fatalf("Failed to encrypt DEK: %v", err)
 	}
 
-	// Save node info
 	info := &db.NodeInfo{
 		NodeID:   nodeID,
 		DEK:      encDEK,
@@ -211,12 +202,10 @@ func runHKMInit() {
 		log.Fatalf("Failed to save node info: %v", err)
 	}
 
-	// Save salt
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
 
-	// Store password as temp ref (auto-deletes after 1 hour)
 	pwCiphertext, pwNonce, pwErr := crypto.Encrypt(dek, []byte(password))
 	tempRef := ""
 	if pwErr == nil {
