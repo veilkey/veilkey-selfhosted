@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"net"
 	"os"
 	"strings"
 	"time"
@@ -69,18 +68,6 @@ func parseDurationEnv(key string, defaultVal time.Duration) time.Duration {
 	return defaultVal
 }
 
-func detectExternalIP() string {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return ""
-	}
-	for _, addr := range addrs {
-		if ipnet, ok := addr.(*net.IPNet); ok && !ipnet.IP.IsLoopback() && ipnet.IP.To4() != nil {
-			return ipnet.IP.String()
-		}
-	}
-	return ""
-}
 
 func generateInitRef(length int) (string, error) {
 	b := make([]byte, length)

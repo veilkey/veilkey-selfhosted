@@ -87,7 +87,7 @@ func runSetupServer(dbPath, dataDir string) {
 	mux.HandleFunc("GET /api/install/status", server.HandleInstallStatus)
 	mux.HandleFunc("PATCH /api/install/vaultcenter-url", server.HandlePatchVaultcenterURL)
 	mux.HandleFunc("POST /api/install/init", func(w http.ResponseWriter, r *http.Request) {
-		handleInstallInit(w, r, database, dataDir, server)
+		handleInstallInit(w, r, database, dataDir)
 	})
 
 	log.Printf("veilkey-localvault setup mode on %s (waiting for initialization)", addr)
@@ -105,7 +105,7 @@ func runSetupServer(dbPath, dataDir string) {
 	}
 }
 
-func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string, server *api.Server) {
+func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string) {
 	var req struct {
 		Password       string `json:"password"`
 		VaultcenterURL string `json:"vaultcenter_url"`
