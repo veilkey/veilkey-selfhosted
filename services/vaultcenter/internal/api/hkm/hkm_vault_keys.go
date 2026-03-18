@@ -28,22 +28,22 @@ type agentSecretMeta struct {
 }
 
 func normalizeFallbackSecretRef(raw string) (ref string, scope string, status string) {
-	scope = "TEMP"
-	status = "temp"
+	scope = refScopeTemp
+	status = refStatusTemp
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", scope, status
 	}
 	parts := strings.Split(raw, ":")
-	if len(parts) == 3 && strings.EqualFold(parts[0], "VK") {
+	if len(parts) == 3 && strings.EqualFold(parts[0], refFamilyVK) {
 		scope = strings.ToUpper(strings.TrimSpace(parts[1]))
 		ref = strings.TrimSpace(parts[2])
 		switch scope {
-		case "LOCAL", "EXTERNAL":
-			status = "active"
+		case refScopeLocal, refScopeExternal:
+			status = refStatusActive
 		default:
-			scope = "TEMP"
-			status = "temp"
+			scope = refScopeTemp
+			status = refStatusTemp
 		}
 		return ref, scope, status
 	}
@@ -228,7 +228,7 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 			if err := json.Unmarshal(fallbackBody, &secret); err == nil && strings.TrimSpace(secret.Ref) != "" {
 				ref, scope, status := normalizeFallbackSecretRef(secret.Ref)
 				if strings.TrimSpace(secret.Scope) != "" || strings.TrimSpace(secret.Status) != "" {
-					scope, status, err = normalizeScopeStatus("VK", secret.Scope, secret.Status, "TEMP")
+					scope, status, err = normalizeScopeStatus(refFamilyVK, secret.Scope, secret.Status, refScopeTemp)
 					if err != nil {
 						return nil, 0, nil, err
 					}
@@ -269,7 +269,7 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 					}
 					ref, scope, status := normalizeFallbackSecretRef(item.Ref)
 					if strings.TrimSpace(item.Scope) != "" || strings.TrimSpace(item.Status) != "" {
-						scope, status, err = normalizeScopeStatus("VK", item.Scope, item.Status, "TEMP")
+						scope, status, err = normalizeScopeStatus(refFamilyVK, item.Scope, item.Status, refScopeTemp)
 						if err != nil {
 							return nil, 0, nil, err
 						}
@@ -297,7 +297,7 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 
 func normalizeMeta(meta *agentSecretMeta) error {
 	var err error
-	meta.Scope, meta.Status, err = normalizeScopeStatus("VK", meta.Scope, meta.Status, "TEMP")
+	meta.Scope, meta.Status, err = normalizeScopeStatus(refFamilyVK, meta.Scope, meta.Status, refScopeTemp)
 	if err != nil {
 		return err
 	}

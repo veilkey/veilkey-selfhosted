@@ -35,7 +35,7 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	scope, status, err := normalizeScopeStatus("VE", reqData.Scope, reqData.Status, "LOCAL")
+	scope, status, err := normalizeScopeStatus(refFamilyVE, reqData.Scope, reqData.Status, refScopeLocal)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -56,10 +56,10 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 	}
 	if resp.StatusCode == http.StatusOK {
 		for key := range reqData.Configs {
-			_ = h.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				"VE:"+scope+":"+key,
+				refFamilyVE+":"+scope+":"+key,
 				"save",
 				"agent",
 				agent.AgentHash,

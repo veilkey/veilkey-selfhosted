@@ -68,7 +68,7 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 				return
 			}
-			scope, status, normalizeErr := normalizeScopeStatus("VE", data.Scope, data.Status, "LOCAL")
+			scope, status, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
 			if normalizeErr != nil {
 				return
 			}

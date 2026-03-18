@@ -44,7 +44,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	scope, status, err := normalizeScopeStatus("VE", req.Scope, req.Status, "LOCAL")
+	scope, status, err := normalizeScopeStatus(refFamilyVE, req.Scope, req.Status, refScopeLocal)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -102,7 +102,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				Status string `json:"status"`
 			}
 			if json.NewDecoder(resp.Body).Decode(&data) == nil {
-				currentScope, currentStatus, normalizeErr := normalizeScopeStatus("VE", data.Scope, data.Status, "LOCAL")
+				currentScope, currentStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
 				if normalizeErr != nil {
 					checkMu.Lock()
 					checks = append(checks, bulkSetCheck{ai: ai, found: false})

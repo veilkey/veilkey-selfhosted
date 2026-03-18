@@ -8,8 +8,8 @@ func (d *DB) SaveConfig(key, value string) error {
 	entry := &Config{
 		Key:    key,
 		Value:  value,
-		Scope:  "LOCAL",
-		Status: "active",
+		Scope:  RefScopeLocal,
+		Status: RefStatusActive,
 	}
 	return d.conn.Save(entry).Error
 }
@@ -20,8 +20,8 @@ func (d *DB) SaveConfigs(configs map[string]string) error {
 			entry := &Config{
 				Key:    key,
 				Value:  value,
-				Scope:  "LOCAL",
-				Status: "active",
+				Scope:  RefScopeLocal,
+				Status: RefStatusActive,
 			}
 			if err := tx.Save(entry).Error; err != nil {
 				return err

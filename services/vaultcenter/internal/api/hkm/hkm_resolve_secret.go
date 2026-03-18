@@ -216,7 +216,7 @@ func (h *Handler) resolveTrackedRef(w http.ResponseWriter, ref string, tracked *
 	}
 
 	// Temp encrypt refs: ciphertext stored directly in token_refs
-	if tracked.RefScope == "TEMP" && tracked.Ciphertext != "" && tracked.AgentHash == "" {
+	if tracked.RefScope == refScopeTemp && tracked.Ciphertext != "" && tracked.AgentHash == "" {
 		if tracked.ExpiresAt != nil && time.Now().UTC().After(*tracked.ExpiresAt) {
 			respondError(w, http.StatusGone, "temp ref expired: "+ref)
 			return true

@@ -71,7 +71,7 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 		if ref, ok := data["ref"].(string); ok && ref != "" {
 			scope, _ := data["scope"].(string)
 			status, _ := data["status"].(string)
-			scope, status, err = normalizeScopeStatus("VK", scope, status, "TEMP")
+			scope, status, err = normalizeScopeStatus(refFamilyVK, scope, status, refScopeTemp)
 			if err != nil {
 				respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 				return

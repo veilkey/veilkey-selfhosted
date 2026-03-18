@@ -54,7 +54,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	if meta.Status != "active" || (meta.Scope != "LOCAL" && meta.Scope != "EXTERNAL") {
+	if meta.Status != refStatusActive || (meta.Scope != refScopeLocal && meta.Scope != refScopeExternal) {
 		respondError(w, http.StatusConflict, "additional secret fields require VK:LOCAL or VK:EXTERNAL active lifecycle")
 		return
 	}

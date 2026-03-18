@@ -36,7 +36,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 					if key, ok := cfg["key"].(string); ok && key != "" {
 						scope, _ := cfg["scope"].(string)
 						status, _ := cfg["status"].(string)
-						scope, status, err = normalizeScopeStatus("VE", scope, status, "LOCAL")
+						scope, status, err = normalizeScopeStatus(refFamilyVE, scope, status, refScopeLocal)
 						if err != nil {
 							respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
 							return
@@ -44,7 +44,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 						cfg["ref"] = "VE:" + scope + ":" + key
 						cfg["scope"] = scope
 						cfg["status"] = status
-						_ = h.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+						_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
 					}
 				}
 			}

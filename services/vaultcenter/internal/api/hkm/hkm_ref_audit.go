@@ -208,11 +208,11 @@ func compareTrackedRefEntries(a, b trackedRefAuditEntry) int {
 
 func refScopeRank(scope string) int {
 	switch scope {
-	case "LOCAL":
+	case refScopeLocal:
 		return 0
-	case "EXTERNAL":
+	case refScopeExternal:
 		return 1
-	case "TEMP":
+	case refScopeTemp:
 		return 2
 	default:
 		return 9
@@ -221,7 +221,7 @@ func refScopeRank(scope string) int {
 
 func refStatusRank(status string) int {
 	switch status {
-	case "active":
+	case refStatusActive:
 		return 0
 	case "temp":
 		return 1

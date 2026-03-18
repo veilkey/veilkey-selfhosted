@@ -27,7 +27,7 @@ func (h *Handler) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request
 			}
 			body, readErr := io.ReadAll(preResp.Body)
 			if readErr == nil && json.Unmarshal(body, &data) == nil {
-				scope, _, normalizeErr := normalizeScopeStatus("VE", data.Scope, "", "LOCAL")
+				scope, _, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, "", refScopeLocal)
 				if normalizeErr == nil {
 					trackedRef = "VE:" + scope + ":" + key
 				}

@@ -34,7 +34,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	scope, status, err := normalizeScopeStatus("VE", reqData.Scope, reqData.Status, "LOCAL")
+	scope, status, err := normalizeScopeStatus(refFamilyVE, reqData.Scope, reqData.Status, refScopeLocal)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
@@ -59,7 +59,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 			key := reqData.Key
 			respScope, _ := respData["scope"].(string)
 			respStatus, _ := respData["status"].(string)
-			scope, status, err = normalizeScopeStatus("VE", respScope, respStatus, scope)
+			scope, status, err = normalizeScopeStatus(refFamilyVE, respScope, respStatus, scope)
 			if err != nil {
 				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
 				return
@@ -69,10 +69,10 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 			respData["status"] = status
 			respData["vault"] = agent.Label
 			setRuntimeHashAliases(respData, agent.AgentHash)
-			_ = h.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				"VE:"+scope+":"+key,
+				refFamilyVE+":"+scope+":"+key,
 				"save",
 				"agent",
 				agent.AgentHash,

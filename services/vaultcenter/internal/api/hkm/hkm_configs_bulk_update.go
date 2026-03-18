@@ -86,7 +86,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				Status string `json:"status"`
 			}
 			if json.NewDecoder(resp.Body).Decode(&data) == nil {
-				scope, status, normalizeErr := normalizeScopeStatus("VE", data.Scope, data.Status, "LOCAL")
+				scope, status, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
 				if normalizeErr != nil {
 					return
 				}

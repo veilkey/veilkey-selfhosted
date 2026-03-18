@@ -57,7 +57,7 @@ func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 						if strings.TrimSpace(scope) == "" && strings.TrimSpace(status) == "" {
 							scope, status = fallbackScope, fallbackStatus
 						}
-						scope, status, err = normalizeScopeStatus("VK", scope, status, "TEMP")
+						scope, status, err = normalizeScopeStatus(refFamilyVK, scope, status, refScopeTemp)
 						if err != nil {
 							respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 							return

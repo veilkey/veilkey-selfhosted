@@ -34,7 +34,7 @@ func (h *Handler) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 		if json.Unmarshal(body, &data) == nil {
 			scope, _ := data["scope"].(string)
 			status, _ := data["status"].(string)
-			scope, status, err = normalizeScopeStatus("VE", scope, status, "LOCAL")
+			scope, status, err = normalizeScopeStatus(refFamilyVE, scope, status, refScopeLocal)
 			if err != nil {
 				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
 				return
@@ -44,7 +44,7 @@ func (h *Handler) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 			data["status"] = status
 			data["vault"] = agent.Label
 			setRuntimeHashAliases(data, agent.AgentHash)
-			_ = h.upsertTrackedRef("VE:"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(refFamilyVE+":"+scope+":"+key, agent.KeyVersion, status, agent.AgentHash)
 			if marshaled, marshalErr := json.Marshal(data); marshalErr == nil {
 				body = marshaled
 			}
