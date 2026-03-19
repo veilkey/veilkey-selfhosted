@@ -619,7 +619,7 @@ mod pty_wrap {
         };
 
         // Resolve VK refs in environment variables → child sees real values
-        let vk_re = regex::Regex::new(r"VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})").unwrap();
+        let vk_re = regex::Regex::new(super::detector::VEILKEY_RE_STR).unwrap();
         let mut mask_map: Vec<(String, String)> = Vec::new(); // (plaintext, vk_ref)
         let mut cmd = CommandBuilder::new(&shell_args[0]);
         for arg in &shell_args[1..] {
