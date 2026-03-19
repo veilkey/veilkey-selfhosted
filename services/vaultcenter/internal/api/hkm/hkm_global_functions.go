@@ -32,11 +32,8 @@ func (h *Handler) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) 
 			return
 		}
 		if _, err := h.deps.SubmitTx(r.Context(), chain.TxSaveGlobalFunction, chain.SaveGlobalFunctionPayload{
-			Name:         req.Name,
-			FunctionHash: req.FunctionHash,
-			Category:     req.Category,
-			Command:      req.Command,
-			VarsJSON:     req.VarsJSON,
+			Name: req.Name,
+			Body: req.Command,
 		}); err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
@@ -62,9 +59,7 @@ func (h *Handler) handleGlobalFunction(w http.ResponseWriter, r *http.Request) {
 		}
 		respondJSON(w, http.StatusOK, fn)
 	case http.MethodDelete:
-		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteGlobalFunction, chain.DeleteGlobalFunctionPayload{
-			Name: name,
-		}); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteGlobalFunction, chain.DeleteGlobalFunctionPayload{Name: name}); err != nil {
 			respondError(w, http.StatusNotFound, err.Error())
 			return
 		}

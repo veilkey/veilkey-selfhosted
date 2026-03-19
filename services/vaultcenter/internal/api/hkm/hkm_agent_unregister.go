@@ -13,9 +13,7 @@ func (h *Handler) handleAgentUnregisterByNode(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadRequest, "node_id is required")
 		return
 	}
-	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteAgent, chain.DeleteAgentPayload{
-		NodeID: nodeID,
-	}); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteAgent, chain.DeleteAgentPayload{NodeID: nodeID}); err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}

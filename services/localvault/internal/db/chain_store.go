@@ -48,6 +48,9 @@ func (a *ChainStoreAdapter) RegisterChild(_ *chain.ChildRecord) error {
 	return nil
 }
 
+// DeleteAgent is a no-op on localvault.
+func (a *ChainStoreAdapter) DeleteAgent(_ string) error { return nil }
+
 // DeleteChild is a no-op on localvault.
 func (a *ChainStoreAdapter) DeleteChild(_ string) error { return nil }
 
