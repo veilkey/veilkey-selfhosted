@@ -163,7 +163,7 @@ func (h *Handler) handleBulkApplyTemplates(w http.ResponseWriter, r *http.Reques
 		}
 		tmpl, err := h.saveBulkApplyTemplateFile(vaultHash, "", &req)
 		if err != nil {
-			httputil.RespondError(w, http.StatusBadRequest, err.Error())
+			httputil.RespondError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
 		httputil.RespondJSON(w, http.StatusOK, bulkApplyTemplateResponse(tmpl))
@@ -183,7 +183,7 @@ func (h *Handler) handleBulkApplyTemplate(w http.ResponseWriter, r *http.Request
 	case http.MethodGet:
 		tmpl, err := h.loadBulkApplyTemplateRecord(vaultHash, name)
 		if err != nil {
-			httputil.RespondError(w, http.StatusNotFound, err.Error())
+			httputil.RespondError(w, http.StatusNotFound, "not found")
 			return
 		}
 		httputil.RespondJSON(w, http.StatusOK, bulkApplyTemplateResponse(tmpl))
@@ -195,13 +195,13 @@ func (h *Handler) handleBulkApplyTemplate(w http.ResponseWriter, r *http.Request
 		}
 		current, err := h.saveBulkApplyTemplateFile(vaultHash, name, &req)
 		if err != nil {
-			httputil.RespondError(w, http.StatusBadRequest, err.Error())
+			httputil.RespondError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
 		httputil.RespondJSON(w, http.StatusOK, bulkApplyTemplateResponse(current))
 	case http.MethodDelete:
 		if err := h.deleteBulkApplyTemplateFile(vaultHash, name); err != nil {
-			httputil.RespondError(w, http.StatusNotFound, err.Error())
+			httputil.RespondError(w, http.StatusNotFound, "not found")
 			return
 		}
 		httputil.RespondJSON(w, http.StatusOK, map[string]any{
@@ -223,7 +223,7 @@ func (h *Handler) handleBulkApplyTemplatePreview(w http.ResponseWriter, r *http.
 	}
 	tmpl, err := h.loadBulkApplyTemplateRecord(vaultHash, name)
 	if err != nil {
-		httputil.RespondError(w, http.StatusNotFound, err.Error())
+		httputil.RespondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if tmpl.ValidationStatus != "valid" {

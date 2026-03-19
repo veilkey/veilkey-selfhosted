@@ -378,7 +378,7 @@ func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
 
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -392,7 +392,7 @@ func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -423,7 +423,7 @@ func (h *Handler) handleVaultKeyUsage(w http.ResponseWriter, r *http.Request) {
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -437,7 +437,7 @@ func (h *Handler) handleVaultKeyUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -479,7 +479,7 @@ func (h *Handler) handleVaultKeyBindings(w http.ResponseWriter, r *http.Request)
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -493,7 +493,7 @@ func (h *Handler) handleVaultKeyBindings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -534,7 +534,7 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -548,7 +548,7 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -763,7 +763,7 @@ func (h *Handler) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -777,7 +777,7 @@ func (h *Handler) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -823,7 +823,7 @@ func (h *Handler) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Req
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -837,7 +837,7 @@ func (h *Handler) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	row, err := h.deps.DB().GetBinding(bindingID)
@@ -872,7 +872,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(ctx context.Context, w http.Resp
 	}
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return nil, nil, false
 	}
 	if statusCode != http.StatusOK {
@@ -886,7 +886,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(ctx context.Context, w http.Resp
 		return nil, nil, false
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return nil, nil, false
 	}
 	_ = h.upsertTrackedRef(ctx, meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
@@ -1063,7 +1063,7 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -1077,7 +1077,7 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)

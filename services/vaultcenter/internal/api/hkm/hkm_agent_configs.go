@@ -20,7 +20,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodGet, agent.URL()+agentPathConfigs, nil)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

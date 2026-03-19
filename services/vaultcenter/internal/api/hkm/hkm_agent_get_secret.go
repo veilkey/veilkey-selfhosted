@@ -27,7 +27,7 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 	agentURL := agent.URL()
 	meta, status, body, err := h.fetchAgentSecretMeta(agentURL, name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if status != http.StatusOK {
@@ -41,14 +41,14 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	cipher, err := h.fetchAgentCiphertext(agentURL, meta.Ref)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "failed to fetch ciphertext: "+err.Error())
+		respondError(w, http.StatusBadGateway, "failed to fetch ciphertext")
 		return
 	}
 	plaintext, decErr := crypto.Decrypt(agentDEK, cipher.Ciphertext, cipher.Nonce)

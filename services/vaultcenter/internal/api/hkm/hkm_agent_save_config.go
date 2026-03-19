@@ -45,7 +45,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

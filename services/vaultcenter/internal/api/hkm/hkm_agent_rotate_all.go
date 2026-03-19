@@ -11,7 +11,7 @@ func (h *Handler) handleAgentRotateAll(w http.ResponseWriter, r *http.Request) {
 	h.advancePendingRotationsViaChain(r)
 	agents, err := h.deps.DB().ScheduleAllAgentRotations(reason)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation")
 		return
 	}
 	results := make([]map[string]interface{}, 0, len(agents))

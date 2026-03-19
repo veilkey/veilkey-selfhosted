@@ -41,7 +41,7 @@ func (h *Handler) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathRekey, httputil.ContentTypeJSON, bytes.NewReader(rekeyBody))
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

@@ -14,7 +14,7 @@ func (h *Handler) handleAgentUnregisterByNode(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteAgent, chain.DeleteAgentPayload{NodeID: nodeID}); err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	log.Printf("agent: unregistered node=%s", nodeID)

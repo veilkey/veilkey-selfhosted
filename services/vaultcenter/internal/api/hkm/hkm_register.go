@@ -72,12 +72,12 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 		URL:     req.URL,
 		Version: 1,
 	}); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to register child: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to register child")
 		return
 	}
 	// DEK delivery via direct DB write (never on chain)
 	if err := h.deps.DB().UpdateChildDEK(nodeID, encryptedChildDEK, childNonce, 1); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to save child DEK: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to save child DEK")
 		return
 	}
 

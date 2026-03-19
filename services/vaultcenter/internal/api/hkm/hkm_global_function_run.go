@@ -213,7 +213,7 @@ func (h *Handler) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request
 	}
 	fn, err := h.deps.DB().GetGlobalFunction(name)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 
@@ -233,13 +233,13 @@ func (h *Handler) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request
 
 	rendered, err := h.renderGlobalFunctionCommand(fn)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		respondError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 
 	env, appliedEnvKeys, err := h.buildGlobalFunctionRunEnv(req)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		respondError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 

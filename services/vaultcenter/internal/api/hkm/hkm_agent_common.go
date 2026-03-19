@@ -153,7 +153,7 @@ func (h *Handler) respondAgentLookupError(w http.ResponseWriter, err error) {
 		respondError(w, stateErr.statusCode, stateErr.message)
 		return
 	}
-	respondError(w, http.StatusNotFound, err.Error())
+	respondError(w, http.StatusNotFound, "not found")
 }
 
 func (h *Handler) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, error) {

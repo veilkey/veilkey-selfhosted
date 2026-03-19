@@ -40,7 +40,7 @@ func (h *Handler) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodDelete, joinPath(agent.URL(), agentPathConfigs, key), nil)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

@@ -36,7 +36,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -50,7 +50,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 	if meta.Status != string(refStatusActive) || (meta.Scope != string(refScopeLocal) && meta.Scope != string(refScopeExternal)) {
@@ -92,7 +92,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 	})
 	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathSecretFields, httputil.ContentTypeJSON, bytes.NewReader(reqBody))
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()
@@ -131,7 +131,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 
 	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	if statusCode != http.StatusOK {
@@ -145,7 +145,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if err := normalizeMeta(meta); err != nil {
-		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope")
 		return
 	}
 
@@ -155,7 +155,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 			respondError(w, http.StatusNotFound, "secret field not found")
 			return
 		}
-		respondError(w, http.StatusInternalServerError, "failed to fetch secret field ciphertext: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to fetch secret field ciphertext")
 		return
 	}
 
@@ -201,7 +201,7 @@ func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Re
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

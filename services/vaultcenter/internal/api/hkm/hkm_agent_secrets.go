@@ -20,7 +20,7 @@ func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := h.deps.HTTPClient().Get(agent.URL() + agentPathSecrets)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

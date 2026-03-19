@@ -394,7 +394,7 @@ func (h *Handler) handleAdminReveal(w http.ResponseWriter, r *http.Request) {
 	}
 	payload, err := h.resolveAdminReveal(req.Ref)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	_ = h.deps.DB().MarkSecretCatalogRevealed(payload["ref"].(string), now)
@@ -444,7 +444,7 @@ func (h *Handler) handleAdminRebindApprovalsList(w http.ResponseWriter, r *http.
 func (h *Handler) handleAdminRebindPlan(w http.ResponseWriter, r *http.Request) {
 	agent, err := h.deps.FindAgentRecord(r.PathValue("agent"))
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if !agent.RebindRequired && agent.BlockedAt == nil {
@@ -489,7 +489,7 @@ func (h *Handler) handleAdminApproveRebind(w http.ResponseWriter, r *http.Reques
 	session, _ := h.currentAdminSession(r)
 	agent, err := h.deps.FindAgentRecord(r.PathValue("agent"))
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	requiredConfirm := "APPROVE " + strings.ToUpper(strings.TrimSpace(agent.AgentHash))
@@ -513,7 +513,7 @@ func (h *Handler) handleAdminApproveRebind(w http.ResponseWriter, r *http.Reques
 	}
 	updated, err := h.deps.DB().ApproveAgentRebind(agent.NodeID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to approve agent rebind: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to approve agent rebind")
 		return
 	}
 	h.deps.SaveAuditEvent(
@@ -574,12 +574,12 @@ func (h *Handler) handleAdminScheduleAllRotations(w http.ResponseWriter, r *http
 	session, _ := h.currentAdminSession(r)
 	_, err := h.deps.DB().AdvancePendingRotations(time.Now().UTC())
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to advance pending rotations: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to advance pending rotations")
 		return
 	}
 	agents, err := h.deps.DB().ScheduleAllAgentRotations(reason)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation")
 		return
 	}
 	results := make([]map[string]any, 0, len(agents))
@@ -620,7 +620,7 @@ func (h *Handler) handleAdminScheduleRotation(w http.ResponseWriter, r *http.Req
 	session, _ := h.currentAdminSession(r)
 	agent, err := h.deps.FindAgentRecord(r.PathValue("agent"))
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	requiredConfirm := "ROTATE " + strings.ToUpper(strings.TrimSpace(agent.AgentHash))
@@ -639,7 +639,7 @@ func (h *Handler) handleAdminScheduleRotation(w http.ResponseWriter, r *http.Req
 	}
 	updated, err := h.deps.DB().ScheduleAgentRotation(agent.NodeID, reason)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to schedule agent rotation")
 		return
 	}
 	h.deps.SaveAuditEvent("vault", updated.NodeID, "admin_schedule_rotation_single", "admin_session", session.SessionID, reason, "admin_rotate_single", map[string]any{

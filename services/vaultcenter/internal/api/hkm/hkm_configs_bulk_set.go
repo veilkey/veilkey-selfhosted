@@ -48,7 +48,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 	}
 	normScopeVal, normStatusVal, err := normalizeScopeStatus(refFamilyVE, refScope(req.Scope), refStatus(req.Status), refScopeLocal)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+		respondError(w, http.StatusBadRequest, "invalid request")
 		return
 	}
 	scope, status := string(normScopeVal), string(normStatusVal)

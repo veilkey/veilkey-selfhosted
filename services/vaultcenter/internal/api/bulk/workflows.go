@@ -262,7 +262,7 @@ func (h *Handler) proxyAndRecordWorkflow(w http.ResponseWriter, r *http.Request,
 	}
 	statusCode, body, err := h.proxyBulkApplyWorkflow(r, vaultHash, workflowName, endpoint)
 	if err != nil {
-		httputil.RespondError(w, statusCode, err.Error())
+		httputil.RespondError(w, statusCode, "workflow execution failed")
 		return
 	}
 	var payload map[string]any
@@ -313,7 +313,7 @@ func (h *Handler) handleBulkApplyWorkflow(w http.ResponseWriter, r *http.Request
 	}
 	summary, err := h.buildBulkApplyWorkflowSummary(vaultHash, workflowName)
 	if err != nil {
-		httputil.RespondError(w, http.StatusNotFound, err.Error())
+		httputil.RespondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	rows, err := h.deps.DB().ListBulkApplyRuns(vaultHash, workflowName, 10)
@@ -358,7 +358,7 @@ func (h *Handler) handleBulkApplyRun(w http.ResponseWriter, r *http.Request) {
 	}
 	run, err := h.deps.DB().GetBulkApplyRun(runID)
 	if err != nil {
-		httputil.RespondError(w, http.StatusNotFound, err.Error())
+		httputil.RespondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	httputil.RespondJSON(w, http.StatusOK, decodeBulkApplyRunSummary(run))

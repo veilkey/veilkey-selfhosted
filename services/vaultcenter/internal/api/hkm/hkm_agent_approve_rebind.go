@@ -10,7 +10,7 @@ func (h *Handler) handleAgentApproveRebind(w http.ResponseWriter, r *http.Reques
 	hashOrLabel := r.PathValue("agent")
 	agent, err := h.findAgentRecord(hashOrLabel)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if !agent.RebindRequired && agent.BlockedAt == nil {
@@ -20,7 +20,7 @@ func (h *Handler) handleAgentApproveRebind(w http.ResponseWriter, r *http.Reques
 
 	updated, err := h.deps.DB().ApproveAgentRebind(agent.NodeID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to approve agent rebind: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to approve agent rebind")
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{

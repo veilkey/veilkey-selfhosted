@@ -68,7 +68,7 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 	config, err := s.db.GetConfig(key)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		s.respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 
@@ -112,7 +112,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := s.SubmitTx(r.Context(), chain.TxSetConfig, chain.SetConfigPayload{Key: req.Key, Value: *req.Value}); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to save config: "+err.Error())
+		s.respondError(w, http.StatusInternalServerError, "failed to save config")
 		return
 	}
 
@@ -149,7 +149,7 @@ func (s *Server) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) {
 
 	for key, value := range req.Configs {
 		if _, err := s.SubmitTx(r.Context(), chain.TxSetConfig, chain.SetConfigPayload{Key: key, Value: value}); err != nil {
-			s.respondError(w, http.StatusInternalServerError, "failed to save configs: "+err.Error())
+			s.respondError(w, http.StatusInternalServerError, "failed to save configs")
 			return
 		}
 	}
@@ -172,7 +172,7 @@ func (s *Server) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := s.SubmitTx(r.Context(), chain.TxDeleteConfig, chain.DeleteConfigPayload{Key: key}); err != nil {
-		s.respondError(w, http.StatusNotFound, err.Error())
+		s.respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 

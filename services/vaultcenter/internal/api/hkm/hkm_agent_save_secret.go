@@ -56,7 +56,7 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 	}
 	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathCipher, httputil.ContentTypeJSON, bytes.NewReader(body))
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
+		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
 	}
 	defer resp.Body.Close()

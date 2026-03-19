@@ -151,14 +151,14 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 	}
 	plaintext, err := s.resolveTempRef(tracked)
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to resolve ref: "+err.Error())
+		s.respondError(w, http.StatusInternalServerError, "failed to resolve ref")
 		return
 	}
 
 	// 2. Find agent and decrypt agentDEK
 	agent, err := s.FindAgentRecord(req.VaultHash)
 	if err != nil {
-		s.respondError(w, http.StatusNotFound, "vault not found: "+err.Error())
+		s.respondError(w, http.StatusNotFound, "vault not found")
 		return
 	}
 	agentDEK, err := s.DecryptAgentDEK(agent.DEK, agent.DEKNonce)
@@ -192,7 +192,7 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 		bytes.NewReader(cipherBody),
 	)
 	if err != nil {
-		s.respondError(w, http.StatusBadGateway, "failed to reach vault: "+err.Error())
+		s.respondError(w, http.StatusBadGateway, "failed to reach vault")
 		return
 	}
 	defer resp.Body.Close()

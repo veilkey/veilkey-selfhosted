@@ -60,7 +60,7 @@ func (h *Handler) handleRekey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.deps.DB().UpdateNodeDEK(encDEK, encNonce, req.Version); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to update node DEK: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to update node DEK")
 		return
 	}
 

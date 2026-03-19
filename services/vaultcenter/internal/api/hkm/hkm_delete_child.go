@@ -15,7 +15,7 @@ func (h *Handler) handleDeleteChild(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteChild, chain.DeleteChildPayload{NodeID: nodeID}); err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	log.Printf("Deleted child node: %s", nodeID)

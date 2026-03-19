@@ -173,12 +173,12 @@ func (h *Handler) handleTrackedRefSync(w http.ResponseWriter, r *http.Request) {
 		}
 		agent, err = h.findAgent(target)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
+			respondError(w, http.StatusBadRequest, "invalid request")
 			return
 		}
 	}
 	if err := h.syncTrackedRef(r.Context(), req.Ref, req.PreviousRef, req.Version, resolvedStatus, agent.AgentHash); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to sync tracked ref: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to sync tracked ref")
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{

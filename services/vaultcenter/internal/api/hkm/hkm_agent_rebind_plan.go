@@ -10,7 +10,7 @@ func (h *Handler) handleAgentRebindPlan(w http.ResponseWriter, r *http.Request) 
 	hashOrLabel := r.PathValue("agent")
 	agent, err := h.findAgentRecord(hashOrLabel)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
 	if !agent.RebindRequired && agent.BlockedAt == nil {

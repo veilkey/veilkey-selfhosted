@@ -84,7 +84,7 @@ func (h *Handler) handleFederatedRotate(w http.ResponseWriter, r *http.Request) 
 		if err != nil {
 			results = append(results, rotateResult{
 				NodeID: child.NodeID, Label: child.Label,
-				Status: "error", Error: "rekey request failed: " + err.Error(),
+				Status: "error", Error: "rekey request failed",
 			})
 			failCount++
 			continue
@@ -133,7 +133,7 @@ func (h *Handler) handleFederatedRotate(w http.ResponseWriter, r *http.Request) 
 				NodeID: child.NodeID, Label: child.Label,
 				Status: "partial", OldVersion: child.Version, NewVersion: newVersion,
 				SecretsUpdated: rekeyResp.SecretsUpdated,
-				Error:          "child rekeyed but parent record update failed: " + err.Error(),
+				Error:          "child rekeyed but parent record update failed",
 			})
 			failCount++
 			continue
