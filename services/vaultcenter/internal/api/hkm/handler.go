@@ -1,9 +1,11 @@
 package hkm
 
 import (
+	"context"
 	"net/http"
 	"time"
 
+	"veilkey-vaultcenter/internal/chain"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -36,6 +38,14 @@ type Deps interface {
 
 	// SaveAuditEvent records an audit event.
 	SaveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source string, before, after map[string]any)
+
+	// SubmitTx submits a write TX and blocks until committed.
+	// Returns the result log (e.g. canonical ref) or error.
+	SubmitTx(ctx context.Context, txType chain.TxType, payload any) (string, error)
+
+	// SubmitTxAsync submits a write TX without waiting for block inclusion.
+	// Used for high-frequency, loss-tolerant operations (heartbeat).
+	SubmitTxAsync(ctx context.Context, txType chain.TxType, payload any) error
 }
 
 // Handler owns all HKM HTTP handlers.
