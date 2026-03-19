@@ -1,53 +1,85 @@
 use std::env;
-use veil_cli_rs::{
-    check_executable, clear_proxy_overrides, exec_replace, load_session_exports,
-    sanitize_exported_env,
-};
+use std::process;
+
+fn find_bin(env_key: &str, name: &str) -> String {
+    if let Ok(v) = env::var(env_key) {
+        if !v.is_empty() {
+            return v;
+        }
+    }
+    // Try PATH lookup
+    which(name).unwrap_or_else(|| {
+        eprintln!("veil: {} not found (set {} or add to PATH)", name, env_key);
+        process::exit(1);
+    })
+}
+
+fn which(name: &str) -> Option<String> {
+    let path = env::var("PATH").unwrap_or_default();
+    for dir in path.split(':') {
+        let candidate = format!("{}/{}", dir, name);
+        if std::path::Path::new(&candidate).exists() {
+            return Some(candidate);
+        }
+    }
+    None
+}
+
+fn exec_replace(bin: &str, args: &[String]) -> ! {
+    use std::os::unix::process::CommandExt;
+    let err = process::Command::new(bin).args(args).exec();
+    eprintln!("veil: exec {}: {}", bin, err);
+    process::exit(1);
+}
 
 fn main() {
-    let session_config_bin = env::var("VEILKEY_SESSION_CONFIG_BIN").unwrap_or_else(|_| {
-        eprintln!("error: VEILKEY_SESSION_CONFIG_BIN is required");
-        std::process::exit(1);
-    });
-    let veilkey_bin = env::var("VEILKEY_BIN").unwrap_or_else(|_| {
-        eprintln!("error: VEILKEY_BIN is required");
-        std::process::exit(1);
-    });
-
-    check_executable(&session_config_bin, "veil");
-    check_executable(&veilkey_bin, "veil");
-
-    clear_proxy_overrides();
-    load_session_exports(&session_config_bin);
-    sanitize_exported_env();
+    let cli_bin = find_bin("VEILKEY_CLI_BIN", "veilkey-cli");
 
     env::set_var("VEILKEY_VEIL", "1");
-    env::set_var("VEILKEY_VERIFIED_SESSION", "1");
 
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
+        // veil → enter protected shell
         exec_replace(
-            &veilkey_bin,
-            &["session".to_string(), "bash".to_string(), "-li".to_string()],
+            &cli_bin,
+            &["wrap-pty".to_string(), "bash".to_string(), "-li".to_string()],
         );
     }
 
     match args[0].as_str() {
         "status" => {
-            let mut full = vec!["status".to_string()];
-            full.extend_from_slice(&args[1..]);
-            exec_replace(&veilkey_bin, &full);
+            exec_replace(&cli_bin, &["status".to_string()]);
         }
-        "paste-mode" => {
-            let mut full = vec!["paste-mode".to_string()];
+        "resolve" => {
+            let mut full = vec!["resolve".to_string()];
             full.extend_from_slice(&args[1..]);
-            exec_replace(&veilkey_bin, &full);
+            exec_replace(&cli_bin, &full);
+        }
+        "exec" => {
+            let mut full = vec!["exec".to_string()];
+            full.extend_from_slice(&args[1..]);
+            exec_replace(&cli_bin, &full);
+        }
+        "scan" => {
+            let mut full = vec!["scan".to_string()];
+            full.extend_from_slice(&args[1..]);
+            exec_replace(&cli_bin, &full);
+        }
+        "help" | "-h" | "--help" => {
+            println!("Usage:");
+            println!("  veil                     Enter protected session (PTY masking)");
+            println!("  veil status              Show VeilKey connection status");
+            println!("  veil resolve <VK:ref>    Resolve a VK reference");
+            println!("  veil exec <command...>   Resolve VK refs in args and execute");
+            println!("  veil scan [file...]      Scan files for secrets");
+            println!("  veil help                Show this help");
         }
         _ => {
-            eprintln!("veil: direct app launch is not supported; enter veil shell first and run the tool inside it.");
-            eprintln!("usage: veil [status|paste-mode [on|off|status]]");
-            std::process::exit(1);
+            // Pass through to wrap-pty with args as command
+            let mut full = vec!["wrap-pty".to_string()];
+            full.extend_from_slice(&args);
+            exec_replace(&cli_bin, &full);
         }
     }
 }
