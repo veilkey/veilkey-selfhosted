@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
 
 type configSearchResult struct {
@@ -31,7 +33,7 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), cmdutil.ParseDurationEnv("VEILKEY_BULK_TIMEOUT", 30*time.Second))
 	defer cancel()
 
 	var wg sync.WaitGroup

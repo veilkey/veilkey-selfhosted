@@ -16,6 +16,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/mailer"
 
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -137,7 +138,7 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "send-code":
 		code := fmt.Sprintf("%06d", rand.IntN(1000000))
-		expiresAt := time.Now().UTC().Add(5 * time.Minute)
+		expiresAt := time.Now().UTC().Add(cmdutil.ParseDurationEnv("VEILKEY_EMAIL_OTP_EXPIRY", 5*time.Minute))
 		if _, err := h.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
 			log.Printf("email-otp: failed to update code: %v", err)
 			respondErr(w, http.StatusInternalServerError, "failed to send code")

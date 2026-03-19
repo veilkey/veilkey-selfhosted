@@ -10,11 +10,12 @@ import (
 	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/refs"
 )
 
-const tempKeyTTL = 1 * time.Hour
+var tempKeyTTL = cmdutil.ParseDurationEnv("VEILKEY_TEMP_KEY_TTL", 1*time.Hour)
 
 func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	var req struct {

@@ -11,6 +11,11 @@ import (
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
+const (
+	registrationTokenDefaultMinutes = 60    // 1 hour
+	registrationTokenMaxMinutes     = 10080 // 7 days
+)
+
 type registrationTokenPayload struct {
 	TokenID   string `json:"t"`
 	URL       string `json:"u"`
@@ -38,10 +43,10 @@ func (s *Server) handleCreateRegistrationToken(w http.ResponseWriter, r *http.Re
 		return
 	}
 	if req.ExpiresInMinutes <= 0 {
-		req.ExpiresInMinutes = 60 // default 1 hour
+		req.ExpiresInMinutes = registrationTokenDefaultMinutes
 	}
-	if req.ExpiresInMinutes > 10080 { // max 7 days
-		req.ExpiresInMinutes = 10080
+	if req.ExpiresInMinutes > registrationTokenMaxMinutes {
+		req.ExpiresInMinutes = registrationTokenMaxMinutes
 	}
 
 	tokenID := crypto.GenerateUUID()

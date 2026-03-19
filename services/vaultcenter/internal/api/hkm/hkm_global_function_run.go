@@ -17,6 +17,7 @@ import (
 	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -39,9 +40,9 @@ var functionRunEnvAllowlist = map[string]struct{}{
 	"VEILKEY_GEMINI_MAX_OUTPUT_TOKENS": {},
 }
 
-const (
-	defaultFunctionRunTimeout = 120 * time.Second
-	maxFunctionRunTimeout     = 10 * time.Minute
+var (
+	defaultFunctionRunTimeout = cmdutil.ParseDurationEnv("VEILKEY_FUNCTION_RUN_TIMEOUT", 120*time.Second)
+	maxFunctionRunTimeout     = cmdutil.ParseDurationEnv("VEILKEY_FUNCTION_RUN_MAX_TIMEOUT", 10*time.Minute)
 )
 
 type globalFunctionVarSpec struct {

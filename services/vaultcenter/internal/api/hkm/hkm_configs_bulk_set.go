@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
 
 type bulkSetCheck struct {
@@ -62,7 +64,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), cmdutil.ParseDurationEnv("VEILKEY_BULK_TIMEOUT", 30*time.Second))
 	defer cancel()
 
 	// Pre-flight: check current values across all agents

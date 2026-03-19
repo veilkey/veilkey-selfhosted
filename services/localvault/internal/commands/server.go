@@ -67,7 +67,7 @@ func RunServer() {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set)")
 	}
 	hostname, _ := os.Hostname()
-	server.StartHeartbeat(hubURL, hostname, listenPort, 5*time.Minute)
+	server.StartHeartbeat(hubURL, hostname, listenPort, cmdutil.ParseDurationEnv("VEILKEY_HEARTBEAT_INTERVAL", 5*time.Minute))
 
 	handler := server.SetupRoutes()
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
