@@ -238,6 +238,8 @@ github.com/veilkey/veilkey-chain v0.4.0 h1:rGqrQT8cf8b4iHlBBOgKAtQ1PHHxD3klMN6a+
 github.com/veilkey/veilkey-chain v0.4.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-chain v0.5.0 h1:Tp/GF7BwFuUDoTGKf7eDbqdSCgIUfNGZD2dXy+hESac=
 github.com/veilkey/veilkey-chain v0.5.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
+github.com/veilkey/veilkey-chain v0.6.0 h1:C3t4g3JIS9NsgTtKqsWsrOicAF+Q8e89XVFTO6p60XM=
+github.com/veilkey/veilkey-chain v0.6.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-go-package v0.3.1 h1:TgDHcA1wc/e7JwYZNaSRbzqVex0WZxCAvZ73Jb7uooY=
 github.com/veilkey/veilkey-go-package v0.3.1/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/wneessen/go-mail v0.7.2 h1:xxPnhZ6IZLSgxShebmZ6DPKh1b6OJcoHfzy7UjOkzS8=

@@ -3,6 +3,8 @@ package hkm
 import (
 	"log"
 	"net/http"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 func (h *Handler) handleAgentUnregisterByNode(w http.ResponseWriter, r *http.Request) {
@@ -11,7 +13,7 @@ func (h *Handler) handleAgentUnregisterByNode(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadRequest, "node_id is required")
 		return
 	}
-	if err := h.deps.DB().DeleteAgentByNodeID(nodeID); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteAgent, chain.DeleteAgentPayload{NodeID: nodeID}); err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}

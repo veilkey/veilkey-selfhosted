@@ -2,9 +2,11 @@ package hkm
 
 import (
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+
+	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) {
@@ -29,7 +31,10 @@ func (h *Handler) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) 
 			respondError(w, http.StatusBadRequest, "function name is required")
 			return
 		}
-		if err := h.deps.DB().SaveGlobalFunction(&req); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxSaveGlobalFunction, chain.SaveGlobalFunctionPayload{
+			Name: req.Name,
+			Body: req.Command,
+		}); err != nil {
 			respondError(w, http.StatusBadRequest, err.Error())
 			return
 		}
@@ -54,7 +59,7 @@ func (h *Handler) handleGlobalFunction(w http.ResponseWriter, r *http.Request) {
 		}
 		respondJSON(w, http.StatusOK, fn)
 	case http.MethodDelete:
-		if err := h.deps.DB().DeleteGlobalFunction(name); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteGlobalFunction, chain.DeleteGlobalFunctionPayload{Name: name}); err != nil {
 			respondError(w, http.StatusNotFound, err.Error())
 			return
 		}

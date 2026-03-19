@@ -61,6 +61,34 @@ func (a *ChainStoreAdapter) DeleteBinding(bindingID string) error {
 	return a.DB.DeleteBinding(bindingID)
 }
 
+func (a *ChainStoreAdapter) DeleteAgent(nodeID string) error {
+	return a.DB.DeleteAgentByNodeID(nodeID)
+}
+
+func (a *ChainStoreAdapter) DeleteChild(nodeID string) error {
+	return a.DB.DeleteChild(nodeID)
+}
+
+func (a *ChainStoreAdapter) UpdateChildURL(nodeID, url string) error {
+	return a.DB.UpdateChildURL(nodeID, url)
+}
+
+func (a *ChainStoreAdapter) SaveGlobalFunction(fn *chain.GlobalFunctionRecord) error {
+	return a.DB.SaveGlobalFunction(&GlobalFunction{
+		Name:     fn.Name,
+		Command:  fn.Body,
+		Category: fn.Language,
+	})
+}
+
+func (a *ChainStoreAdapter) DeleteGlobalFunction(name string) error {
+	return a.DB.DeleteGlobalFunction(name)
+}
+
+func (a *ChainStoreAdapter) DeleteBindingsByTarget(bindingType, targetName string) error {
+	return a.DB.DeleteBindingsByTarget(bindingType, targetName)
+}
+
 func (a *ChainStoreAdapter) SaveConfig(key, value string) error {
 	return a.DB.SaveConfig(key, value)
 }

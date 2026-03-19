@@ -3,6 +3,8 @@ package hkm
 import (
 	"log"
 	"net/http"
+
+	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/httputil"
 )
 
@@ -39,7 +41,7 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if req.Version > 0 && req.Version != child.Version {
 		log.Printf("heartbeat: VERSION MISMATCH child %s (%s) — reported v%d, expected v%d. Disconnecting.",
 			nodeID, child.Label, req.Version, child.Version)
-		if err := h.deps.DB().DeleteChild(nodeID); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteChild, chain.DeleteChildPayload{NodeID: nodeID}); err != nil {
 			log.Printf("heartbeat: failed to delete child %s: %v", nodeID, err)
 		}
 		respondJSON(w, http.StatusForbidden, map[string]interface{}{
@@ -51,7 +53,7 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.deps.DB().UpdateChildURL(nodeID, req.URL); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpdateChildURL, chain.UpdateChildURLPayload{NodeID: nodeID, URL: req.URL}); err != nil {
 		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

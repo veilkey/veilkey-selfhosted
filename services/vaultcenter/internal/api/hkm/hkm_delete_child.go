@@ -3,6 +3,8 @@ package hkm
 import (
 	"log"
 	"net/http"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 // handleDeleteChild removes a child node by node_id
@@ -12,7 +14,7 @@ func (h *Handler) handleDeleteChild(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "node_id is required")
 		return
 	}
-	if err := h.deps.DB().DeleteChild(nodeID); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteChild, chain.DeleteChildPayload{NodeID: nodeID}); err != nil {
 		respondError(w, http.StatusNotFound, err.Error())
 		return
 	}

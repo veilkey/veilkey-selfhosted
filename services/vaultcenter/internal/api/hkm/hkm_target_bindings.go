@@ -115,7 +115,7 @@ func (h *Handler) handleTargetBindingsReplace(w http.ResponseWriter, r *http.Req
 		}
 	}
 
-	if err := h.deps.DB().DeleteBindingsByTarget(bindingType, targetName); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteBindingsByTarget, chain.DeleteBindingsByTargetPayload{BindingType: bindingType, TargetName: targetName}); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to clear existing target bindings")
 		return
 	}
@@ -189,7 +189,7 @@ func (h *Handler) handleTargetBindingsDeleteAll(w http.ResponseWriter, r *http.R
 		respondError(w, http.StatusInternalServerError, "failed to list target bindings")
 		return
 	}
-	if err := h.deps.DB().DeleteBindingsByTarget(bindingType, targetName); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteBindingsByTarget, chain.DeleteBindingsByTargetPayload{BindingType: bindingType, TargetName: targetName}); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to delete target bindings")
 		return
 	}
