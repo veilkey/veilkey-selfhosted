@@ -163,19 +163,20 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 		}
 	}
 
-	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
-		log.Printf("setup: failed to write salt: %v", err)
-		http.Error(w, "failed to write salt", http.StatusInternalServerError)
-		return
-	}
-
-	// Save password file for auto-unlock on restart
+	// Save password file BEFORE salt — salt existence signals "init complete",
+	// so password file must exist first for auto-unlock to work on restart.
 	passwordFile := filepath.Join(filepath.Dir(saltFile), "password")
 	if err := os.WriteFile(passwordFile, []byte(req.Password), 0600); err != nil {
 		log.Printf("setup: failed to write password file: %v", err)
 		// non-fatal: server can still be unlocked manually
 	} else {
 		log.Printf("setup: password file saved to %s", passwordFile)
+	}
+
+	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
+		log.Printf("setup: failed to write salt: %v", err)
+		http.Error(w, "failed to write salt", http.StatusInternalServerError)
+		return
 	}
 
 	if err := database.SetAdminPassword(req.AdminPassword); err != nil {
