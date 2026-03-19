@@ -44,6 +44,23 @@ func (a *ChainStoreAdapter) RegisterChild(child *chain.ChildRecord) error {
 	})
 }
 
+func (a *ChainStoreAdapter) SaveBinding(binding *chain.BindingRecord) error {
+	return a.DB.SaveBinding(&Binding{
+		BindingID:    binding.BindingID,
+		BindingType:  binding.BindingType,
+		TargetName:   binding.TargetName,
+		VaultHash:    binding.VaultHash,
+		SecretName:   binding.SecretName,
+		FieldKey:     binding.FieldKey,
+		RefCanonical: binding.RefCanonical,
+		Required:     binding.Required,
+	})
+}
+
+func (a *ChainStoreAdapter) DeleteBinding(bindingID string) error {
+	return a.DB.DeleteBinding(bindingID)
+}
+
 func (a *ChainStoreAdapter) SaveConfig(key, value string) error {
 	return a.DB.SaveConfig(key, value)
 }

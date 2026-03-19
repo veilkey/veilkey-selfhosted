@@ -45,6 +45,12 @@ func (a *ChainStoreAdapter) RegisterChild(_ *chain.ChildRecord) error {
 	return nil
 }
 
+// SaveBinding is a no-op on localvault (vaultcenter manages bindings).
+func (a *ChainStoreAdapter) SaveBinding(_ *chain.BindingRecord) error { return nil }
+
+// DeleteBinding is a no-op on localvault.
+func (a *ChainStoreAdapter) DeleteBinding(_ string) error { return nil }
+
 // SaveConfig applies config changes from chain blocks.
 func (a *ChainStoreAdapter) SaveConfig(key, value string) error {
 	return a.DB.SaveConfig(key, value)
