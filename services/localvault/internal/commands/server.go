@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"veilkey-localvault/internal/api"
+	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
 )
@@ -35,6 +36,19 @@ func RunServer() {
 	}
 
 	server, addr, listenPort := mustLoadServer()
+
+	// CometBFT chain full node (optional — set VEILKEY_CHAIN_HOME to enable)
+	if chainHome := os.Getenv("VEILKEY_CHAIN_HOME"); chainHome != "" {
+		adapter := &db.ChainStoreAdapter{DB: server.DB()}
+		cometNode, chainErr := chain.StartNode(adapter, adapter, chainHome)
+		if chainErr != nil {
+			log.Fatalf("Failed to start chain node: %v", chainErr)
+		}
+		defer chain.StopNode(cometNode)
+		log.Printf("CometBFT full node started (home=%s)", chainHome)
+	} else {
+		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set)")
+	}
 
 	hubURL := server.LogResolvedVaultcenterURL("startup")
 	hostname, _ := os.Hostname()
