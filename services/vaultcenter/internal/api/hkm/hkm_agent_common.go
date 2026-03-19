@@ -56,12 +56,6 @@ type cipherSecret struct {
 	Nonce      []byte
 }
 
-type resolvedAgentSecret struct {
-	Name  string `json:"name"`
-	Ref   string `json:"ref"`
-	Value string `json:"value"`
-}
-
 type cipherSecretField struct {
 	Name       string
 	FieldKey   string
@@ -218,27 +212,4 @@ func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*ci
 		Ciphertext: data.Ciphertext,
 		Nonce:      data.Nonce,
 	}, nil
-}
-
-func (h *Handler) fetchAgentResolvedValue(agentURL, ref string) (*resolvedAgentSecret, error) {
-	req, err := http.NewRequest(http.MethodGet, joinPath(agentURL, agentPathResolve, ref), nil)
-	if err != nil {
-		return nil, fmt.Errorf("agent resolve request: %w", err)
-	}
-	req.Header.Set("X-VeilKey-Cascade", "true")
-	resp, err := h.deps.HTTPClient().Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("agent unreachable: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("agent returned %d", resp.StatusCode)
-	}
-
-	var data resolvedAgentSecret
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
-		return nil, fmt.Errorf("invalid agent response: %w", err)
-	}
-	return &data, nil
 }
