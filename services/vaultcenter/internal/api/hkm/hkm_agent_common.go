@@ -220,7 +220,12 @@ func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*ci
 }
 
 func (h *Handler) fetchAgentResolvedValue(agentURL, ref string) (*resolvedAgentSecret, error) {
-	resp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathResolve, ref))
+	req, err := http.NewRequest(http.MethodGet, joinPath(agentURL, agentPathResolve, ref), nil)
+	if err != nil {
+		return nil, fmt.Errorf("agent resolve request: %w", err)
+	}
+	req.Header.Set("X-VeilKey-Cascade", "true")
+	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
