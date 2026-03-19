@@ -376,7 +376,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		trustedCIDRs:  cidrs,
 		timeouts:      DefaultTimeouts(),
 		unlockLimiter: ratelimit.New(),
-		httpClient:    tlsutil.InitHTTPClientFromEnv(),
+		httpClient:    newPooledHTTPClient(tlsutil.InitHTTPClientFromEnv()),
 		chainStore:    &db.ChainStoreAdapter{DB: database},
 		bulkApplyDir:  strings.TrimSpace(os.Getenv("VEILKEY_BULK_APPLY_DIR")),
 	}
@@ -558,4 +558,21 @@ func logMiddleware(next http.Handler) http.Handler {
 		log.Printf("%s %s %s", r.RemoteAddr, r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})
+}
+
+// newPooledHTTPClient wraps an existing client with connection pooling optimized
+// for inter-service communication (many concurrent requests to same host).
+func newPooledHTTPClient(base *http.Client) *http.Client {
+	transport := &http.Transport{
+		MaxIdleConns:        100,
+		MaxIdleConnsPerHost: 20,
+		IdleConnTimeout:     90 * time.Second,
+	}
+	if t, ok := base.Transport.(*http.Transport); ok && t.TLSClientConfig != nil {
+		transport.TLSClientConfig = t.TLSClientConfig
+	}
+	return &http.Client{
+		Timeout:   base.Timeout,
+		Transport: transport,
+	}
 }
