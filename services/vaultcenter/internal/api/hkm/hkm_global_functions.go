@@ -4,9 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 func (h *Handler) handleGlobalFunctions(w http.ResponseWriter, r *http.Request) {

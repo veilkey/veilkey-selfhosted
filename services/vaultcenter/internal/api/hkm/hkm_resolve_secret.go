@@ -7,14 +7,15 @@ import (
 	"log"
 	"net/http"
 
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-vaultcenter/internal/db"
 )
 
 // handleResolveSecret resolves a scoped VK ref to its plaintext value

@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type registrationTokenPayload struct {

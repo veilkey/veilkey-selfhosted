@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 
 	"github.com/veilkey/veilkey-go-package/crypto"
 )

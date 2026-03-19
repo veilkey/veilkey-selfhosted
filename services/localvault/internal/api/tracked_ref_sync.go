@@ -7,8 +7,9 @@ import (
 	"io"
 	"strings"
 
-	"github.com/veilkey/veilkey-go-package/httputil"
 	"veilkey-localvault/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 type trackedRefSyncResult struct {

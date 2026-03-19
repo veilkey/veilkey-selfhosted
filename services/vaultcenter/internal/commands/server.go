@@ -9,9 +9,10 @@ import (
 	"time"
 
 	"veilkey-vaultcenter/internal/api"
+	"veilkey-vaultcenter/internal/db"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-vaultcenter/internal/db"
 )
 
 func RunServer() {

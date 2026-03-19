@@ -3,10 +3,11 @@ package hkm
 import (
 	"log"
 	"net/http"
-	chain "github.com/veilkey/veilkey-chain"
-	"veilkey-vaultcenter/internal/httputil"
 	"net/url"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 

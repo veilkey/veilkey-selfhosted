@@ -3,8 +3,8 @@ package db
 import (
 	"time"
 
-	"github.com/veilkey/veilkey-go-package/refs"
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/refs"
 )
 
 // ChainStoreAdapter wraps *DB to implement chain.Store and chain.ChainMeta.
@@ -13,7 +13,7 @@ type ChainStoreAdapter struct {
 }
 
 var (
-	_ chain.Store        = (*ChainStoreAdapter)(nil)
+	_ chain.Store     = (*ChainStoreAdapter)(nil)
 	_ chain.ChainMeta = (*ChainStoreAdapter)(nil)
 )
 

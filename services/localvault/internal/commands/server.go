@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/veilkey/veilkey-go-package/httputil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -13,10 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/veilkey/veilkey-go-package/httputil"
+
 	"veilkey-localvault/internal/api"
+	"veilkey-localvault/internal/db"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-localvault/internal/db"
 )
 
 var initMu sync.Mutex

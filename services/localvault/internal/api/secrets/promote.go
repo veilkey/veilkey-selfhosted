@@ -8,8 +8,9 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handlePromote(w http.ResponseWriter, r *http.Request) {

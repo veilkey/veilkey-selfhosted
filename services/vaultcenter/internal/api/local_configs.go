@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/veilkey/veilkey-go-package/refs"
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/refs"
 )
 
 func localSupportedFeatures() []string {

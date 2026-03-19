@@ -7,8 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func RunInit() {

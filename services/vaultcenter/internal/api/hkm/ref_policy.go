@@ -8,16 +8,16 @@ import (
 )
 
 type refPolicyEntry struct {
-	Family         string
-	DefaultScope   db.RefScope
-	AllowedScopes  []db.RefScope
+	Family          string
+	DefaultScope    db.RefScope
+	AllowedScopes   []db.RefScope
 	DefaultStatuses map[db.RefScope]db.RefStatus
 }
 
 var builtinRefPolicies = []refPolicyEntry{
 	{
-		Family:       db.RefFamilyVK,
-		DefaultScope: db.RefScopeTemp,
+		Family:        db.RefFamilyVK,
+		DefaultScope:  db.RefScopeTemp,
 		AllowedScopes: []db.RefScope{db.RefScopeTemp, db.RefScopeLocal, db.RefScopeExternal},
 		DefaultStatuses: map[db.RefScope]db.RefStatus{
 			db.RefScopeTemp:     db.RefStatusTemp,
@@ -26,8 +26,8 @@ var builtinRefPolicies = []refPolicyEntry{
 		},
 	},
 	{
-		Family:       db.RefFamilyVE,
-		DefaultScope: db.RefScopeTemp,
+		Family:        db.RefFamilyVE,
+		DefaultScope:  db.RefScopeTemp,
 		AllowedScopes: []db.RefScope{db.RefScopeTemp, db.RefScopeLocal, db.RefScopeExternal},
 		DefaultStatuses: map[db.RefScope]db.RefStatus{
 			db.RefScopeTemp:     db.RefStatusTemp,

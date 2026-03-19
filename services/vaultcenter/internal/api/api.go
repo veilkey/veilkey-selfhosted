@@ -17,16 +17,18 @@ import (
 	"veilkey-vaultcenter/internal/api/approval"
 	"veilkey-vaultcenter/internal/api/bulk"
 	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/agentapi"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
 	"github.com/veilkey/veilkey-go-package/tlsutil"
-	"veilkey-vaultcenter/internal/db"
-	"veilkey-vaultcenter/internal/httputil"
 )
 
 const defaultChainP2PAddr = "127.0.0.1:26656"
+
 type NodeIdentity struct {
 	NodeID    string
 	ParentURL string
@@ -51,24 +53,24 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db             *db.DB
-	kek            []byte
-	kekMu          sync.RWMutex
-	locked         bool
-	salt           []byte
-	trustedIPs     map[string]bool
-	trustedCIDRs   []*net.IPNet
-	identity       *NodeIdentity
-	timeouts       Timeouts
-	unlockLimiter  *ratelimit.UnlockRateLimiter
-	httpClient     *http.Client
-	chainClient    *chain.Client
-	chainStore     chain.Store
-	chainHome      string
-	chainNodeID    string
-	bulkApplyDir   string
-	updateMu       sync.RWMutex
-	updateState    systemUpdateState
+	db              *db.DB
+	kek             []byte
+	kekMu           sync.RWMutex
+	locked          bool
+	salt            []byte
+	trustedIPs      map[string]bool
+	trustedCIDRs    []*net.IPNet
+	identity        *NodeIdentity
+	timeouts        Timeouts
+	unlockLimiter   *ratelimit.UnlockRateLimiter
+	httpClient      *http.Client
+	chainClient     *chain.Client
+	chainStore      chain.Store
+	chainHome       string
+	chainNodeID     string
+	bulkApplyDir    string
+	updateMu        sync.RWMutex
+	updateState     systemUpdateState
 	approvalHandler *approval.Handler
 	adminHandler    *admin.Handler
 	hkmHandler      *hkm.Handler
@@ -117,9 +119,9 @@ func (s *Server) SaveAuditEvent(entityType, entityID, action, actorType, actorID
 // ── chain TX submission ─────────────────────────────────────────────────────
 
 // SetChainClient sets the CometBFT chain client. nil disables chain mode (DB fallback).
-func (s *Server) SetChainClient(c *chain.Client)      { s.chainClient = c }
-func (s *Server) SetChainHome(home string)             { s.chainHome = home }
-func (s *Server) SetChainNodeID(nodeID string)         { s.chainNodeID = nodeID }
+func (s *Server) SetChainClient(c *chain.Client) { s.chainClient = c }
+func (s *Server) SetChainHome(home string)       { s.chainHome = home }
+func (s *Server) SetChainNodeID(nodeID string)   { s.chainNodeID = nodeID }
 
 // ChainInfo returns genesis JSON and persistent_peers for child nodes joining the chain.
 // Returns nil, "" if chain is not enabled.

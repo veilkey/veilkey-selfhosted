@@ -4,12 +4,13 @@ import (
 	"log"
 	"net"
 	"net/http"
-	chain "github.com/veilkey/veilkey-chain"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"time"
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) preferredHeartbeatIP(r *http.Request) string {
@@ -212,7 +213,6 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		localEnabled = *req.LocalEnabled
 	}
 
-	
 	upsertPayload := chain.UpsertAgentPayload{
 		NodeID:       nodeID,
 		Label:        req.Label,
@@ -329,4 +329,3 @@ func heartbeatAgentState(agent *db.Agent, status string) map[string]interface{} 
 	}
 	return resp
 }
-

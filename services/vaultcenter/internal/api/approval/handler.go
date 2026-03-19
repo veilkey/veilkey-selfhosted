@@ -7,7 +7,6 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 )
 
-
 // Handler owns all approval-flow HTTP handlers.
 type Handler struct {
 	db         *db.DB

@@ -13,9 +13,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 const (
@@ -35,7 +36,6 @@ type adminAuthSettingsResponse struct {
 	IdleTTLSeconds      int64 `json:"idle_timeout_seconds"`
 	RevealWindowSeconds int64 `json:"reveal_window_seconds"`
 }
-
 
 func (h *Handler) handleAdminCreateSecureInputChallenge(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -640,8 +640,6 @@ func (h *Handler) handleAdminScheduleRotation(w http.ResponseWriter, r *http.Req
 	})
 }
 
-
-
 func (h *Handler) requireAdminSession(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if _, err := h.currentAdminSession(r); err != nil {
@@ -883,4 +881,3 @@ func rebindApprovalPayload(agent *db.Agent) map[string]any {
 		"managed_paths":       db.DecodeManagedPaths(agent.ManagedPaths),
 	}
 }
-

@@ -4,8 +4,8 @@ import (
 	"io"
 	"net/http"
 
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request) {

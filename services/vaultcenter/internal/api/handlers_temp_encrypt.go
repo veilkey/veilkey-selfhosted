@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/refs"
-	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/db"
 )
 
 const tempKeyTTL = 1 * time.Hour

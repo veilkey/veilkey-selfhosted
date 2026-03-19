@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func joinPath(base string, elem ...string) string { return httputil.JoinPath(base, elem...) }

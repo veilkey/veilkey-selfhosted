@@ -9,11 +9,12 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/veilkey/veilkey-go-package/httputil"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 // ErrRotationRequired is returned by SendHeartbeatOnce when the hub requires a key rotation.

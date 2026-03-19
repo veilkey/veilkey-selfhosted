@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 // Deps is the interface hkm.Handler uses to access server capabilities.

@@ -8,15 +8,16 @@ import (
 	"io"
 	"net/http"
 
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/refs"
-	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/db"
 )
 
 type tempRefItem struct {
@@ -69,9 +70,9 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 	plaintextHash := hex.EncodeToString(hash[:])
 	if existing, err := s.db.FindActiveTempRefByHash(plaintextHash); err == nil && existing != nil {
 		s.respondJSON(w, http.StatusOK, map[string]any{
-			"ref":        existing.RefCanonical,
-			"name":       existing.SecretName,
-			"expires_at": existing.ExpiresAt,
+			"ref":          existing.RefCanonical,
+			"name":         existing.SecretName,
+			"expires_at":   existing.ExpiresAt,
 			"deduplicated": true,
 		})
 		return

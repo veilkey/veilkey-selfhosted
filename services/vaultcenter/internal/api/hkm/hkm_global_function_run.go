@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-vaultcenter/internal/db"
 )
 
 var functionRunAllowlist = map[string]struct{}{

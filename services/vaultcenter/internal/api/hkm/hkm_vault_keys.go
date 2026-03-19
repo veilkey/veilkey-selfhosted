@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"slices"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type agentSecretMeta struct {

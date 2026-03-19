@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	chain "github.com/veilkey/veilkey-chain"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 func parseCanonicalRef(ref string) (db.RefParts, error) {

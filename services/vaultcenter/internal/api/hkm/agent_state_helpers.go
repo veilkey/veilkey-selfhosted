@@ -3,8 +3,9 @@ package hkm
 import (
 	"time"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 func ptr[T any](v T) *T { return &v }

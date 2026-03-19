@@ -6,8 +6,8 @@ import (
 	"log"
 	"net/http"
 
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {

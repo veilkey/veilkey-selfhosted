@@ -33,7 +33,9 @@ const (
 )
 
 // makeRef constructs a canonical ref string from its components.
-func makeRef(family string, scope db.RefScope, id string) string { return db.MakeRef(family, scope, id) }
+func makeRef(family string, scope db.RefScope, id string) string {
+	return db.MakeRef(family, scope, id)
+}
 
 // refScope converts a string to db.RefScope.
 func refScope(s string) db.RefScope { return db.RefScope(s) }

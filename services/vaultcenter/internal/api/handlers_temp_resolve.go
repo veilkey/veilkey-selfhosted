@@ -3,8 +3,9 @@ package api
 import (
 	"fmt"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (s *Server) resolveTempRef(tracked *db.TokenRef) (string, error) {

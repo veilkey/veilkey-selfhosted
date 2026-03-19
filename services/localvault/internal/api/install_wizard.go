@@ -5,8 +5,9 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/veilkey/veilkey-go-package/httputil"
 	"strings"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 
 	"veilkey-localvault/internal/db"
 )

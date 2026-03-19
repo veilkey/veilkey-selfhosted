@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 type bulkSetCheck struct {
