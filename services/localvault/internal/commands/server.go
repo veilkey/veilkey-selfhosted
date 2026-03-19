@@ -67,7 +67,7 @@ func RunServer() {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set)")
 	}
 	hostname, _ := os.Hostname()
-	server.StartHeartbeat(hubURL, hostname, listenPort, 5*time.Minute)
+	server.StartHeartbeat(hubURL, hostname, listenPort, cmdutil.ParseDurationEnv("VEILKEY_HEARTBEAT_INTERVAL", 5*time.Minute))
 
 	handler := server.SetupRoutes()
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
@@ -262,7 +262,7 @@ func mustLoadServer() (*api.Server, string, int) {
 		trustedIPs = strings.Split(v, ",")
 		log.Printf("Trusted IPs: %v", trustedIPs)
 	} else {
-		log.Println("WARNING: VEILKEY_TRUSTED_IPS not set, sensitive endpoints are unrestricted")
+		log.Fatal("VEILKEY_TRUSTED_IPS is required (comma-separated CIDRs)")
 	}
 
 	info, err := database.GetNodeInfo()
@@ -292,13 +292,6 @@ func mustLoadServer() (*api.Server, string, int) {
 		}
 		server.Unlock(kek)
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := cmdutil.ReadPasswordFromDataDir(dataDir); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
-			log.Fatalf("Failed to unlock with data dir password file: invalid password")
-		}
-		server.Unlock(kek)
-		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {

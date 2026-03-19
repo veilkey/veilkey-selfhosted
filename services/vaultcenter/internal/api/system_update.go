@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -190,7 +191,8 @@ func (s *Server) runSystemUpdate(scriptPath, channel, target string) {
 		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 			next.LastError = "update command timed out"
 		} else {
-			next.LastError = err.Error()
+			log.Printf("system update failed: %v", err)
+			next.LastError = "update command failed"
 		}
 	}
 

@@ -53,7 +53,7 @@ func RunServer() {
 		trustedIPs = strings.Split(v, ",")
 		log.Printf("Trusted IPs: %v", trustedIPs)
 	} else {
-		log.Println("WARNING: VEILKEY_TRUSTED_IPS not set, sensitive endpoints are unrestricted")
+		log.Fatal("VEILKEY_TRUSTED_IPS is required (comma-separated CIDRs)")
 	}
 
 	server := api.NewServer(database, nil, trustedIPs)
@@ -81,12 +81,6 @@ func RunServer() {
 			log.Fatalf("Failed to unlock with VEILKEY_PASSWORD_FILE: %v", err)
 		}
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := cmdutil.ReadPasswordFromDataDir(dataDir); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if err := server.Unlock(kek); err != nil {
-			log.Fatalf("Failed to unlock with data dir password file: %v", err)
-		}
-		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {

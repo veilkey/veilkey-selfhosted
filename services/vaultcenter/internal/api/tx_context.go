@@ -30,11 +30,3 @@ func txActorFromCtx(ctx context.Context) chain.TxActor {
 	}
 	return chain.TxActor{ActorType: "system"}
 }
-
-// chainErrorToHTTP translates chain result codes to HTTP status codes.
-func chainErrorToHTTP(resultLog string, err error) (int, string) {
-	if err != nil {
-		return http.StatusInternalServerError, err.Error()
-	}
-	return http.StatusOK, resultLog
-}

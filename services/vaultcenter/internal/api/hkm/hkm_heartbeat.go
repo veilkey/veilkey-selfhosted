@@ -55,7 +55,7 @@ func (h *Handler) handleHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpdateChildURL, chain.UpdateChildURLPayload{NodeID: nodeID, URL: req.URL}); err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to update child URL")
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]interface{}{

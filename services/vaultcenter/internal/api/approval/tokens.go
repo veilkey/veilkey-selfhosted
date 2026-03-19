@@ -93,7 +93,7 @@ func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *h
 		return
 	}
 	if _, err := h.db.CompleteApprovalTokenChallenge(challenge.Token, ciphertext, nonce); err != nil {
-		respondErr(w, http.StatusInternalServerError, err.Error())
+		respondErr(w, http.StatusInternalServerError, "failed to complete challenge")
 		return
 	}
 	after := map[string]any{

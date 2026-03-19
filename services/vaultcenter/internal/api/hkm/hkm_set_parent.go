@@ -34,7 +34,7 @@ func (h *Handler) handleSetParent(w http.ResponseWriter, r *http.Request) {
 		ParentURL: req.ParentURL,
 	})
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to set parent URL")
 		return
 	}
 	log.Printf("Parent URL set to %s", req.ParentURL)

@@ -19,7 +19,7 @@ import (
 func (h *Handler) handleFederatedRotate(w http.ResponseWriter, r *http.Request) {
 	children, err := h.deps.DB().ListChildren()
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to list children")
 		return
 	}
 

@@ -13,15 +13,23 @@ import (
 
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
 
 const adminSessionCookie = "vk_session"
-const adminSessionDuration = 24 * time.Hour
-const adminSessionIdleDuration = 2 * time.Hour
+
+var (
+	adminSessionDuration     = cmdutil.ParseDurationEnv("VEILKEY_ADMIN_SESSION_TTL", 8*time.Hour)
+	adminSessionIdleDuration = cmdutil.ParseDurationEnv("VEILKEY_ADMIN_SESSION_IDLE_TIMEOUT", 1*time.Hour)
+)
 
 const loginMaxAttempts = 10
-const loginLockDuration = 15 * time.Minute
-const loginCleanupInterval = 10 * time.Minute
+
+var (
+	loginLockDuration    = cmdutil.ParseDurationEnv("VEILKEY_LOGIN_LOCK_DURATION", 15*time.Minute)
+	loginCleanupInterval = cmdutil.ParseDurationEnv("VEILKEY_LOGIN_CLEANUP_INTERVAL", 10*time.Minute)
+)
 
 type loginAttempt struct {
 	count    int

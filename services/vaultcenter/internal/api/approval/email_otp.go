@@ -2,10 +2,13 @@ package approval
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"math/rand/v2"
 	"net/http"
+	"net/mail"
 	"strings"
 	"time"
 
@@ -13,6 +16,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/mailer"
 
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -33,7 +37,7 @@ func (h *Handler) handleCreateEmailOTPChallenge(w http.ResponseWriter, r *http.R
 		return
 	}
 	email := strings.TrimSpace(req.Email)
-	if !strings.Contains(email, "@") || !strings.Contains(email[strings.Index(email, "@"):], ".") {
+	if _, err := mail.ParseAddress(email); err != nil {
 		respondErr(w, http.StatusBadRequest, "invalid email format")
 		return
 	}
@@ -134,12 +138,14 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "send-code":
 		code := fmt.Sprintf("%06d", rand.IntN(1000000))
-		expiresAt := time.Now().UTC().Add(5 * time.Minute)
+		otpExpiry := cmdutil.ParseDurationEnv("VEILKEY_EMAIL_OTP_EXPIRY", 5*time.Minute)
+		expiresAt := time.Now().UTC().Add(otpExpiry)
 		if _, err := h.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
-			respondErr(w, http.StatusInternalServerError, err.Error())
+			log.Printf("email-otp: failed to update code: %v", err)
+			respondErr(w, http.StatusInternalServerError, "failed to send code")
 			return
 		}
-		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: 300 seconds\n", code)
+		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: %d seconds\n", code, int(otpExpiry.Seconds()))
 		if err := mailer.Send(challenge.Email, "VeilKey one-time code", body); err != nil {
 			respondErr(w, http.StatusBadGateway, err.Error())
 			return
@@ -153,7 +159,8 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if _, err := h.db.MarkEmailOTPVerified(token); err != nil {
-			respondErr(w, http.StatusInternalServerError, err.Error())
+			log.Printf("email-otp: failed to mark verified: %v", err)
+			respondErr(w, http.StatusInternalServerError, "verification failed")
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -167,7 +174,7 @@ func validateEmailOTPChallenge(challenge *db.EmailOTPChallenge, code string) boo
 	if challenge == nil || strings.TrimSpace(code) == "" || challenge.CodeExpiresAt == nil || time.Now().UTC().After(*challenge.CodeExpiresAt) {
 		return false
 	}
-	return hashEmailOTPCode(code) == challenge.CodeHash
+	return subtle.ConstantTimeCompare([]byte(hashEmailOTPCode(code)), []byte(challenge.CodeHash)) == 1
 }
 
 func hashEmailOTPCode(code string) string {

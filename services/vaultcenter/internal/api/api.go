@@ -22,6 +22,7 @@ import (
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/agentapi"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
 	"github.com/veilkey/veilkey-go-package/tlsutil"
@@ -46,9 +47,9 @@ type Timeouts struct {
 // DefaultTimeouts returns production-safe defaults
 func DefaultTimeouts() Timeouts {
 	return Timeouts{
-		CascadeResolve: 5 * time.Second,
-		ParentForward:  3 * time.Second,
-		Deploy:         30 * time.Second,
+		CascadeResolve: cmdutil.ParseDurationEnv("VEILKEY_HKM_CASCADE_TIMEOUT", 5*time.Second),
+		ParentForward:  cmdutil.ParseDurationEnv("VEILKEY_HKM_PARENT_TIMEOUT", 3*time.Second),
+		Deploy:         cmdutil.ParseDurationEnv("VEILKEY_HKM_DEPLOY_TIMEOUT", 30*time.Second),
 	}
 }
 
@@ -550,7 +551,16 @@ func (s *Server) SetupRoutes() http.Handler {
 		mux.HandleFunc("POST /api/admin/tracked-refs/cleanup", s.requireReadyForOps(s.adminHandler.RequireAdminSession(s.hkmHandler.HandleTrackedRefCleanup)))
 	}
 
-	return logMiddleware(TxActorMiddleware(mux))
+	return securityHeadersMiddleware(logMiddleware(TxActorMiddleware(mux)))
+}
+
+func securityHeadersMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Content-Type-Options", "nosniff")
+		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func logMiddleware(next http.Handler) http.Handler {
@@ -566,7 +576,7 @@ func newPooledHTTPClient(base *http.Client) *http.Client {
 	transport := &http.Transport{
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 20,
-		IdleConnTimeout:     90 * time.Second,
+		IdleConnTimeout:     cmdutil.ParseDurationEnv("VEILKEY_IDLE_CONN_TIMEOUT", 90*time.Second),
 	}
 	if t, ok := base.Transport.(*http.Transport); ok && t.TLSClientConfig != nil {
 		transport.TLSClientConfig = t.TLSClientConfig

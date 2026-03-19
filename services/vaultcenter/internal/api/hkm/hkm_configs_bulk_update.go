@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
 
 func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request) {
@@ -45,7 +47,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(r.Context(), cmdutil.ParseDurationEnv("VEILKEY_BULK_TIMEOUT", 30*time.Second))
 	defer cancel()
 
 	// First pass: find which agents have this key and their current values

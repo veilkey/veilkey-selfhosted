@@ -128,7 +128,7 @@ func (h *Handler) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if _, err := h.db.CompleteSecretInputChallenge(challenge.Token); err != nil {
-		respondErr(w, http.StatusInternalServerError, err.Error())
+		respondErr(w, http.StatusInternalServerError, "failed to complete challenge")
 		return
 	}
 	_ = h.db.SaveAuditEvent(&db.AuditEvent{

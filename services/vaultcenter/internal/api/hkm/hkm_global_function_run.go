@@ -17,6 +17,7 @@ import (
 	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -30,15 +31,18 @@ var functionRunAllowlist = map[string]struct{}{
 
 var functionRunPlaceholderRe = regexp.MustCompile(`\{\%\{([A-Za-z_][A-Za-z0-9_]*)\}\%\}`)
 
+// functionRunDangerousChars rejects shell metacharacters that allow command chaining/injection.
+var functionRunDangerousChars = regexp.MustCompile("[|;&`$(){}]")
+
 var functionRunEnvAllowlist = map[string]struct{}{
 	"VEILKEY_GEMINI_FRONTEND_SYSTEM":   {},
 	"VEILKEY_GEMINI_TEMPERATURE":       {},
 	"VEILKEY_GEMINI_MAX_OUTPUT_TOKENS": {},
 }
 
-const (
-	defaultFunctionRunTimeout = 120 * time.Second
-	maxFunctionRunTimeout     = 10 * time.Minute
+var (
+	defaultFunctionRunTimeout = cmdutil.ParseDurationEnv("VEILKEY_FUNCTION_RUN_TIMEOUT", 120*time.Second)
+	maxFunctionRunTimeout     = cmdutil.ParseDurationEnv("VEILKEY_FUNCTION_RUN_MAX_TIMEOUT", 10*time.Minute)
 )
 
 type globalFunctionVarSpec struct {
@@ -109,6 +113,12 @@ func (h *Handler) renderGlobalFunctionCommand(fn *db.GlobalFunction) (string, er
 	}
 	if _, ok := functionRunAllowlist[fields[0]]; !ok {
 		return "", fmt.Errorf("function command %q is not allowed", fields[0])
+	}
+
+	// Strip placeholders before checking for dangerous characters in the command template.
+	stripped := functionRunPlaceholderRe.ReplaceAllString(fn.Command, "PLACEHOLDER")
+	if functionRunDangerousChars.MatchString(stripped) {
+		return "", fmt.Errorf("function command contains disallowed shell metacharacters")
 	}
 
 	vars := map[string]globalFunctionVarSpec{}

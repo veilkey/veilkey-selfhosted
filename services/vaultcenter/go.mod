@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/cometbft/cometbft v0.38.17
-	github.com/veilkey/veilkey-go-package v0.4.2
+	github.com/veilkey/veilkey-go-package v0.4.3
 	github.com/wneessen/go-mail v0.7.2
 	gorm.io/gorm v1.31.1
 )

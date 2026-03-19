@@ -2,8 +2,8 @@ package admin
 
 import (
 	"crypto/hmac"
-	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/base64"
 	"encoding/binary"
@@ -807,7 +807,7 @@ func buildTOTPURI(secret string) string {
 	v.Set("issuer", issuer)
 	v.Set("period", strconv.Itoa(adminTOTPPeriodSeconds))
 	v.Set("digits", strconv.Itoa(adminTOTPDigits))
-	v.Set("algorithm", "SHA1")
+	v.Set("algorithm", "SHA256")
 	return "otpauth://totp/" + label + "?" + v.Encode()
 }
 
@@ -816,12 +816,14 @@ func verifyTOTP(secret, code string, now time.Time) bool {
 	if len(normalized) != adminTOTPDigits {
 		return false
 	}
+	match := false
 	for offset := -1; offset <= 1; offset++ {
-		if totpCode(secret, now.Add(time.Duration(offset*adminTOTPPeriodSeconds)*time.Second)) == normalized {
-			return true
+		expected := totpCode(secret, now.Add(time.Duration(offset*adminTOTPPeriodSeconds)*time.Second))
+		if subtle.ConstantTimeCompare([]byte(expected), []byte(normalized)) == 1 {
+			match = true
 		}
 	}
-	return false
+	return match
 }
 
 func totpCode(secret string, now time.Time) string {
@@ -833,7 +835,7 @@ func totpCode(secret string, now time.Time) string {
 	counter := uint64(now.UTC().Unix() / adminTOTPPeriodSeconds)
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], counter)
-	mac := hmac.New(sha1.New, key)
+	mac := hmac.New(sha256.New, key)
 	_, _ = mac.Write(buf[:])
 	sum := mac.Sum(nil)
 	offset := sum[len(sum)-1] & 0x0f
