@@ -3,6 +3,8 @@ package chain
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/veilkey/veilkey-go-package/refs"
 )
 
 type TxType string
@@ -29,27 +31,26 @@ type TxEnvelope struct {
 
 // SaveTokenRefPayload carries the data for a SaveTokenRef transaction.
 type SaveTokenRefPayload struct {
-	RefCanonical  string     `json:"ref_canonical"`
-	RefFamily     string     `json:"ref_family"`
-	RefScope      string     `json:"ref_scope"`
-	RefID         string     `json:"ref_id"`
-	SecretName    string     `json:"secret_name"`
-	AgentHash     string     `json:"agent_hash"`
-	PlaintextHash string     `json:"plaintext_hash,omitempty"`
-	Ciphertext    string     `json:"ciphertext"`
-	Version       int        `json:"version"`
-	Status        string     `json:"status"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	RefFamily     string         `json:"ref_family"`
+	RefScope      refs.RefScope  `json:"ref_scope"`
+	RefID         string         `json:"ref_id"`
+	SecretName    string         `json:"secret_name"`
+	AgentHash     string         `json:"agent_hash"`
+	PlaintextHash string         `json:"plaintext_hash,omitempty"`
+	Ciphertext    string         `json:"ciphertext"`
+	Version       int            `json:"version"`
+	Status        refs.RefStatus `json:"status"`
+	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
 }
 
 // UpdateTokenRefPayload carries the data for an UpdateTokenRef transaction.
 type UpdateTokenRefPayload struct {
-	RefCanonical  string     `json:"ref_canonical"`
-	PlaintextHash string     `json:"plaintext_hash,omitempty"`
-	Ciphertext    string     `json:"ciphertext,omitempty"`
-	Version       int        `json:"version"`
-	Status        string     `json:"status,omitempty"`
-	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	RefCanonical  string         `json:"ref_canonical"`
+	PlaintextHash string         `json:"plaintext_hash,omitempty"`
+	Ciphertext    string         `json:"ciphertext,omitempty"`
+	Version       int            `json:"version"`
+	Status        refs.RefStatus `json:"status,omitempty"`
+	ExpiresAt     *time.Time     `json:"expires_at,omitempty"`
 }
 
 // DeleteTokenRefPayload carries the data for a DeleteTokenRef transaction.
@@ -117,10 +118,10 @@ type DeleteBindingPayload struct {
 
 // SetConfigPayload carries the data for a SetConfig transaction.
 type SetConfigPayload struct {
-	Key    string `json:"key"`
-	Value  string `json:"value"`
-	Scope  string `json:"scope"`
-	Status string `json:"status"`
+	Key    string         `json:"key"`
+	Value  string         `json:"value"`
+	Scope  refs.RefScope  `json:"scope"`
+	Status refs.RefStatus `json:"status"`
 }
 
 // RecordAuditEventPayload carries the data for a RecordAuditEvent transaction.
