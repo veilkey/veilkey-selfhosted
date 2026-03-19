@@ -13,25 +13,7 @@ func parseCanonicalRef(ref string) (db.RefParts, error) {
 }
 
 func normalizeScopeStatus(family string, scope db.RefScope, status db.RefStatus, fallbackScope db.RefScope) (db.RefScope, db.RefStatus, error) {
-	if scope == "" {
-		scope = fallbackScope
-	}
-	if scope == "" {
-		scope = db.RefScopeTemp
-	}
-	switch scope {
-	case db.RefScopeLocal, db.RefScopeExternal:
-		if status == "" {
-			status = db.RefStatusActive
-		}
-	case db.RefScopeTemp:
-		if status == "" {
-			status = db.RefStatusTemp
-		}
-	default:
-		return "", "", fmt.Errorf("unsupported %s scope: %s", family, scope)
-	}
-	return scope, status, nil
+	return db.NormalizeScopeStatus(family, scope, status, fallbackScope)
 }
 
 func (h *Handler) upsertTrackedRef(ref string, version int, status db.RefStatus, agentHash string) error {

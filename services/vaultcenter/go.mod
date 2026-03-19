@@ -3,7 +3,7 @@ module veilkey-vaultcenter
 go 1.25.0
 
 require (
-	github.com/veilkey/veilkey-go-package v0.3.0
+	github.com/veilkey/veilkey-go-package v0.3.1
 	github.com/wneessen/go-mail v0.7.2
 	gorm.io/gorm v1.31.1
 )

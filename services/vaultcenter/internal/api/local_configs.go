@@ -247,27 +247,9 @@ func (s *Server) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// normalizeScopeStatus normalizes scope and status for a given ref family.
+// normalizeScopeStatus delegates to the shared refs package.
 func normalizeScopeStatus(family string, scope db.RefScope, status db.RefStatus, fallbackScope db.RefScope) (db.RefScope, db.RefStatus, error) {
-	if scope == "" {
-		scope = fallbackScope
-	}
-	if scope == "" {
-		scope = db.RefScopeTemp
-	}
-	switch scope {
-	case db.RefScopeLocal, db.RefScopeExternal:
-		if status == "" {
-			status = db.RefStatusActive
-		}
-	case db.RefScopeTemp:
-		if status == "" {
-			status = db.RefStatusTemp
-		}
-	default:
-		return "", "", fmt.Errorf("unsupported %s scope: %s", family, scope)
-	}
-	return scope, status, nil
+	return db.NormalizeScopeStatus(family, scope, status, fallbackScope)
 }
 
 // upsertTrackedRef upserts a tracked ref directly via the DB.

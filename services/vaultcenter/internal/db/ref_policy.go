@@ -30,3 +30,7 @@ const (
 func MakeRef(family string, scope RefScope, id string) string {
 	return refs.MakeRef(family, scope, id)
 }
+
+func NormalizeScopeStatus(family string, scope RefScope, status RefStatus, fallbackScope RefScope) (RefScope, RefStatus, error) {
+	return refs.NormalizeScopeStatus(family, scope, status, fallbackScope)
+}

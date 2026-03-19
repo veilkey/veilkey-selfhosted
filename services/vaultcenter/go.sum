@@ -14,6 +14,8 @@ github.com/stretchr/testify v1.3.0 h1:TivCn/peBQ7UY8ooIcPgZFpTNSz0Q2U6UrFlUfqbe0
 github.com/stretchr/testify v1.3.0/go.mod h1:M5WIy9Dh21IEIfnGCwXGc5bZfKNJtfHm1UVUgZn+9EI=
 github.com/veilkey/veilkey-go-package v0.3.0 h1:BvGydDA3pQsHEEBw/FzmVw2Nhk8OqGZzjA7CgH3Xd2g=
 github.com/veilkey/veilkey-go-package v0.3.0/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
+github.com/veilkey/veilkey-go-package v0.3.1 h1:TgDHcA1wc/e7JwYZNaSRbzqVex0WZxCAvZ73Jb7uooY=
+github.com/veilkey/veilkey-go-package v0.3.1/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/wneessen/go-mail v0.7.2 h1:xxPnhZ6IZLSgxShebmZ6DPKh1b6OJcoHfzy7UjOkzS8=
 github.com/wneessen/go-mail v0.7.2/go.mod h1:+TkW6QP3EVkgTEqHtVmnAE/1MRhmzb8Y9/W3pweuS+k=
 golang.org/x/crypto v0.49.0 h1:+Ng2ULVvLHnJ/ZFEq4KdcDd/cfjrrjjNSXNzxg0Y4U4=
