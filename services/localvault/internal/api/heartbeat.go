@@ -8,6 +8,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -91,7 +93,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
 
-	resp, err := s.httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(endpoint, httputil.ContentTypeJSON, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

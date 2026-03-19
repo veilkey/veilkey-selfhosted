@@ -3,6 +3,8 @@ package hkm
 import (
 	"io"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 )
 
@@ -39,7 +41,7 @@ func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request
 			_ = h.deleteTrackedRef(r.Context(), makeRef(refFamilyVK, refScopeTemp, metaRefParts[2]))
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
 }

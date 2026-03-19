@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"time"
 
@@ -157,7 +159,7 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 	}
 	resp, err := s.httpClient.Post(
 		strings.TrimRight(agentURL, "/")+"/api/promote",
-		"application/json",
+		httputil.ContentTypeJSON,
 		bytes.NewReader(promoteBody),
 	)
 	if err != nil {

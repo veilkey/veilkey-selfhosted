@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -106,7 +108,7 @@ func runSetupServer(dbPath, dataDir string) {
 	mux.Handle("/assets/", http.FileServer(http.FS(api.InstallUIAssets())))
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.Write([]byte(`{"status":"setup"}`))
 	})
 
@@ -212,7 +214,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 
 	log.Printf("install: initialization complete, node_id=%s", nodeID)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"status":  "initialized",
 		"node_id": nodeID,

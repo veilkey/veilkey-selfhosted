@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 	"strings"
 
 	"veilkey-localvault/internal/db"
@@ -60,7 +62,7 @@ func (s *Server) HandleInstallStatus(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	json.NewEncoder(w).Encode(status)
 }
 

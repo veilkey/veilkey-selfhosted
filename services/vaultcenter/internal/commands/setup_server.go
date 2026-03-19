@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,7 +59,7 @@ func RunSetupServer(dbPath, dataDir string) {
 	}
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.Write([]byte(`{"status":"setup"}`))
 	})
 
@@ -102,13 +104,13 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	req.Password = strings.TrimSpace(req.Password)
 	req.AdminPassword = strings.TrimSpace(req.AdminPassword)
 	if len(req.Password) < 8 {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "password must be at least 8 characters"})
 		return
 	}
 	if len(req.AdminPassword) < 8 {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "admin_password must be at least 8 characters"})
 		return
@@ -202,7 +204,7 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 
 	log.Printf("setup: initialization complete, node_id=%s, temp_ref=%s, admin_temp_ref=%s", nodeID, tempRef, adminTempRef)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]any{
 		"node_id":        nodeID,
 		"temp_ref":       tempRef,

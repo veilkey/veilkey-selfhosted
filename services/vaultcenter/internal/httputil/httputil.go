@@ -26,6 +26,10 @@ func DecodeJSON(r *http.Request, dst any) error    { return sharedhttp.DecodeJSO
 func PathVal(r *http.Request, key string) string   { return sharedhttp.PathVal(r, key) }
 
 const MaxBulkItems = sharedhttp.MaxBulkItems
+const ContentTypeJSON = sharedhttp.ContentTypeJSON
+const HeaderCFConnectingIP = sharedhttp.HeaderCFConnectingIP
+const HeaderXRealIP = sharedhttp.HeaderXRealIP
+const HeaderXForwardedFor = sharedhttp.HeaderXForwardedFor
 
 // Agent API path constants — re-exported from agentapi for backward compatibility.
 const (

@@ -242,7 +242,7 @@ func (h *Handler) proxyBulkApplyWorkflow(r *http.Request, vaultHash, workflowNam
 	}
 	body, _ := json.Marshal(payload)
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agentURL+path, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		return http.StatusBadGateway, nil, fmt.Errorf("agent unreachable: %w", err)
@@ -272,7 +272,7 @@ func (h *Handler) proxyAndRecordWorkflow(w http.ResponseWriter, r *http.Request,
 		}
 	}
 	h.saveBulkApplyRun(vaultHash, workflowName, runType, status, body)
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(statusCode)
 	_, _ = w.Write(body)
 }

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/veilkey/veilkey-go-package/httputil"
 	"veilkey-localvault/internal/db"
 )
 
@@ -44,7 +45,7 @@ func (s *Server) syncTrackedRefWithVaultcenter(ref string, previousRef string, v
 		return result
 	}
 
-	resp, err := s.httpClient.Post(target.URL+"/api/tracked-refs/sync", "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(target.URL+"/api/tracked-refs/sync", httputil.ContentTypeJSON, bytes.NewReader(body))
 	if err != nil {
 		result.Status = "degraded"
 		result.Error = err.Error()

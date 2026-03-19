@@ -6,6 +6,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"sync"
 	"time"
@@ -128,7 +130,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		if result, ok := <-resultCh; ok {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 			w.WriteHeader(http.StatusOK)
 			w.Write(result.body)
 			return
@@ -154,7 +156,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				respondError(w, http.StatusNotFound, "ref not found: "+ref)
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 			w.WriteHeader(http.StatusOK)
 			w.Write(body)
 			return

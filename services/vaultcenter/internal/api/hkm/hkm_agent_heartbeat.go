@@ -16,9 +16,9 @@ func (h *Handler) preferredHeartbeatIP(r *http.Request) string {
 	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if h.deps.IsTrustedIPString(clientIP) {
 		for _, value := range []string{
-			r.Header.Get("CF-Connecting-IP"),
-			r.Header.Get("X-Real-IP"),
-			r.Header.Get("X-Forwarded-For"),
+			r.Header.Get(httputil.HeaderCFConnectingIP),
+			r.Header.Get(httputil.HeaderXRealIP),
+			r.Header.Get(httputil.HeaderXForwardedFor),
 		} {
 			value = strings.TrimSpace(value)
 			if value == "" {

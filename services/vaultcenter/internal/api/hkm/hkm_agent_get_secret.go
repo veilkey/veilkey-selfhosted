@@ -2,6 +2,8 @@ package hkm
 
 import (
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -28,7 +30,7 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if status != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(status)
 		w.Write(body)
 		return

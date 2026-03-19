@@ -53,7 +53,7 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusInternalServerError, "failed to marshal request body")
 		return
 	}
-	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathCipher, "application/json", bytes.NewReader(body))
+	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathCipher, httputil.ContentTypeJSON, bytes.NewReader(body))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -86,7 +86,7 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 		setRuntimeHashAliases(data, agent.AgentHash)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(resp.StatusCode)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("failed to encode response: %v", err)

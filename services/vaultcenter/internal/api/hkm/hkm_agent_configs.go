@@ -5,6 +5,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +55,7 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 		setRuntimeHashAliases(data, agent.AgentHash)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(resp.StatusCode)
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		log.Printf("failed to encode response: %v", err)

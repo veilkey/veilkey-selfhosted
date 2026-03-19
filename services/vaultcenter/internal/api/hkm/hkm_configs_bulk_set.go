@@ -195,7 +195,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				results[idx] = applyResult{ai: ai, err: err}
 				return
 			}
-			httpReq.Header.Set("Content-Type", "application/json")
+			httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ai: ai, err: err}
@@ -271,7 +271,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 				}
 				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ai.URL()+agentPathConfigs, bytes.NewReader(body))
 				if httpReq != nil {
-					httpReq.Header.Set("Content-Type", "application/json")
+					httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {
 						resp.Body.Close()
