@@ -21,8 +21,8 @@ data/
 
 # Secrets
 .env
-secrets/
-!secrets/.gitkeep
+/secrets/
+!/secrets/.gitkeep
 
 # macOS
 .DS_Store
