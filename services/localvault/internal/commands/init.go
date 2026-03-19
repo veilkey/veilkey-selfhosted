@@ -149,12 +149,6 @@ func RunInit() {
 		}
 	}
 
-	// Save password file for auto-unlock on restart
-	passwordFile := filepath.Join(dataDir, "password")
-	if err := os.WriteFile(passwordFile, []byte(password), 0600); err != nil {
-		log.Printf("Warning: failed to write password file: %v", err)
-	}
-
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
