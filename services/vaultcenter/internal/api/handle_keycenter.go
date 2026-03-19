@@ -143,25 +143,52 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	agentURL, err := s.FindAgentURL(req.VaultHash)
+	// 1. Resolve temp-ref to plaintext (VC internal)
+	tracked, err := s.db.GetRef(req.Ref)
+	if err != nil {
+		s.respondError(w, http.StatusNotFound, "ref not found")
+		return
+	}
+	plaintext, err := s.resolveTempRef(tracked)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to resolve ref: "+err.Error())
+		return
+	}
+
+	// 2. Find agent and decrypt agentDEK
+	agent, err := s.FindAgentRecord(req.VaultHash)
 	if err != nil {
 		s.respondError(w, http.StatusNotFound, "vault not found: "+err.Error())
 		return
 	}
+	agentDEK, err := s.DecryptAgentDEK(agent.DEK, agent.DEKNonce)
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to decrypt agent key")
+		return
+	}
 
-	// Call LV's /api/promote endpoint
-	promoteBody, err := json.Marshal(map[string]string{
-		"ref":  req.Ref,
-		"name": req.Name,
+	// 3. Encrypt with agentDEK (LV cannot decrypt — VC only)
+	ciphertext, nonce, err := crypto.Encrypt(agentDEK, []byte(plaintext))
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "encryption failed")
+		return
+	}
+
+	// 4. Send pre-encrypted ciphertext to LV /api/cipher (not /api/promote)
+	agentURL := s.AgentURL(agent.IP, agent.Port)
+	cipherBody, err := json.Marshal(map[string]any{
+		"name":       req.Name,
+		"ciphertext": ciphertext,
+		"nonce":      nonce,
 	})
 	if err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to encode promote request")
+		s.respondError(w, http.StatusInternalServerError, "failed to encode request")
 		return
 	}
 	resp, err := s.httpClient.Post(
-		strings.TrimRight(agentURL, "/")+"/api/promote",
+		strings.TrimRight(agentURL, "/")+"/api/cipher",
 		httputil.ContentTypeJSON,
-		bytes.NewReader(promoteBody),
+		bytes.NewReader(cipherBody),
 	)
 	if err != nil {
 		s.respondError(w, http.StatusBadGateway, "failed to reach vault: "+err.Error())
@@ -179,12 +206,12 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	var promoteResp map[string]any
-	if err := json.Unmarshal(body, &promoteResp); err != nil {
+	var cipherResp map[string]any
+	if err := json.Unmarshal(body, &cipherResp); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to parse vault response")
 		return
 	}
-	s.respondJSON(w, http.StatusOK, promoteResp)
+	s.respondJSON(w, http.StatusOK, cipherResp)
 }
 
 func (s *Server) handleKeycenterRevealRef(w http.ResponseWriter, r *http.Request) {
