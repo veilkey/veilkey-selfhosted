@@ -9,9 +9,11 @@ import (
 )
 
 // Execute applies a decoded TxEnvelope to the database.
+// blockTime is the CometBFT block timestamp — used for all time-dependent state changes
+// (e.g. default expiry). env.Timestamp is the client-side submission time (for audit only).
 // Returns (resultCode uint32, resultLog string).
 // Code 0 = success, 1 = unknown type, 2 = decode error, 3 = db error, 4 = validation error.
-func Execute(d *db.DB, env *TxEnvelope) (uint32, string) {
+func Execute(d *db.DB, env *TxEnvelope, blockTime time.Time) (uint32, string) {
 	switch env.Type {
 
 	// ── TokenRef operations ─────────────────────────────────────────────
@@ -35,7 +37,7 @@ func Execute(d *db.DB, env *TxEnvelope) (uint32, string) {
 		if p.ExpiresAt != nil {
 			expiresAt = *p.ExpiresAt
 		} else {
-			expiresAt = time.Now().UTC().Add(4 * time.Hour)
+			expiresAt = blockTime.UTC().Add(4 * time.Hour)
 		}
 		if err := d.SaveRefWithExpiryAndHash(
 			parts, p.Ciphertext, p.Version,

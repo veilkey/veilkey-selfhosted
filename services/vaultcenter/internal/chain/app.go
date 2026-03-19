@@ -73,7 +73,7 @@ func (app *Application) FinalizeBlock(_ context.Context, req *abcitypes.RequestF
 			txResults[i] = &abcitypes.ExecTxResult{Code: 2, Log: err.Error()}
 			continue
 		}
-		code, log := Execute(app.db, env)
+		code, log := Execute(app.db, env, req.Time)
 		txResults[i] = &abcitypes.ExecTxResult{Code: code, Log: log}
 	}
 

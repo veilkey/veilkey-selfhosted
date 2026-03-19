@@ -148,6 +148,14 @@ fi
 check_env_documented "localvault"
 check_env_documented "vaultcenter"
 
+# 6. executor에서 time.Now() 사용 금지 (리플레이 결정론)
+executor_time_now=$(grep -n 'time\.Now()' services/vaultcenter/internal/chain/executor.go 2>/dev/null || true)
+if [[ -n "$executor_time_now" ]]; then
+  echo "❌ chain/executor.go에서 time.Now() 사용 금지 — blockTime 파라미터를 사용하세요"
+  echo "$executor_time_now"
+  found=1
+fi
+
 if [[ $found -eq 1 ]]; then
   echo ""
   echo "기본값은 .env.example에 추가하세요."

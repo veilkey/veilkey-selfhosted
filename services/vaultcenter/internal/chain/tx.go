@@ -26,6 +26,9 @@ type TxEnvelope struct {
 	Type      TxType          `json:"type"`
 	Nonce     string          `json:"nonce"`
 	Timestamp time.Time       `json:"timestamp"`
+	ActorType string          `json:"actor_type,omitempty"` // "agent", "operator", "system", "api"
+	ActorID   string          `json:"actor_id,omitempty"`   // remote IP or agent hash
+	Source    string          `json:"source,omitempty"`     // route path or handler name
 	Payload   json.RawMessage `json:"payload"`
 }
 
