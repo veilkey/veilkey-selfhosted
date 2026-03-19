@@ -172,7 +172,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 
 	if req.VaultcenterURL != "" {
 		normalized := strings.TrimRight(req.VaultcenterURL, "/")
-		if err := database.SaveConfig("VEILKEY_VAULTCENTER_URL", normalized); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, normalized); err != nil {
 			log.Printf("install: failed to save vaultcenter URL: %v", err)
 			http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
 			return

@@ -212,7 +212,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	// Save vaultcenter URL to DB config if provided
 	if req.VaultcenterURL != "" {
 		normalized := strings.TrimRight(req.VaultcenterURL, "/")
-		if err := database.SaveConfig("VEILKEY_VAULTCENTER_URL", normalized); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, normalized); err != nil {
 			log.Printf("install: failed to save vaultcenter URL: %v", err)
 			http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
 			return
@@ -404,18 +404,18 @@ func runRebind() {
 
 func ensureVaultIdentity(database *db.DB, nodeID string) (string, string, error) {
 	vaultHash := ""
-	if cfg, err := database.GetConfig("VAULT_HASH"); err == nil {
+	if cfg, err := database.GetConfig(db.ConfigKeyVaultHash); err == nil {
 		vaultHash = strings.TrimSpace(cfg.Value)
 	}
 	if vaultHash == "" {
 		vaultHash = defaultVaultHash(nodeID)
-		if err := database.SaveConfig("VAULT_HASH", vaultHash); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultHash, vaultHash); err != nil {
 			return "", "", err
 		}
 	}
 
 	vaultName := ""
-	if cfg, err := database.GetConfig("VAULT_NAME"); err == nil {
+	if cfg, err := database.GetConfig(db.ConfigKeyVaultName); err == nil {
 		vaultName = strings.TrimSpace(cfg.Value)
 	}
 	if vaultName == "" {
@@ -426,7 +426,7 @@ func ensureVaultIdentity(database *db.DB, nodeID string) (string, string, error)
 		if vaultName == "" {
 			vaultName = "localvault"
 		}
-		if err := database.SaveConfig("VAULT_NAME", vaultName); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultName, vaultName); err != nil {
 			return "", "", err
 		}
 	}

@@ -102,7 +102,7 @@ func RunInit() {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: pwRefID}
 			encoded := base64.StdEncoding.EncodeToString(pwCiphertext) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
 			expiresAt := time.Now().UTC().Add(1 * time.Hour)
-			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyVaultcenterPassword); saveErr == nil {
 				tempRef = parts.Canonical()
 			}
 		}

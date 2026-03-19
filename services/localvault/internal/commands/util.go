@@ -18,18 +18,18 @@ func readPassword(prompt string) string {
 
 func ensureVaultIdentity(database *db.DB, nodeID string) (string, string, error) {
 	vaultHash := ""
-	if cfg, err := database.GetConfig("VAULT_HASH"); err == nil {
+	if cfg, err := database.GetConfig(db.ConfigKeyVaultHash); err == nil {
 		vaultHash = strings.TrimSpace(cfg.Value)
 	}
 	if vaultHash == "" {
 		vaultHash = defaultVaultHash(nodeID)
-		if err := database.SaveConfig("VAULT_HASH", vaultHash); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultHash, vaultHash); err != nil {
 			return "", "", err
 		}
 	}
 
 	vaultName := ""
-	if cfg, err := database.GetConfig("VAULT_NAME"); err == nil {
+	if cfg, err := database.GetConfig(db.ConfigKeyVaultName); err == nil {
 		vaultName = strings.TrimSpace(cfg.Value)
 	}
 	if vaultName == "" {
@@ -40,7 +40,7 @@ func ensureVaultIdentity(database *db.DB, nodeID string) (string, string, error)
 		if vaultName == "" {
 			vaultName = "localvault"
 		}
-		if err := database.SaveConfig("VAULT_NAME", vaultName); err != nil {
+		if err := database.SaveConfig(db.ConfigKeyVaultName, vaultName); err != nil {
 			return "", "", err
 		}
 	}

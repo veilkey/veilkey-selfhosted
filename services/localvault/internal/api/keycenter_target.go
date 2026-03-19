@@ -5,6 +5,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"veilkey-localvault/internal/db"
 )
 
 type vaultcenterTarget struct {
@@ -19,7 +21,7 @@ func (s *Server) resolveVaultcenterTarget() vaultcenterTarget {
 		value string
 	}{
 		{label: "env:VEILKEY_VAULTCENTER_URL", value: strings.TrimSpace(os.Getenv("VEILKEY_VAULTCENTER_URL"))},
-		{label: "db:VEILKEY_VAULTCENTER_URL", value: s.lookupConfigValue("VEILKEY_VAULTCENTER_URL")},
+		{label: "db:VEILKEY_VAULTCENTER_URL", value: s.lookupConfigValue(db.ConfigKeyVaultcenterURL)},
 	}
 
 	selected := vaultcenterTarget{}
