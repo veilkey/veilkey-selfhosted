@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 )
 
@@ -77,7 +78,7 @@ func renderBulkApplyPreview(body string) string {
 }
 
 func isSensitiveBulkApplyValue(kind, name string) bool {
-	if strings.EqualFold(strings.TrimSpace(kind), "VE") {
+	if strings.EqualFold(strings.TrimSpace(kind), db.RefFamilyVE) {
 		return false
 	}
 	upper := strings.ToUpper(strings.TrimSpace(name))
@@ -116,7 +117,7 @@ func (h *Handler) renderResolvedBulkApplyPreview(vaultHash, body string) string 
 
 		// Map VK→"secret", VE→"config" to match the Deps interface contract.
 		depKind := "secret"
-		if kind == "VE" {
+		if kind == db.RefFamilyVE {
 			depKind = "config"
 		}
 

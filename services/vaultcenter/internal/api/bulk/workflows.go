@@ -102,7 +102,7 @@ func (h *Handler) renderResolvedBulkApplyBody(vaultHash, body string) (string, e
 		name := strings.TrimSpace(match[2])
 
 		depKind := "secret"
-		if kind == "VE" {
+		if kind == db.RefFamilyVE {
 			depKind = "config"
 		}
 
