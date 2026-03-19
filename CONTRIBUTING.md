@@ -30,7 +30,7 @@ cd services/vaultcenter && go build ./...
 cd services/localvault && go build ./...
 
 # Rust CLI
-cd services/veilkey-cli && cargo build --release
+cd services/veil-cli && cargo build --release
 cd services/veil-cli && cargo build --release
 
 # Docker

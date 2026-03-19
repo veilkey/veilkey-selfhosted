@@ -35,7 +35,7 @@ jobs:
             veil-cli:
               - 'services/veil-cli/**'
             veilkey-cli:
-              - 'services/veilkey-cli/**'
+              - 'services/veil-cli/**'
 
   # ── VaultCenter (Go + SQLCipher) ─────────────────────────────
   vaultcenter:
@@ -131,7 +131,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: services/veilkey-cli
+        working-directory: services/veil-cli
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -139,7 +139,7 @@ jobs:
           components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: services/veilkey-cli
+          workspaces: services/veil-cli
       - name: Format check
         run: cargo fmt --check
       - name: Lint
@@ -152,8 +152,8 @@ jobs:
         with:
           name: veilkey-cli-linux-amd64
           path: |
-            services/veilkey-cli/target/release/veilkey-cli
-            services/veilkey-cli/target/release/veilkey-session-config
+            services/veil-cli/target/release/veilkey-cli
+            services/veil-cli/target/release/veilkey-session-config
 
   # ── PR 게이트 (모든 필수 job 통과 확인) ──────────────────────
   pr-gate:

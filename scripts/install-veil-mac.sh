@@ -69,7 +69,7 @@ fi
 
 # 6. Config file
 if [ ! -f "$HOME/.veilkey.yml" ]; then
-    cp "$REPO_ROOT/services/veilkey-cli/examples/.veilkey.yml" "$HOME/.veilkey.yml"
+    cp "$REPO_ROOT/services/veil-cli/examples/.veilkey.yml" "$HOME/.veilkey.yml"
     echo "  Created ~/.veilkey.yml"
 else
     echo "  ~/.veilkey.yml exists (skipped)"

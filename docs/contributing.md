@@ -16,7 +16,7 @@ CGO_ENABLED=1 go build -o veilkey-vaultcenter ./cmd
 
 # Rust CLIs
 cd services/veil-cli && cargo build --release
-cd services/veilkey-cli && cargo build --release
+cd services/veil-cli && cargo build --release
 ```
 
 ## Branch Strategy
@@ -43,7 +43,7 @@ cd services/veilkey-cli && cargo build --release
 | vaultcenter | `services/vaultcenter/**` changed | lint (golangci-lint) + build (CGO/SQLCipher) |
 | localvault | `services/localvault/**` changed | lint (golangci-lint) + build (CGO/SQLCipher) |
 | veil-cli | `services/veil-cli/**` changed | clippy + test + release build |
-| veilkey-cli | `services/veilkey-cli/**` changed | clippy + release build |
+| veilkey-cli | `services/veil-cli/**` changed | clippy + release build |
 | pr-gate | always | verifies all required jobs passed |
 
 ## Code Style

@@ -6,8 +6,7 @@
 |-----------|------|----------|------|
 | VaultCenter | `services/vaultcenter/` | Go | Central management, admin UI, CometBFT chain, agentDEK encryption |
 | LocalVault | `services/localvault/` | Go | Storage-only vault (no decrypt capability), heartbeat |
-| veil-cli | `services/veil-cli/` | Rust | Protected session entry point (`veil`, `veilkey`) |
-| veilkey-cli | `services/veilkey-cli/` | Rust | CLI tools: scan, filter, exec, resolve, wrap-pty |
+| veil-cli | `services/veil-cli/` | Rust | veil, veilkey, veilkey-cli, veilkey-session-config |
 
 ## Documentation Index
 
@@ -19,7 +18,6 @@
 | [security-model.md](./security-model.md) | Security model, PTY masking, threat boundaries |
 | [OPERATING-MODEL.md](./OPERATING-MODEL.md) | Operational model, heartbeat, key rotation |
 | [contributing.md](./contributing.md) | Contribution guidelines |
-| [ci-integration.md](./ci-integration.md) | CI/CD integration |
 
 ## Canonical Identity Terms
 
