@@ -618,10 +618,29 @@ mod pty_wrap {
             }
         };
 
+        // Resolve VK refs in environment variables → child sees real values
+        let vk_re = regex::Regex::new(r"VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})").unwrap();
+        let mut mask_map: Vec<(String, String)> = Vec::new(); // (plaintext, vk_ref)
         let mut cmd = CommandBuilder::new(&shell_args[0]);
         for arg in &shell_args[1..] {
             cmd.arg(arg);
         }
+        for (key, value) in std::env::vars() {
+            if vk_re.is_match(&value) {
+                let resolved = vk_re.replace_all(&value, |caps: &regex::Captures| {
+                    match client.resolve(&caps[0]) {
+                        Ok(v) => {
+                            mask_map.push((v.clone(), caps[0].to_string()));
+                            v
+                        }
+                        Err(_) => caps[0].to_string(),
+                    }
+                }).to_string();
+                cmd.env(key, resolved);
+            }
+        }
+        // Sort mask_map by plaintext length descending (longest match first)
+        mask_map.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
 
         let mut child = match pair.slave.spawn_command(cmd) {
             Ok(c) => c,
@@ -642,17 +661,21 @@ mod pty_wrap {
             let _ = io::copy(&mut stdin, &mut master_writer);
         });
 
-        // pty output → process_line → stdout
-        let mut detector = SecretDetector::new(&cfg, &client, &logger, false);
+        // pty output → mask plaintext → stdout
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
 
         let reader = io::BufReader::new(master_reader);
         for line in reader.lines() {
             match line {
-                Ok(l) => {
-                    let processed = detector.process_line(&l);
-                    let _ = stdout.write_all(processed.as_bytes());
+                Ok(mut l) => {
+                    // Replace any resolved plaintext with its VK ref
+                    for (plaintext, vk_ref) in &mask_map {
+                        if !plaintext.is_empty() {
+                            l = l.replace(plaintext.as_str(), vk_ref.as_str());
+                        }
+                    }
+                    let _ = stdout.write_all(l.as_bytes());
                     let _ = stdout.write_all(b"\n");
                 }
                 Err(_) => break,
@@ -665,11 +688,11 @@ mod pty_wrap {
             .map(|s| if s.success() { 0 } else { 1 })
             .unwrap_or(1);
 
-        if detector.stats.detections > 0 {
+        if !mask_map.is_empty() {
             drop(stdout);
             eprintln!(
-                "\n[veilkey] {} secret(s) detected and replaced",
-                detector.stats.detections
+                "\n[veilkey] {} secret(s) masked in session",
+                mask_map.len()
             );
         }
         std::process::exit(exit_code);

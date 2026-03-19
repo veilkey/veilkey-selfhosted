@@ -12,18 +12,13 @@ RUN cd veilkey-cli && cargo build --release
 
 FROM alpine:3.20
 RUN apk add --no-cache bash curl
-COPY --from=builder /build/veil-cli/target/release/veil /usr/local/bin/veil
-COPY --from=builder /build/veil-cli/target/release/veilkey /usr/local/bin/veilkey
-COPY --from=builder /build/veilkey-cli/target/release/veilkey-cli /usr/local/bin/veilkey-cli
-COPY --from=builder /build/veilkey-cli/target/release/veilkey-session-config /usr/local/bin/veilkey-session-config
 
+ARG BIN_DIR=/usr/local/bin
+COPY --from=builder /build/veil-cli/target/release/veil ${BIN_DIR}/veil
+COPY --from=builder /build/veil-cli/target/release/veilkey ${BIN_DIR}/veilkey
+COPY --from=builder /build/veilkey-cli/target/release/veilkey-cli ${BIN_DIR}/veilkey-cli
+COPY --from=builder /build/veilkey-cli/target/release/veilkey-session-config ${BIN_DIR}/veilkey-session-config
 COPY veilkey-cli/examples/.veilkey.yml /root/.veilkey.yml
-
-ENV VEILKEY_BIN=/usr/local/bin/veilkey
-ENV VEILKEY_CLI_BIN=/usr/local/bin/veilkey-cli
-ENV VEILKEY_VK_BIN=/usr/local/bin/veilkey
-ENV VEILKEY_SESSION_CONFIG_BIN=/usr/local/bin/veilkey-session-config
-ENV VEILKEY_CONFIG=/root/.veilkey.yml
 
 WORKDIR /root
 ENTRYPOINT ["/bin/bash"]
