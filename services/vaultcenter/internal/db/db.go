@@ -47,6 +47,7 @@ func (d *DB) migrate() error {
 		&Config{},
 		&BulkApplyTemplate{},
 		&BulkApplyRun{},
+		&RegistrationToken{},
 	); err != nil {
 		return err
 	}

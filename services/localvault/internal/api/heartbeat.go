@@ -68,7 +68,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		configsCount = count
 	}
 
-	body, err := json.Marshal(map[string]interface{}{
+	payload := map[string]interface{}{
 		"vault_node_uuid": nodeID,
 		"node_id":         nodeID,
 		"vault_hash":      s.identity.VaultHash,
@@ -81,7 +81,12 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"secrets_count":   secretsCount,
 		"configs_count":   configsCount,
 		"version":         version,
-	})
+	}
+	// Include registration token for first-time registration
+	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {
+		payload["registration_token"] = regToken.Value
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
@@ -112,6 +117,20 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 			}
 		}
 		return fmt.Errorf("heartbeat rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	// On successful registration, consume the one-time registration token
+	var hbResp struct {
+		Status string `json:"status"`
+	}
+	if respBody, readErr := io.ReadAll(resp.Body); readErr == nil {
+		if json.Unmarshal(respBody, &hbResp) == nil && hbResp.Status == "registered" {
+			if err := s.db.DeleteConfig("VEILKEY_REGISTRATION_TOKEN"); err != nil {
+				log.Printf("heartbeat: failed to delete registration token config: %v", err)
+			} else {
+				log.Println("heartbeat: registration token consumed (one-time use)")
+			}
+		}
 	}
 	return nil
 }

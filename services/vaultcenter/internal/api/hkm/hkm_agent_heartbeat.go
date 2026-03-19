@@ -48,22 +48,23 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	h.advancePendingRotationsBestEffort()
 
 	var req struct {
-		VaultNodeUUID  string   `json:"vault_node_uuid"`
-		NodeID         string   `json:"node_id"`
-		Label          string   `json:"label"`
-		VaultHash      string   `json:"vault_hash"`
-		VaultName      string   `json:"vault_name"`
-		Role           string   `json:"role"`
-		LocalVaultRole string   `json:"localvault_role"`
-		HostEnabled    *bool    `json:"host_enabled"`
-		LocalEnabled   *bool    `json:"local_enabled"`
-		ManagedPaths   []string `json:"managed_paths"`
-		KeyVersion     int      `json:"key_version"`
-		IP             string   `json:"ip"`
-		Port           int      `json:"port"`
-		SecretsCount   int      `json:"secrets_count"`
-		ConfigsCount   int      `json:"configs_count"`
-		Version        int      `json:"version"`
+		VaultNodeUUID     string   `json:"vault_node_uuid"`
+		NodeID            string   `json:"node_id"`
+		Label             string   `json:"label"`
+		VaultHash         string   `json:"vault_hash"`
+		VaultName         string   `json:"vault_name"`
+		Role              string   `json:"role"`
+		LocalVaultRole    string   `json:"localvault_role"`
+		HostEnabled       *bool    `json:"host_enabled"`
+		LocalEnabled      *bool    `json:"local_enabled"`
+		ManagedPaths      []string `json:"managed_paths"`
+		KeyVersion        int      `json:"key_version"`
+		IP                string   `json:"ip"`
+		Port              int      `json:"port"`
+		SecretsCount      int      `json:"secrets_count"`
+		ConfigsCount      int      `json:"configs_count"`
+		Version           int      `json:"version"`
+		RegistrationToken string   `json:"registration_token"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -168,6 +169,20 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		agent = nil
 	}
 
+	// New agent registration requires a valid registration token
+	if agent == nil {
+		if req.RegistrationToken == "" {
+			respondError(w, http.StatusForbidden, "registration_token is required for first-time agent registration")
+			return
+		}
+		regToken, tokenErr := h.deps.DB().ValidateRegistrationToken(req.RegistrationToken)
+		if tokenErr != nil || regToken == nil {
+			respondError(w, http.StatusForbidden, "invalid or expired registration token")
+			return
+		}
+		// Token will be consumed after successful registration (below)
+	}
+
 	if err := h.deps.DB().UpsertAgent(nodeID, req.Label, req.VaultHash, req.VaultName, req.IP, req.Port, req.SecretsCount, req.ConfigsCount, req.Version, req.KeyVersion); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
 		return
@@ -224,6 +239,13 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 
 		log.Printf("agent: assigned hash=%s to %s (%s)", agentHash, nodeID, req.Label)
+
+		// Consume the registration token (one-time use)
+		if req.RegistrationToken != "" {
+			if err := h.deps.DB().ConsumeRegistrationToken(req.RegistrationToken, nodeID); err != nil {
+				log.Printf("agent: failed to consume registration token %s: %v", req.RegistrationToken, err)
+			}
+		}
 
 		resp := map[string]interface{}{
 			"status":        "registered",

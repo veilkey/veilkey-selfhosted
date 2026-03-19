@@ -61,6 +61,11 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/admin/login", s.handleAdminLogin)
 	mux.HandleFunc("POST /api/admin/logout", s.handleAdminLogout)
 	mux.HandleFunc("GET /api/admin/check", s.handleAdminCheck)
+	// Registration token management
+	mux.HandleFunc("POST /api/admin/registration-tokens", s.requireUnlocked(s.adminHandler.RequireAdminSession(s.handleCreateRegistrationToken)))
+	mux.HandleFunc("GET /api/admin/registration-tokens", s.requireUnlocked(s.adminHandler.RequireAdminSession(s.handleListRegistrationTokens)))
+	mux.HandleFunc("DELETE /api/admin/registration-tokens/{token_id}", s.requireUnlocked(s.adminHandler.RequireAdminSession(s.handleRevokeRegistrationToken)))
+	mux.HandleFunc("GET /api/registration-tokens/{token_id}/validate", s.requireUnlocked(s.handleValidateRegistrationToken))
 	mux.HandleFunc("GET /api/configs", s.requireUnlocked(s.handleListConfigs))
 	mux.HandleFunc("GET /api/configs/{key}", s.requireUnlocked(s.handleGetConfig))
 	mux.HandleFunc("POST /api/configs", s.requireTrustedIP(s.requireUnlocked(s.handleSaveConfig)))

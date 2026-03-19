@@ -345,3 +345,16 @@ type Migration struct {
 }
 
 func (Migration) TableName() string { return "migrations" }
+
+type RegistrationToken struct {
+	TokenID    string     `gorm:"primaryKey;column:token_id" json:"token_id"`
+	Label      string     `gorm:"column:label;not null;default:''" json:"label"`
+	CreatedBy  string     `gorm:"column:created_by;not null;default:admin" json:"created_by"`
+	Status     string     `gorm:"column:status;not null;default:active;index" json:"status"` // active, used, revoked, expired
+	UsedByNode string     `gorm:"column:used_by_node;not null;default:''" json:"used_by_node"`
+	ExpiresAt  time.Time  `gorm:"column:expires_at;not null;index" json:"expires_at"`
+	UsedAt     *time.Time `gorm:"column:used_at" json:"used_at"`
+	CreatedAt  time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (RegistrationToken) TableName() string { return "registration_tokens" }

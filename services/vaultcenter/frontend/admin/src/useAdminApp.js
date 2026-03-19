@@ -83,6 +83,9 @@ const state = reactive({
     selectedTempRef: null,
     revealedValues: {},
     routeSelectedRefCanonical: null,
+    regTokens: [],
+    createdRegToken: null,
+    showRegTokenForm: false,
     busy: {},
     ui: {
         sidebarHTML: '',
@@ -1564,7 +1567,10 @@ function renderKeycenterPage() {
     state.ui.centerHTML = `
         <div class="pane-header">
             <div class="pane-title"><strong>${escapeHTML(t('keycenter_temp_refs_title'))}</strong></div>
-            <div class="toolbar"><span class="pill">${refs.length}</span></div>
+            <div class="toolbar">
+                <span class="pill">${refs.length}</span>
+                <button class="btn btn-soft" data-action="show-create-reg-token" style="margin-left:8px;font-size:0.8rem">+ 등록 토큰</button>
+            </div>
         </div>
         <div class="pane-content">
             <div class="table-wrap">
@@ -1623,6 +1629,59 @@ function renderKeycenterPage() {
                                     </button></td>
                                 </tr>
                             `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>` : ''}
+
+            ${state.showRegTokenForm ? `
+            <div style="margin-top:20px;padding:12px;border:1px solid #444;border-radius:6px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>등록 토큰 발급</strong></div>
+                <form data-action="create-reg-token-form">
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">라벨 (선택)</label>
+                        <input class="form-input" type="text" name="label" placeholder="my-vault-01" style="width:100%"/>
+                    </div>
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">만료</label>
+                        <select class="form-input" name="expires" style="width:100%">
+                            <option value="60">1시간</option>
+                            <option value="360">6시간</option>
+                            <option value="1440" selected>24시간</option>
+                            <option value="10080">7일</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">토큰 생성</button>
+                </form>
+                ${state.createdRegToken ? `
+                <div style="margin-top:12px;padding:8px;background:#1a2a1a;border-radius:4px">
+                    <div style="font-size:0.75rem;color:#999;margin-bottom:4px">생성된 토큰</div>
+                    <code style="font-size:0.7rem;word-break:break-all;color:#c8f0a0">${escapeHTML(state.createdRegToken.token)}</code>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-soft" data-action="copy-reg-token" style="font-size:0.75rem">복사</button>
+                    </div>
+                    <div style="margin-top:8px;font-size:0.7rem;color:#888">
+                        <code>${escapeHTML(state.createdRegToken.command)}</code>
+                    </div>
+                </div>` : ''}
+            </div>` : ''}
+
+            ${state.regTokens.length ? `
+            <div style="margin-top:20px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>등록 토큰 목록</strong></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>라벨</th><th>상태</th><th>만료</th><th></th></tr></thead>
+                        <tbody>
+                            ${state.regTokens.map(tk => {
+                                const statusColor = tk.status === 'active' ? '#a8f0a0' : tk.status === 'used' ? '#888' : '#f0a0a0';
+                                return `<tr>
+                                    <td>${escapeHTML(tk.label || '-')}</td>
+                                    <td><span style="color:${statusColor}">${escapeHTML(tk.status)}</span></td>
+                                    <td style="font-size:0.8rem">${fmtRemaining(tk.expires_at) || fmtAbs(tk.expires_at)}</td>
+                                    <td>${tk.status === 'active' ? `<button class="btn btn-soft" data-action="revoke-reg-token" data-token-id="${escapeHTML(tk.token_id)}" style="font-size:0.7rem">폐기</button>` : ''}</td>
+                                </tr>`;
+                            }).join('')}
                         </tbody>
                     </table>
                 </div>
@@ -1703,6 +1762,15 @@ async function loadKeycenterTempRefs() {
         }
     } catch (err) {
         state.keycenterTempRefs = [];
+    }
+}
+
+async function loadRegTokens() {
+    try {
+        const data = await request('/api/admin/registration-tokens');
+        state.regTokens = data.tokens || [];
+    } catch (err) {
+        state.regTokens = [];
     }
 }
 
@@ -2783,6 +2851,26 @@ async function handleAction(action, dataset) {
             render();
             return;
         }
+        if (action === 'show-create-reg-token') {
+            state.showRegTokenForm = !state.showRegTokenForm;
+            state.createdRegToken = null;
+            render();
+            return;
+        }
+        if (action === 'copy-reg-token') {
+            if (state.createdRegToken?.token) {
+                navigator.clipboard.writeText(state.createdRegToken.token);
+                setMessage('ok', '토큰이 복사되었습니다.');
+                render();
+            }
+            return;
+        }
+        if (action === 'revoke-reg-token') {
+            await request(`/api/admin/registration-tokens/${dataset.tokenId}`, { method: 'DELETE' });
+            await loadRegTokens();
+            render();
+            return;
+        }
     } catch (err) {
         setMessage('error', err.message);
         render();
@@ -2790,10 +2878,27 @@ async function handleAction(action, dataset) {
 }
 
   function onSubmit(event) {
-    const form = event.target.closest('form[data-form]');
-    if (!form) return;
+    const form = event.target.closest('form[data-action]');
+    if (form && form.dataset.action === 'create-reg-token-form') {
+        event.preventDefault();
+        const label = form.querySelector('[name=label]')?.value || '';
+        const expires = parseInt(form.querySelector('[name=expires]')?.value || '1440', 10);
+        request('/api/admin/registration-tokens', {
+            method: 'POST',
+            body: JSON.stringify({ label, expires_in_minutes: expires })
+        }).then(data => {
+            state.createdRegToken = data;
+            loadRegTokens().then(() => render());
+        }).catch(err => {
+            setMessage('error', err.message);
+            render();
+        });
+        return;
+    }
+    const dataForm = event.target.closest('form[data-form]');
+    if (!dataForm) return;
     event.preventDefault();
-    handleFormSubmit(form);
+    handleFormSubmit(dataForm);
   }
 
   function onClick(event) {
@@ -2884,6 +2989,7 @@ async function boot() {
     await loadFunctions();
     await loadTrackedRefAudit();
     await loadKeycenterTempRefs();
+    await loadRegTokens();
     await syncPageData();
     render();
 }
