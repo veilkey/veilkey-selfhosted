@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/jeonghan/go/pkg/mod/github.com/cometbft/cometbft@v0.38.17/abci/types/**)"
+    ]
+  }
+}
