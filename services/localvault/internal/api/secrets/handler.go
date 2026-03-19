@@ -55,7 +55,6 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/cipher/{ref}", trusted(ready(h.handleCipher)))
 	mux.HandleFunc("GET /api/cipher/{ref}/fields/{field}", trusted(ready(h.handleCipherField)))
 	mux.HandleFunc("POST /api/cipher", trusted(ready(h.handleSaveCipher)))
-	mux.HandleFunc("POST /api/encrypt", ready(h.handleEncrypt))
 
 	mux.HandleFunc("GET /api/secrets/meta/{name}", ready(h.handleGetSecretMeta))
 	mux.HandleFunc("POST /api/secrets/fields", trusted(ready(h.handleSaveSecretFields)))
