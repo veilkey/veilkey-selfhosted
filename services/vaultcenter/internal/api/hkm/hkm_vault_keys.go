@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/veilkey/veilkey-go-package/crypto"
+	"veilkey-vaultcenter/internal/chain"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -605,7 +606,16 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 		RefCanonical: meta.Token,
 		Required:     required,
 	}
-	if err := h.deps.DB().SaveBinding(&entry); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxSaveBinding, chain.SaveBindingPayload{
+		BindingID:    entry.BindingID,
+		BindingType:  entry.BindingType,
+		TargetName:   entry.TargetName,
+		VaultHash:    entry.VaultHash,
+		SecretName:   entry.SecretName,
+		FieldKey:     entry.FieldKey,
+		RefCanonical: entry.RefCanonical,
+		Required:     entry.Required,
+	}); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to save binding")
 		return
 	}
@@ -679,13 +689,24 @@ func (h *Handler) handleVaultKeyBindingsReplace(w http.ResponseWriter, r *http.R
 		return
 	}
 	for _, row := range existing {
-		if err := h.deps.DB().DeleteBinding(row.BindingID); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteBinding, chain.DeleteBindingPayload{
+			BindingID: row.BindingID,
+		}); err != nil {
 			respondError(w, http.StatusInternalServerError, "failed to clear existing bindings")
 			return
 		}
 	}
 	for i := range entries {
-		if err := h.deps.DB().SaveBinding(&entries[i]); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxSaveBinding, chain.SaveBindingPayload{
+			BindingID:    entries[i].BindingID,
+			BindingType:  entries[i].BindingType,
+			TargetName:   entries[i].TargetName,
+			VaultHash:    entries[i].VaultHash,
+			SecretName:   entries[i].SecretName,
+			FieldKey:     entries[i].FieldKey,
+			RefCanonical: entries[i].RefCanonical,
+			Required:     entries[i].Required,
+		}); err != nil {
 			respondError(w, http.StatusInternalServerError, "failed to save replacement bindings")
 			return
 		}
@@ -715,7 +736,9 @@ func (h *Handler) handleVaultKeyBindingsDeleteAll(w http.ResponseWriter, r *http
 		return
 	}
 	for _, row := range rows {
-		if err := h.deps.DB().DeleteBinding(row.BindingID); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteBinding, chain.DeleteBindingPayload{
+			BindingID: row.BindingID,
+		}); err != nil {
 			respondError(w, http.StatusInternalServerError, "failed to delete bindings")
 			return
 		}
@@ -825,7 +848,9 @@ func (h *Handler) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusNotFound, "binding not found for key")
 		return
 	}
-	if err := h.deps.DB().DeleteBinding(bindingID); err != nil {
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxDeleteBinding, chain.DeleteBindingPayload{
+		BindingID: bindingID,
+	}); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to delete binding")
 		return
 	}

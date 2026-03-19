@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/veilkey/veilkey-go-package/refs"
+	"veilkey-vaultcenter/internal/chain"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -118,7 +120,7 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.SaveConfig(req.Key, *req.Value); err != nil {
+	if _, err := s.SubmitTx(r.Context(), chain.TxSetConfig, chain.SetConfigPayload{Key: req.Key, Value: *req.Value}); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to save config: "+err.Error())
 		return
 	}
@@ -172,9 +174,11 @@ func (s *Server) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := s.db.SaveConfigs(req.Configs); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to save configs: "+err.Error())
-		return
+	for key, value := range req.Configs {
+		if _, err := s.SubmitTx(r.Context(), chain.TxSetConfig, chain.SetConfigPayload{Key: key, Value: value}); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "failed to save configs: "+err.Error())
+			return
+		}
 	}
 
 	for key, value := range req.Configs {
@@ -267,7 +271,12 @@ func (s *Server) upsertTrackedRef(ctx context.Context, ref string, version int, 
 		version = 1
 	}
 	if existing, err := s.db.GetRef(ref); err == nil && existing != nil {
-		return s.db.UpdateRefWithName(ref, ref, version, status, "")
+		_, txErr := s.SubmitTx(ctx, chain.TxUpdateTokenRef, chain.UpdateTokenRefPayload{
+			RefCanonical: ref,
+			Version:      version,
+			Status:       refs.RefStatus(status),
+		})
+		return txErr
 	}
 	return s.db.SaveRef(parts, "", version, status, agentHash)
 }
@@ -280,5 +289,8 @@ func (s *Server) deleteTrackedRef(ctx context.Context, ref string) error {
 	if _, err := s.db.GetRef(ref); err != nil {
 		return err
 	}
-	return s.db.DeleteRef(ref)
+	_, txErr := s.SubmitTx(ctx, chain.TxDeleteTokenRef, chain.DeleteTokenRefPayload{
+		RefCanonical: ref,
+	})
+	return txErr
 }

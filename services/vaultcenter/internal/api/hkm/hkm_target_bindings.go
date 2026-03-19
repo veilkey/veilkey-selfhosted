@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/veilkey/veilkey-go-package/crypto"
+	"veilkey-vaultcenter/internal/chain"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -119,7 +120,16 @@ func (h *Handler) handleTargetBindingsReplace(w http.ResponseWriter, r *http.Req
 		return
 	}
 	for i := range entries {
-		if err := h.deps.DB().SaveBinding(&entries[i]); err != nil {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxSaveBinding, chain.SaveBindingPayload{
+			BindingID:    entries[i].BindingID,
+			BindingType:  entries[i].BindingType,
+			TargetName:   entries[i].TargetName,
+			VaultHash:    entries[i].VaultHash,
+			SecretName:   entries[i].SecretName,
+			FieldKey:     entries[i].FieldKey,
+			RefCanonical: entries[i].RefCanonical,
+			Required:     entries[i].Required,
+		}); err != nil {
 			respondError(w, http.StatusInternalServerError, "failed to save target bindings")
 			return
 		}
