@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,6 +15,7 @@ import (
 	"veilkey-vaultcenter/internal/api/approval"
 	"veilkey-vaultcenter/internal/api/bulk"
 	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/chain"
 	"github.com/veilkey/veilkey-go-package/agentapi"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
@@ -57,6 +59,7 @@ type Server struct {
 	timeouts       Timeouts
 	unlockLimiter  *ratelimit.UnlockRateLimiter
 	httpClient     *http.Client
+	chainClient    *chain.Client
 	bulkApplyDir   string
 	updateMu       sync.RWMutex
 	updateState    systemUpdateState
@@ -103,6 +106,73 @@ func (s *Server) IsTrustedIPString(ip string) bool { return s.isTrustedIPString(
 
 func (s *Server) SaveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source string, before, after map[string]any) {
 	s.saveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source, before, after)
+}
+
+// ── chain TX submission ─────────────────────────────────────────────────────
+
+// SetChainClient sets the CometBFT chain client. nil disables chain mode (DB fallback).
+func (s *Server) SetChainClient(c *chain.Client) { s.chainClient = c }
+
+// SubmitTx submits a write TX and blocks until committed.
+func (s *Server) SubmitTx(ctx context.Context, txType chain.TxType, payload any) (string, error) {
+	actor := txActorFromCtx(ctx)
+	if s.chainClient != nil {
+		env, err := chain.BuildEnvelope(txType, payload, actor)
+		if err != nil {
+			return "", err
+		}
+		txBytes, err := chain.MarshalEnvelope(env)
+		if err != nil {
+			return "", err
+		}
+		result, err := s.chainClient.BroadcastTxCommitRaw(ctx, txBytes)
+		if err != nil {
+			return "", err
+		}
+		if result.CheckTx.Code != 0 {
+			return "", fmt.Errorf("chain check: %s", result.CheckTx.Log)
+		}
+		if result.TxResult.Code != 0 {
+			return "", fmt.Errorf("chain exec: %s", result.TxResult.Log)
+		}
+		return result.TxResult.Log, nil
+	}
+	// fallback: executor 직접 호출
+	env, err := chain.BuildEnvelope(txType, payload, actor)
+	if err != nil {
+		return "", err
+	}
+	code, resultLog := chain.Execute(s.db, env)
+	if code != 0 {
+		return "", fmt.Errorf(resultLog)
+	}
+	return resultLog, nil
+}
+
+// SubmitTxAsync submits a write TX without waiting for block inclusion.
+func (s *Server) SubmitTxAsync(ctx context.Context, txType chain.TxType, payload any) error {
+	actor := txActorFromCtx(ctx)
+	if s.chainClient != nil {
+		env, err := chain.BuildEnvelope(txType, payload, actor)
+		if err != nil {
+			return err
+		}
+		txBytes, err := chain.MarshalEnvelope(env)
+		if err != nil {
+			return err
+		}
+		return s.chainClient.BroadcastTxSyncRaw(ctx, txBytes)
+	}
+	// fallback
+	env, err := chain.BuildEnvelope(txType, payload, actor)
+	if err != nil {
+		return err
+	}
+	code, resultLog := chain.Execute(s.db, env)
+	if code != 0 {
+		return fmt.Errorf(resultLog)
+	}
+	return nil
 }
 
 // ── admin.Deps implementation ────────────────────────────────────────────────
