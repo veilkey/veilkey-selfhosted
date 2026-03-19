@@ -90,7 +90,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if role == "" {
 		role = strings.TrimSpace(req.Role)
 	}
-	roleProvided := role != ""
+	_ = role != "" // role is included in UpsertAgentPayload directly
 	if role == "" {
 		role = "agent"
 	}
@@ -186,36 +186,45 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.deps.SubmitTxAsync(r.Context(), chain.TxUpsertAgent, chain.UpsertAgentPayload{
+	// Submit all agent state as a single TX — role, capabilities, managed paths
+	// included in UpsertAgentPayload to avoid read-after-write race with SubmitTxAsync.
+	hostEnabled := agent != nil && agent.HostEnabled
+	localEnabled := agent == nil || agent.LocalEnabled
+	if req.HostEnabled != nil {
+		hostEnabled = *req.HostEnabled
+	}
+	if req.LocalEnabled != nil {
+		localEnabled = *req.LocalEnabled
+	}
+
+	isNewAgent := agent == nil
+	upsertPayload := chain.UpsertAgentPayload{
 		NodeID:       nodeID,
 		Label:        req.Label,
+		AgentRole:    role,
 		VaultHash:    req.VaultHash,
 		VaultName:    req.VaultName,
+		HostEnabled:  hostEnabled,
+		LocalEnabled: localEnabled,
+		ManagedPaths: strings.Join(req.ManagedPaths, ","),
 		IP:           req.IP,
 		Port:         req.Port,
 		SecretsCount: req.SecretsCount,
 		ConfigsCount: req.ConfigsCount,
 		Version:      req.Version,
 		KeyVersion:   req.KeyVersion,
-	}); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
-		return
 	}
-	if roleProvided || agent == nil {
-		if err := h.deps.DB().UpdateAgentRole(nodeID, role); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to update agent role: "+err.Error())
+	// New agents use Commit (need DB row for subsequent reads); existing use Async.
+	if isNewAgent {
+		if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to register agent: "+err.Error())
 			return
 		}
-	}
-	if req.HostEnabled != nil || req.LocalEnabled != nil || roleProvided || agent == nil {
-		if err := h.deps.DB().UpdateAgentCapabilities(nodeID, role, req.HostEnabled, req.LocalEnabled); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to update agent capabilities: "+err.Error())
+	} else {
+		if err := h.deps.SubmitTxAsync(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
+			respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
 			return
 		}
-	}
-	if err := h.deps.DB().UpdateAgentManagedPaths(nodeID, req.ManagedPaths); err != nil {
-		respondError(w, http.StatusConflict, "failed to update agent managed_paths: "+err.Error())
-		return
 	}
 
 	agent, err = h.deps.DB().GetAgentByNodeID(nodeID)
