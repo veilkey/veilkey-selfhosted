@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -156,8 +155,8 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	if pwCipher, pwNonce, pwErr := crypto.Encrypt(dek, []byte(req.Password)); pwErr == nil {
 		if refID, refErr := generateInitRef(16); refErr == nil {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-			encoded := base64.StdEncoding.EncodeToString(pwCipher) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
-			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
+			encoded := crypto.EncodeCiphertext(pwCipher, pwNonce)
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyVaultcenterPassword); saveErr == nil {
 				tempRef = parts.Canonical()
 			}
 		}
@@ -193,8 +192,8 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 		log.Printf("setup: failed to generate admin temp ref ID: %v", refErr)
 	} else {
 		parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-		encoded := base64.StdEncoding.EncodeToString(pwCipher) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
-		if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "ADMIN_PASSWORD"); saveErr != nil {
+		encoded := crypto.EncodeCiphertext(pwCipher, pwNonce)
+		if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyAdminPassword); saveErr != nil {
 			log.Printf("setup: failed to save admin temp ref: %v", saveErr)
 		} else {
 			adminTempRef = parts.Canonical()

@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/mattn/go-sqlite3 v1.14.33
 	github.com/veilkey/veilkey-chain v0.8.0
-	github.com/veilkey/veilkey-go-package v0.3.1
+	github.com/veilkey/veilkey-go-package v0.4.0
 	golang.org/x/crypto v0.49.0
 	gorm.io/driver/sqlite v1.6.0
 	gorm.io/gorm v1.31.1

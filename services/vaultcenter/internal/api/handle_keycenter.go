@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
@@ -94,7 +93,7 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 	}
 
 	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-	encoded := base64.StdEncoding.EncodeToString(ciphertext) + ":" + base64.StdEncoding.EncodeToString(nonce)
+	encoded := crypto.EncodeCiphertext(ciphertext, nonce)
 	expiresAt := time.Now().UTC().Add(1 * time.Hour)
 
 	nodeInfo, err := s.db.GetNodeInfo()

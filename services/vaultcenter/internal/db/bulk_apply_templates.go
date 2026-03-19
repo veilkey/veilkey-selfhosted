@@ -41,7 +41,7 @@ func normalizeBulkApplyTemplate(tmpl *BulkApplyTemplate) error {
 		return fmt.Errorf("body is required")
 	}
 	if tmpl.TemplateID == "" {
-		tmpl.TemplateID = tmpl.VaultRuntimeHash + ":" + tmpl.Name
+		tmpl.TemplateID = MakeTemplateID(tmpl.VaultRuntimeHash, tmpl.Name)
 	}
 	return nil
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -25,6 +26,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 )
 
+const defaultChainP2PAddr = "127.0.0.1:26656"
 type NodeIdentity struct {
 	NodeID    string
 	ParentURL string
@@ -133,7 +135,7 @@ func (s *Server) ChainInfo() (genesisJSON []byte, persistentPeers string) {
 		// peer format: nodeID@host:port — host is the vaultcenter's listen address
 		addr := strings.TrimSpace(os.Getenv("VEILKEY_CHAIN_P2P_ADDR"))
 		if addr == "" {
-			addr = "127.0.0.1:26656"
+			addr = defaultChainP2PAddr
 		}
 		persistentPeers = s.chainNodeID + "@" + addr
 	}
@@ -171,7 +173,7 @@ func (s *Server) SubmitTx(ctx context.Context, txType chain.TxType, payload any)
 	}
 	code, resultLog := chain.Execute(s.chainStore, env)
 	if code != 0 {
-		return "", fmt.Errorf(resultLog)
+		return "", errors.New(resultLog)
 	}
 	return resultLog, nil
 }
@@ -197,7 +199,7 @@ func (s *Server) SubmitTxAsync(ctx context.Context, txType chain.TxType, payload
 	}
 	code, resultLog := chain.Execute(s.chainStore, env)
 	if code != 0 {
-		return fmt.Errorf(resultLog)
+		return errors.New(resultLog)
 	}
 	return nil
 }

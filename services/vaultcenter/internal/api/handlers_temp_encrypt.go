@@ -2,7 +2,6 @@ package api
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"strings"
@@ -69,7 +68,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-	encoded := base64.StdEncoding.EncodeToString(ciphertext) + ":" + base64.StdEncoding.EncodeToString(nonce)
+	encoded := crypto.EncodeCiphertext(ciphertext, nonce)
 	expiresAt := time.Now().UTC().Add(tempKeyTTL)
 
 	nodeInfo, err := s.db.GetNodeInfo()

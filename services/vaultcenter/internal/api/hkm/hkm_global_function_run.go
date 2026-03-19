@@ -59,7 +59,7 @@ func (h *Handler) localFunctionBaseURL() string {
 		return ""
 	}
 	if strings.HasPrefix(addr, ":") {
-		return scheme + "://127.0.0.1" + addr
+		return scheme + "://localhost" + addr
 	}
 	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
 		return addr

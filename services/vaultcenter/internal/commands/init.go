@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -100,7 +99,7 @@ func RunInit() {
 		pwRefID, refErr := generateInitRef(16)
 		if refErr == nil {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: pwRefID}
-			encoded := base64.StdEncoding.EncodeToString(pwCiphertext) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
+			encoded := crypto.EncodeCiphertext(pwCiphertext, pwNonce)
 			expiresAt := time.Now().UTC().Add(1 * time.Hour)
 			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyVaultcenterPassword); saveErr == nil {
 				tempRef = parts.Canonical()

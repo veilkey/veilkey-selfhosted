@@ -156,6 +156,34 @@ fi
 check_env_documented "localvault"
 check_env_documented "vaultcenter"
 
+# 9. cipher:nonce 인라인 인코딩 차단 — crypto.EncodeCiphertext()/DecodeCiphertext()를 사용하세요
+cipher_inline=$(grep -rn --include="*.go" \
+  'EncodeToString.*+ ":".*EncodeToString' $GO_SERVICES 2>/dev/null || true)
+if [[ -n "$cipher_inline" ]]; then
+  echo "❌ cipher:nonce 인라인 인코딩 금지: crypto.EncodeCiphertext()를 사용하세요"
+  echo "$cipher_inline"
+  found=1
+fi
+cipher_decode_inline=$(grep -rn --include="*.go" \
+  'SplitN.*Ciphertext.*":".*2' $GO_SERVICES 2>/dev/null || true)
+if [[ -n "$cipher_decode_inline" ]]; then
+  echo "❌ cipher:nonce 인라인 디코딩 금지: crypto.DecodeCiphertext()를 사용하세요"
+  echo "$cipher_decode_inline"
+  found=1
+fi
+
+# 10. 복합 키 직접 연결 차단 — db.MakeTemplateID()/MakeSecretCanonicalID()를 사용하세요
+composite_key=$(grep -rn --include="*.go" \
+  'VaultHash\s*+\s*":"' $GO_SERVICES 2>/dev/null || true)
+composite_key2=$(grep -rn --include="*.go" \
+  'VaultRuntimeHash\s*+\s*":"' $GO_SERVICES 2>/dev/null || true)
+if [[ -n "$composite_key" || -n "$composite_key2" ]]; then
+  echo "❌ 복합 키 직접 연결 금지: db.MakeTemplateID() 또는 db.MakeSecretCanonicalID()를 사용하세요"
+  [[ -n "$composite_key" ]] && echo "$composite_key"
+  [[ -n "$composite_key2" ]] && echo "$composite_key2"
+  found=1
+fi
+
 if [[ $found -eq 1 ]]; then
   echo ""
   echo "기본값은 .env.example에 추가하세요."

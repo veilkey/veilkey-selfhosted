@@ -92,7 +92,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = role != "" // role is included in UpsertAgentPayload directly
 	if role == "" {
-		role = "agent"
+		role = db.DefaultAgentRole
 	}
 
 	if req.IP == "" {
@@ -212,7 +212,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		localEnabled = *req.LocalEnabled
 	}
 
-	isNewAgent := agent == nil
+	
 	upsertPayload := chain.UpsertAgentPayload{
 		NodeID:       nodeID,
 		Label:        req.Label,
@@ -229,17 +229,10 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Version:      req.Version,
 		KeyVersion:   req.KeyVersion,
 	}
-	// New agents use Commit (need DB row for subsequent reads); existing use Async.
-	if isNewAgent {
-		if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to register agent: "+err.Error())
-			return
-		}
-	} else {
-		if err := h.deps.SubmitTxAsync(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
-			return
-		}
+	// Both new and existing agents use Commit to avoid read-after-write race.
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
+		return
 	}
 
 	agent, err = h.deps.DB().GetAgentByNodeID(nodeID)

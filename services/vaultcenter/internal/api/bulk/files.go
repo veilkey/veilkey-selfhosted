@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"veilkey-vaultcenter/internal/db"
 )
 
 // ---------------------------------------------------------------------------
@@ -186,7 +188,7 @@ func normalizeBulkApplyTemplatePayload(vaultHash string, req *bulkApplyTemplateP
 		enabled = *req.Enabled
 	}
 	record := &bulkApplyTemplateRecord{
-		TemplateID:       strings.TrimSpace(vaultHash) + ":" + name,
+		TemplateID:       db.MakeTemplateID(strings.TrimSpace(vaultHash), name),
 		VaultRuntimeHash: strings.TrimSpace(vaultHash),
 		Name:             name,
 		Format:           format,
@@ -250,7 +252,7 @@ func (h *Handler) loadBulkApplyTemplateRecord(vaultHash, name string) (*bulkAppl
 		return nil, fmt.Errorf("bulk apply template %s not found", strings.TrimSpace(name))
 	}
 	record := &bulkApplyTemplateRecord{
-		TemplateID:       strings.TrimSpace(vaultHash) + ":" + strings.TrimSpace(name),
+		TemplateID:       db.MakeTemplateID(strings.TrimSpace(vaultHash), strings.TrimSpace(name)),
 		VaultRuntimeHash: strings.TrimSpace(vaultHash),
 		Name:             strings.TrimSpace(name),
 		ValidationStatus: "valid",

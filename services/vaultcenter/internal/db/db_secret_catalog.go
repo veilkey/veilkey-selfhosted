@@ -66,7 +66,7 @@ func (d *DB) UpsertSecretCatalogFromTrackedRef(ref *TokenRef) error {
 		lastRevealedAt = existing.LastRevealedAt
 	}
 	entry := &SecretCatalog{
-		SecretCanonicalID: agent.VaultHash + ":" + ref.RefCanonical,
+		SecretCanonicalID: MakeSecretCanonicalID(agent.VaultHash, ref.RefCanonical),
 		SecretName:        name,
 		DisplayName:       displayName,
 		Description:       description,
