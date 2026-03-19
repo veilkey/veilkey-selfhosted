@@ -104,8 +104,7 @@ $ node app.js                  ← process.env.DB_PASSWORD = "actual-password"
 services/
   vaultcenter/     ← 중앙 관리 서버 (Go)
   localvault/      ← 로컬 금고 (Go)
-  veil-cli/        ← veil 진입점 (Rust)
-  veilkey-cli/     ← CLI 도구 — scan, filter, exec, resolve (Rust)
+  veil-cli/        ← veil, veilkey, veilkey-cli, veilkey-session-config (Rust)
 docker-compose.yml ← 전체 스택 (VC + LV + veil)
 ```
 

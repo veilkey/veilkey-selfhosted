@@ -58,18 +58,18 @@ Node-local storage vault. One per machine/container.
 
 **Port:** `:10180` (host: `11180`)
 
-### veil-cli (Rust)
+### veil-cli (Rust) — `services/veil-cli/`
 
-Protected session entry point.
+Single Rust package, 4 binaries:
 
 | Binary | Purpose |
 |--------|---------|
-| `veil` | Enter protected session (loads session config, launches veilkey) |
-| `veilkey` | State, crypto, policy control (session, status, resolve, encrypt) |
+| `veil` | Enter protected session (PTY masking shell) |
+| `veilkey` | State, crypto, policy control |
+| `veilkey-cli` | CLI tools: scan, filter, wrap-pty, exec, resolve |
+| `veilkey-session-config` | Session TOML config loader |
 
-### veilkey-cli (Rust)
-
-Lower-level CLI tools.
+**veilkey-cli commands:**
 
 | Command | Description | API Required |
 |---------|-------------|:---:|

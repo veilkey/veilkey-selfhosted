@@ -16,5 +16,6 @@ repo: {
 	paths: {
 		vaultcenter: "services/vaultcenter"
 		localvault:  "services/localvault"
+		veil_cli:    "services/veil-cli"
 	}
 }
