@@ -8,8 +8,10 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -20,13 +22,34 @@ import (
 )
 
 const (
-	adminSessionCookieName  = "veilkey_admin_session"
-	adminSessionTTL         = 2 * time.Hour
-	adminSessionIdleTimeout = 30 * time.Minute
-	adminRevealWindow       = 5 * time.Minute
-	adminTOTPPeriodSeconds  = 30
-	adminTOTPDigits         = 6
+	adminSessionCookieName         = "veilkey_admin_session"
+	adminSessionTTLDefault         = 2 * time.Hour
+	adminSessionIdleTimeoutDefault = 30 * time.Minute
+	adminRevealWindow              = 5 * time.Minute
+	adminTOTPPeriodSeconds         = 30
+	adminTOTPDigits                = 6
 )
+
+func adminSessionTTL() time.Duration {
+	return envDuration("VEILKEY_ADMIN_SESSION_TTL", adminSessionTTLDefault)
+}
+
+func adminSessionIdleTimeout() time.Duration {
+	return envDuration("VEILKEY_ADMIN_SESSION_IDLE_TIMEOUT", adminSessionIdleTimeoutDefault)
+}
+
+func envDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("invalid duration %s=%q, using default %s", key, v, fallback)
+		return fallback
+	}
+	return d
+}
 
 type adminAuthSettingsResponse struct {
 	TOTPEnabled         bool  `json:"totp_enabled"`
@@ -260,8 +283,8 @@ func (h *Handler) handleAdminSessionLogin(w http.ResponseWriter, r *http.Request
 		TokenHash:     tokenHash,
 		AuthMethod:    "totp",
 		RemoteAddr:    httputil.ActorIDForRequest(r),
-		ExpiresAt:     now.Add(adminSessionTTL),
-		IdleExpiresAt: now.Add(adminSessionIdleTimeout),
+		ExpiresAt:     now.Add(adminSessionTTL()),
+		IdleExpiresAt: now.Add(adminSessionIdleTimeout()),
 		LastSeenAt:    now,
 		CreatedAt:     now,
 	}
@@ -667,7 +690,7 @@ func (h *Handler) currentAdminSession(r *http.Request) (*db.AdminSession, error)
 		return nil, fmt.Errorf("admin session expired")
 	}
 	session.LastSeenAt = now
-	session.IdleExpiresAt = now.Add(adminSessionIdleTimeout)
+	session.IdleExpiresAt = now.Add(adminSessionIdleTimeout())
 	_ = h.deps.DB().TouchAdminSession(session.SessionID, session.LastSeenAt, session.IdleExpiresAt)
 	return session, nil
 }
@@ -680,8 +703,8 @@ func adminAuthSettingsPayload(cfg *db.AdminAuthConfig) adminAuthSettingsResponse
 		TOTPEnabled:         cfg.TOTPEnabled,
 		TOTPEnrolled:        cfg.EnrolledAt != nil && len(cfg.TOTPSecretCiphertext) > 0,
 		PendingEnrollment:   cfg.PendingIssuedAt != nil && len(cfg.PendingSecretCiphertext) > 0,
-		SessionTTLSeconds:   int64(adminSessionTTL.Seconds()),
-		IdleTTLSeconds:      int64(adminSessionIdleTimeout.Seconds()),
+		SessionTTLSeconds:   int64(adminSessionTTL().Seconds()),
+		IdleTTLSeconds:      int64(adminSessionIdleTimeout().Seconds()),
 		RevealWindowSeconds: int64(adminRevealWindow.Seconds()),
 	}
 }
@@ -695,8 +718,8 @@ func sessionPayload(session *db.AdminSession) map[string]any {
 		"idle_expires_at":      session.IdleExpiresAt.Format(time.RFC3339),
 		"last_seen_at":         session.LastSeenAt.Format(time.RFC3339),
 		"reveal_until":         formatOptionalTime(session.RevealUntil),
-		"session_ttl_seconds":  int64(adminSessionTTL.Seconds()),
-		"idle_timeout_seconds": int64(adminSessionIdleTimeout.Seconds()),
+		"session_ttl_seconds":  int64(adminSessionTTL().Seconds()),
+		"idle_timeout_seconds": int64(adminSessionIdleTimeout().Seconds()),
 	}
 }
 

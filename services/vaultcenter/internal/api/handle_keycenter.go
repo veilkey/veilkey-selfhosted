@@ -97,7 +97,7 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 
 	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
 	encoded := crypto.EncodeCiphertext(ciphertext, nonce)
-	expiresAt := time.Now().UTC().Add(1 * time.Hour)
+	expiresAt := time.Now().UTC().Add(tempRefTTL())
 
 	nodeInfo, err := s.db.GetNodeInfo()
 	if err != nil {

@@ -576,3 +576,23 @@ func newPooledHTTPClient(base *http.Client) *http.Client {
 		Transport: transport,
 	}
 }
+
+// envDuration reads a duration from an env var, falling back to a default.
+// Accepts Go duration strings like "1h", "30m", "2h30m".
+func envDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		log.Printf("invalid duration %s=%q, using default %s", key, v, fallback)
+		return fallback
+	}
+	return d
+}
+
+// tempRefTTL returns the configured temp-ref expiry duration.
+func tempRefTTL() time.Duration {
+	return envDuration("VEILKEY_TEMP_REF_TTL", 1*time.Hour)
+}
