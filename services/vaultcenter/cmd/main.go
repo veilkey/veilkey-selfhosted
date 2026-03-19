@@ -96,12 +96,6 @@ func runServer() {
 			log.Fatalf("Failed to unlock with VEILKEY_PASSWORD_FILE: %v", err)
 		}
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := readDataDirPassword(dataDir); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if err := server.Unlock(kek); err != nil {
-			log.Fatalf("Failed to unlock with data dir password file: %v", err)
-		}
-		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {
@@ -142,15 +136,6 @@ func runServer() {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}
-}
-
-func readDataDirPassword(dataDir string) string {
-	path := filepath.Join(dataDir, "password")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
 }
 
 // runHKMInit handles: veilkey-storage init --root

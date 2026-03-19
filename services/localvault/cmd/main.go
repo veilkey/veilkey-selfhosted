@@ -238,15 +238,6 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		log.Printf("install: vaultcenter URL saved: %s", normalized)
 	}
 
-	// Save password file BEFORE salt — salt existence signals "init complete"
-	passwordFile := filepath.Join(dataDir, "password")
-	if err := os.WriteFile(passwordFile, []byte(req.Password), 0600); err != nil {
-		log.Printf("install: failed to write password file: %v", err)
-		// non-fatal: server can still be unlocked manually
-	} else {
-		log.Printf("install: password file saved to %s", passwordFile)
-	}
-
 	// Write salt file (this is the trigger that switches from setup to normal mode)
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Printf("install: failed to write salt file: %v", err)
@@ -333,13 +324,6 @@ func mustLoadServer() (*api.Server, string, int) {
 		}
 		server.Unlock(kek)
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := readDataDirPassword(dataDir); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
-			log.Fatalf("Failed to unlock with data dir password file: invalid password")
-		}
-		server.Unlock(kek)
-		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {
@@ -612,12 +596,6 @@ func runInit() {
 		}
 	}
 
-	// Save password file for auto-unlock on restart
-	passwordFile := filepath.Join(dataDir, "password")
-	if err := os.WriteFile(passwordFile, []byte(password), 0600); err != nil {
-		log.Printf("Warning: failed to write password file: %v", err)
-	}
-
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
@@ -638,14 +616,6 @@ func readPassword(prompt string) string {
 	return cmdutil.ReadPassword(prompt)
 }
 
-func readDataDirPassword(dataDir string) string {
-	path := filepath.Join(dataDir, "password")
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
 
 func decodeRegistrationToken(token string) (tokenID, vcURL, label string, err error) {
 	const prefix = "vk_reg_"
