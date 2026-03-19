@@ -8,6 +8,8 @@ services:
     restart: unless-stopped
     ports:
       - "${VAULTCENTER_HOST_PORT:-11181}:10181"
+      - "${VAULTCENTER_P2P_PORT:-26656}:26656"
+      - "${VAULTCENTER_RPC_PORT:-26657}:26657"
     environment:
       VEILKEY_ADDR: ":10181"
       VEILKEY_DB_PATH: /data/veilkey.db
@@ -18,6 +20,8 @@ services:
       VEILKEY_AGENT_SCHEME: "${VEILKEY_AGENT_SCHEME}"
       VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
       VEILKEY_TLS_INSECURE: "1"
+      VEILKEY_CHAIN_HOME: /data/chain
+      VEILKEY_CHAIN_P2P_ADDR: "vaultcenter:26656"
     volumes:
       - ${VAULTCENTER_DATA_DIR:-./data/vaultcenter}:/data
     healthcheck:
@@ -45,6 +49,8 @@ services:
       VEILKEY_VAULTCENTER_URL: "https://vaultcenter:10181"
       VEILKEY_TRUSTED_IPS: "${VEILKEY_TRUSTED_IPS}"
       VEILKEY_TLS_INSECURE: "1"
+      VEILKEY_CHAIN_HOME: /data/chain
+      VEILKEY_CHAIN_PERSISTENT_PEERS: "${LOCALVAULT_CHAIN_PEERS}"
     volumes:
       - ${LOCALVAULT_DATA_DIR:-./data/localvault}:/data
     depends_on:
