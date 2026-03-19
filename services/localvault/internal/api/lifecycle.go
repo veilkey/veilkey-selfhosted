@@ -32,7 +32,7 @@ func (s *Server) handleReencrypt(w http.ResponseWriter, r *http.Request) {
 	}
 	parsed, err := ParseScopedVKRef(req.Ciphertext)
 	if err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+		s.respondError(w, http.StatusBadRequest, "invalid ref format")
 		return
 	}
 	if _, err := s.db.GetSecretByRef(parsed.ID); err != nil {
@@ -62,7 +62,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 
 	parsed, err := ParseScopedRef(req.Ciphertext)
 	if err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+		s.respondError(w, http.StatusBadRequest, "invalid ref format")
 		return
 	}
 	if parsed.Scope != RefScopeTemp {
@@ -72,7 +72,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 
 	targetScope, err := ParseActivationScope(req.Scope)
 	if err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+		s.respondError(w, http.StatusBadRequest, "invalid ref format")
 		return
 	}
 	switch parsed.Family {
@@ -87,7 +87,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.db.UpdateSecretLifecycle(parsed.ID, targetScope, db.RefStatusActive); err != nil {
-			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
+			s.respondError(w, http.StatusInternalServerError, "failed to update status")
 			return
 		}
 		activated := ParsedRef{
@@ -108,7 +108,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := s.db.UpdateConfigLifecycle(parsed.ID, targetScope, db.RefStatusActive); err != nil {
-			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
+			s.respondError(w, http.StatusInternalServerError, "failed to update status")
 			return
 		}
 		activated := ParsedRef{
@@ -151,7 +151,7 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 
 	parsed, err := ParseScopedRef(req.Ciphertext)
 	if err != nil {
-		s.respondError(w, http.StatusBadRequest, err.Error())
+		s.respondError(w, http.StatusBadRequest, "invalid ref format")
 		return
 	}
 	if parsed.Scope == RefScopeTemp {
@@ -174,7 +174,7 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 			scope = parsed.Scope
 		}
 		if err := s.db.UpdateSecretLifecycle(parsed.ID, scope, status); err != nil {
-			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
+			s.respondError(w, http.StatusInternalServerError, "failed to update status")
 			return
 		}
 		s.respondLifecycleJSON(w, parsed.CanonicalString(), status, false, s.syncTrackedRefWithVaultcenter(parsed.CanonicalString(), "", secret.Version, status))
@@ -190,7 +190,7 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 			return
 		}
 		if err := s.db.UpdateConfigLifecycle(parsed.ID, "", status); err != nil {
-			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
+			s.respondError(w, http.StatusInternalServerError, "failed to update status")
 			return
 		}
 		s.respondLifecycleJSON(w, parsed.CanonicalString(), status, false, s.syncTrackedRefWithVaultcenter(parsed.CanonicalString(), "", 0, status))

@@ -48,7 +48,7 @@ func (h *Handler) handleSaveSecretFields(w http.ResponseWriter, r *http.Request)
 
 	secret, err := h.deps.DB().GetSecretByName(req.Name)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "secret not found")
 		return
 	}
 	if secret.Status != refStatusActive || (secret.Scope != refScopeLocal && secret.Scope != db.RefScopeExternal) {
@@ -79,7 +79,7 @@ func (h *Handler) handleSaveSecretFields(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.deps.DB().SaveSecretFields(req.Name, fields); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to save secret fields: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to save secret fields")
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *Handler) handleCipherField(w http.ResponseWriter, r *http.Request) {
 
 	field, err := h.deps.DB().GetSecretField(secret.Name, fieldKey)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "field not found")
 		return
 	}
 
@@ -147,7 +147,7 @@ func (h *Handler) handleDeleteSecretField(w http.ResponseWriter, r *http.Request
 
 	secret, err := h.deps.DB().GetSecretByName(name)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "secret not found")
 		return
 	}
 	if secret.Status != refStatusActive || (secret.Scope != refScopeLocal && secret.Scope != db.RefScopeExternal) {
@@ -155,7 +155,7 @@ func (h *Handler) handleDeleteSecretField(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if err := h.deps.DB().DeleteSecretField(name, fieldKey); err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "field not found")
 		return
 	}
 

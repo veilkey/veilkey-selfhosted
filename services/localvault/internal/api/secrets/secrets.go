@@ -71,7 +71,7 @@ func (h *Handler) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.deps.DB().DeleteSecret(name); err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "secret not found")
 		return
 	}
 
@@ -104,7 +104,7 @@ func (h *Handler) handleRekey(w http.ResponseWriter, r *http.Request) {
 
 	oldDEK, err := h.deps.GetLocalDEK()
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to get current DEK: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to get current DEK")
 		return
 	}
 	count, skipped, err := h.deps.DB().ReencryptMixedSecrets(
@@ -120,7 +120,7 @@ func (h *Handler) handleRekey(w http.ResponseWriter, r *http.Request) {
 		req.Version,
 	)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, fmt.Sprintf("re-encryption failed after %d secrets (skipped %d already-current): %v", count, skipped, err))
+		respondError(w, http.StatusInternalServerError, fmt.Sprintf("re-encryption failed after %d secrets (skipped %d already-current)", count, skipped))
 		return
 	}
 
@@ -130,7 +130,7 @@ func (h *Handler) handleRekey(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.deps.DB().UpdateNodeDEK(encDEK, encNonce, req.Version); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to update node DEK: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to update node DEK")
 		return
 	}
 

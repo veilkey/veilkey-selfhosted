@@ -81,7 +81,7 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 		Status:     status,
 	}
 	if err := h.deps.DB().SaveSecret(secret); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to save secret: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to save secret")
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *Handler) handleGetSecretMeta(w http.ResponseWriter, r *http.Request) {
 
 	secret, err := h.deps.DB().GetSecretByName(name)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "secret not found")
 		return
 	}
 

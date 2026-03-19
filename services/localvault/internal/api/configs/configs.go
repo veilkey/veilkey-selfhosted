@@ -52,7 +52,7 @@ func (h *Handler) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 
 	config, err := h.deps.DB().GetConfig(key)
 	if err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "config not found")
 		return
 	}
 	if config.Status == refStatusBlock {
@@ -92,7 +92,7 @@ func (h *Handler) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.deps.DB().SaveConfig(req.Key, *req.Value); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to save config: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to save config")
 		return
 	}
 
@@ -131,7 +131,7 @@ func (h *Handler) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.deps.DB().SaveConfigs(req.Configs); err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to save configs: "+err.Error())
+		respondError(w, http.StatusInternalServerError, "failed to save configs")
 		return
 	}
 
@@ -152,7 +152,7 @@ func (h *Handler) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := h.deps.DB().DeleteConfig(key); err != nil {
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "config not found")
 		return
 	}
 

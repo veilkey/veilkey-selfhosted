@@ -77,7 +77,7 @@ func (h *Handler) handleFunctions(w http.ResponseWriter, r *http.Request) {
 		scope := strings.TrimSpace(r.URL.Query().Get("scope"))
 		functions, err := h.deps.DB().ListFunctionsByScope(scope)
 		if err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
+			respondError(w, http.StatusBadRequest, "invalid scope")
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{
@@ -99,7 +99,7 @@ func (h *Handler) handleFunctions(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.deps.DB().SaveFunction(&req); err != nil {
-			respondError(w, http.StatusBadRequest, err.Error())
+			respondError(w, http.StatusBadRequest, "failed to save function")
 			return
 		}
 		respondJSON(w, http.StatusOK, req)
@@ -118,14 +118,14 @@ func (h *Handler) handleFunction(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		fn, err := h.deps.DB().GetFunction(name)
 		if err != nil {
-			respondError(w, http.StatusNotFound, err.Error())
+			respondError(w, http.StatusNotFound, "function not found")
 			return
 		}
 		respondJSON(w, http.StatusOK, fn)
 	case http.MethodDelete:
 		fn, err := h.deps.DB().GetFunction(name)
 		if err != nil {
-			respondError(w, http.StatusNotFound, err.Error())
+			respondError(w, http.StatusNotFound, "function not found")
 			return
 		}
 		if strings.EqualFold(fn.Scope, "GLOBAL") {
@@ -133,7 +133,7 @@ func (h *Handler) handleFunction(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := h.deps.DB().DeleteFunction(name); err != nil {
-			respondError(w, http.StatusNotFound, err.Error())
+			respondError(w, http.StatusNotFound, "function not found")
 			return
 		}
 		respondJSON(w, http.StatusOK, map[string]any{"deleted": name})
