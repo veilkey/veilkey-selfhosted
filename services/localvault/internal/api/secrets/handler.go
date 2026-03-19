@@ -55,8 +55,8 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/cipher/{ref}", trusted(ready(h.handleCipher)))
 	mux.HandleFunc("GET /api/cipher/{ref}/fields/{field}", trusted(ready(h.handleCipherField)))
 	mux.HandleFunc("POST /api/cipher", trusted(ready(h.handleSaveCipher)))
-	mux.HandleFunc("POST /api/decrypt", trusted(ready(h.handleDecrypt)))
-	mux.HandleFunc("POST /api/promote", trusted(ready(h.handlePromote)))
+	// POST /api/decrypt — removed (legacy encryption path)
+	// POST /api/promote — removed (legacy encryption path)
 
 	mux.HandleFunc("POST /api/encrypt", ready(h.handleEncrypt))
 

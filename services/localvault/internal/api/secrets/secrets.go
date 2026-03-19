@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/veilkey/veilkey-go-package/crypto"
@@ -82,52 +81,7 @@ func (h *Handler) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
-	if r.Header.Get("X-VeilKey-Cascade") != "true" {
-		respondError(w, http.StatusForbidden, vaultcenterOnlyDecryptMessage)
-		return
-	}
-
-	ref := r.PathValue("ref")
-	if ref == "" {
-		respondError(w, http.StatusBadRequest, "ref is required")
-		return
-	}
-
-	secret, err := h.deps.DB().GetSecretByRef(ref)
-	if err != nil {
-		parts := strings.SplitN(ref, ":", 3)
-		if len(parts) == 3 {
-			secret, err = h.deps.DB().GetSecretByRef(parts[2])
-		}
-		if err != nil {
-			respondError(w, http.StatusNotFound, "ref not found")
-			return
-		}
-	}
-
-	info, err := h.deps.DB().GetNodeInfo()
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "node info not available")
-		return
-	}
-
-	dek, err := crypto.Decrypt(h.deps.GetKEK(), info.DEK, info.DEKNonce)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "failed to decrypt DEK")
-		return
-	}
-
-	plaintext, err := crypto.Decrypt(dek, secret.Ciphertext, secret.Nonce)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "decryption failed")
-		return
-	}
-
-	respondJSON(w, http.StatusOK, map[string]any{
-		"ref":   ref,
-		"name":  secret.Name,
-		"value": string(plaintext),
-	})
+	respondError(w, http.StatusForbidden, "localvault direct plaintext resolution is disabled")
 }
 
 func (h *Handler) handleRekey(w http.ResponseWriter, r *http.Request) {

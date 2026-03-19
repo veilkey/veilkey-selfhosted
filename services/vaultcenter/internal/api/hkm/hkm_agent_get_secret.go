@@ -46,23 +46,17 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
-	plaintextValue := ""
 	cipher, err := h.fetchAgentCiphertext(agentURL, meta.Ref)
-	if err == nil {
-		plaintext, decErr := crypto.Decrypt(agentDEK, cipher.Ciphertext, cipher.Nonce)
-		if decErr == nil {
-			plaintextValue = string(plaintext)
-		}
+	if err != nil {
+		respondError(w, http.StatusBadGateway, "failed to fetch ciphertext: "+err.Error())
+		return
 	}
-	// Fallback: ask agent to resolve (uses agent's own DEK)
-	if plaintextValue == "" {
-		resolved, resolveErr := h.fetchAgentResolvedValue(agentURL, meta.Token)
-		if resolveErr != nil {
-			respondError(w, http.StatusBadGateway, "failed to resolve secret value")
-			return
-		}
-		plaintextValue = resolved.Value
+	plaintext, decErr := crypto.Decrypt(agentDEK, cipher.Ciphertext, cipher.Nonce)
+	if decErr != nil {
+		respondError(w, http.StatusInternalServerError, "decryption failed")
+		return
 	}
+	plaintextValue := string(plaintext)
 
 	payload := map[string]interface{}{
 		"name":         name,

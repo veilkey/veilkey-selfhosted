@@ -48,3 +48,4 @@ node_modules/
 /veilkey
 # Go build output inside service directories
 services/*/main
+.claude/
