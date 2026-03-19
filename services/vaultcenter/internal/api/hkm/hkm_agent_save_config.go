@@ -34,9 +34,9 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	scope, status, err := normalizeScopeStatus(refFamilyVE, reqData.Scope, reqData.Status, refScopeLocal)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+	normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(reqData.Scope), refStatus(reqData.Status), refScopeLocal)
+	if normalizeErr != nil {
+		respondError(w, http.StatusBadRequest, normalizeErr.Error())
 		return
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agent.URL()+agentPathConfigs, bytes.NewReader(body))
@@ -57,22 +57,22 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		var respData map[string]interface{}
 		if json.Unmarshal(respBody, &respData) == nil {
 			key := reqData.Key
-			respScope, _ := respData["scope"].(string)
-			respStatus, _ := respData["status"].(string)
-			scope, status, err = normalizeScopeStatus(refFamilyVE, respScope, respStatus, scope)
-			if err != nil {
-				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
+			respScopeStr, _ := respData["scope"].(string)
+			respStatusStr, _ := respData["status"].(string)
+			normScope, normStatus, normalizeErr = normalizeScopeStatus(refFamilyVE, refScope(respScopeStr), refStatus(respStatusStr), normScope)
+			if normalizeErr != nil {
+				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+normalizeErr.Error())
 				return
 			}
-			respData["ref"] = "VE:" + scope + ":" + key
-			respData["scope"] = scope
-			respData["status"] = status
+			respData["ref"] = makeRef(refFamilyVE, normScope, key)
+			respData["scope"] = string(normScope)
+			respData["status"] = string(normStatus)
 			respData["vault"] = agent.Label
 			setRuntimeHashAliases(respData, agent.AgentHash)
-			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, normScope, key), agent.KeyVersion, normStatus, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				makeRef(refFamilyVE, scope, key),
+				makeRef(refFamilyVE, normScope, key),
 				"save",
 				"agent",
 				agent.AgentHash,
@@ -81,9 +81,9 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 				nil,
 				map[string]any{
 					"key":                key,
-					"ref":                "VE:" + scope + ":" + key,
+					"ref":                makeRef(refFamilyVE, normScope, key),
 					"vault_runtime_hash": agent.AgentHash,
-					"status":             status,
+					"status":             string(normStatus),
 				},
 			)
 			if marshaled, marshalErr := json.Marshal(respData); marshalErr == nil {

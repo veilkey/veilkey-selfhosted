@@ -8,7 +8,8 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/agentapi"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -43,7 +44,7 @@ type agentInfo struct {
 func (a *agentInfo) URL() string {
 	port := a.Port
 	if port == 0 {
-		port = db.DefaultAgentPort
+		port = agentapi.DefaultPort
 	}
 	return fmt.Sprintf("%s://%s:%d", AgentScheme(), a.IP, port)
 }

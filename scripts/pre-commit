@@ -30,7 +30,16 @@ for val in "${BANNED[@]}"; do
   fi
 done
 
-# 2. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외, 예외 목록 제외)
+# 2. 하드코딩 ref 조합 차단 — makeRef()/db.MakeRef()를 사용하세요
+ref_hardcoded=$(grep -rn --include="*.go" \
+  -E '"V[KE]:" \+|"V[KE]:[A-Z]+:" \+|fmt\.Sprintf\("V[KE]:' $GO_SERVICES 2>/dev/null || true)
+if [[ -n "$ref_hardcoded" ]]; then
+  echo "❌ 하드코딩 ref 금지: makeRef() 또는 db.MakeRef()를 사용하세요"
+  echo "$ref_hardcoded"
+  found=1
+fi
+
+# 3. sh 파일에서 VEILKEY_* fallback 차단 (${VAR:-} 빈값 제외, 예외 목록 제외)
 # *.sh 파일 + 서비스 내 scripts/ 하위의 확장자 없는 스크립트도 포함
 _sh_files=$(find $ALL_SERVICES -name "*.sh" -o \( -path "*/scripts/*" -type f ! -name "*.*" \) 2>/dev/null | sort)
 sh_fallbacks=$(echo "$_sh_files" | xargs grep -n 'VEILKEY_[A-Z_]*:-[^}]' 2>/dev/null | \

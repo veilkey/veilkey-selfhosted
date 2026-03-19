@@ -15,7 +15,8 @@ import (
 	"veilkey-vaultcenter/internal/api/bulk"
 	"veilkey-vaultcenter/internal/api/hkm"
 	"veilkey-vaultcenter/internal/api/install"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/agentapi"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 )
@@ -143,7 +144,7 @@ func (s *Server) FetchAgentCiphertext(agentURL, ref string) (name string, cipher
 
 func (s *Server) AgentURL(ip string, port int) string {
 	if port == 0 {
-		port = db.DefaultAgentPort
+		port = agentapi.DefaultPort
 	}
 	return fmt.Sprintf("%s://%s:%d", AgentScheme(), ip, port)
 }

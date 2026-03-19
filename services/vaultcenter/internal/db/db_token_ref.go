@@ -10,17 +10,12 @@ import (
 
 type RefParts struct {
 	Family string
-	Scope  string
+	Scope  RefScope
 	ID     string
 }
 
 func (r RefParts) Canonical() string {
-	return r.Family + RefSep + r.Scope + RefSep + r.ID
-}
-
-// MakeRef constructs a canonical ref string from its components.
-func MakeRef(family, scope, id string) string {
-	return RefParts{Family: family, Scope: scope, ID: id}.Canonical()
+	return r.Family + RefSep + string(r.Scope) + RefSep + r.ID
 }
 
 func ParseCanonicalRef(canonical string) (RefParts, error) {
@@ -31,7 +26,7 @@ func ParseCanonicalRef(canonical string) (RefParts, error) {
 	}
 	parsed := RefParts{
 		Family: parts[0],
-		Scope:  parts[1],
+		Scope:  RefScope(parts[1]),
 		ID:     parts[2],
 	}
 	if err := parsed.Validate(); err != nil {
@@ -42,7 +37,7 @@ func ParseCanonicalRef(canonical string) (RefParts, error) {
 
 func (r RefParts) Validate() error {
 	r.Family = strings.ToUpper(strings.TrimSpace(r.Family))
-	r.Scope = strings.ToUpper(strings.TrimSpace(r.Scope))
+	r.Scope = RefScope(strings.ToUpper(strings.TrimSpace(string(r.Scope))))
 	r.ID = strings.TrimSpace(r.ID)
 	if r.Family == "" {
 		return fmt.Errorf("ref family is required")
@@ -53,22 +48,23 @@ func (r RefParts) Validate() error {
 	if r.ID == "" {
 		return fmt.Errorf("ref id is required")
 	}
-	if _, _, err := NormalizeRefState(r.Family, r.Scope, "", ""); err != nil {
-		return err
-	}
 	return nil
 }
 
-func (d *DB) SaveRef(parts RefParts, ciphertext string, version int, status string, agentHash string) error {
+func (d *DB) SaveRef(parts RefParts, ciphertext string, version int, status RefStatus, agentHash string) error {
 	return d.SaveRefWithName(parts, ciphertext, version, status, agentHash, "")
 }
 
-func (d *DB) SaveRefWithName(parts RefParts, ciphertext string, version int, status string, agentHash string, secretName string) error {
+func (d *DB) SaveRefWithName(parts RefParts, ciphertext string, version int, status RefStatus, agentHash string, secretName string) error {
 	if err := parts.Validate(); err != nil {
 		return err
 	}
 	if status == "" {
-		status = DefaultRefStatusForFamily(parts.Family, parts.Scope)
+		if parts.Scope == RefScopeLocal || parts.Scope == RefScopeExternal {
+			status = RefStatusActive
+		} else {
+			status = RefStatusTemp
+		}
 	}
 	secretName = strings.TrimSpace(secretName)
 	ref := TokenRef{
@@ -144,8 +140,11 @@ func (d *DB) NormalizeTokenRefStorage() error {
 	return nil
 }
 
-func DefaultRefStatus(scope string) string {
-	return DefaultRefStatusForFamily(RefFamilyVK, scope)
+func DefaultRefStatus(scope RefScope) RefStatus {
+	if scope == RefScopeLocal || scope == RefScopeExternal {
+		return RefStatusActive
+	}
+	return RefStatusTemp
 }
 
 func (d *DB) GetRef(canonical string) (*TokenRef, error) {
@@ -163,11 +162,11 @@ func (d *DB) ListRefsByVersion(version int) ([]TokenRef, error) {
 	return refs, err
 }
 
-func (d *DB) UpdateRef(canonical, newCiphertext string, newVersion int, newStatus string) error {
+func (d *DB) UpdateRef(canonical, newCiphertext string, newVersion int, newStatus RefStatus) error {
 	return d.UpdateRefWithName(canonical, newCiphertext, newVersion, newStatus, "")
 }
 
-func (d *DB) UpdateRefWithName(canonical, newCiphertext string, newVersion int, newStatus string, secretName string) error {
+func (d *DB) UpdateRefWithName(canonical, newCiphertext string, newVersion int, newStatus RefStatus, secretName string) error {
 	secretName = strings.TrimSpace(secretName)
 	query := `
 UPDATE token_refs
@@ -262,11 +261,11 @@ func (d *DB) FindActiveTempRefByHash(plaintextHash string) (*TokenRef, error) {
 	return &ref, nil
 }
 
-func (d *DB) SaveRefWithExpiry(parts RefParts, ciphertext string, version int, status string, expiresAt time.Time, secretName string) error {
+func (d *DB) SaveRefWithExpiry(parts RefParts, ciphertext string, version int, status RefStatus, expiresAt time.Time, secretName string) error {
 	return d.SaveRefWithExpiryAndHash(parts, ciphertext, version, status, expiresAt, secretName, "")
 }
 
-func (d *DB) SaveRefWithExpiryAndHash(parts RefParts, ciphertext string, version int, status string, expiresAt time.Time, secretName string, plaintextHash string) error {
+func (d *DB) SaveRefWithExpiryAndHash(parts RefParts, ciphertext string, version int, status RefStatus, expiresAt time.Time, secretName string, plaintextHash string) error {
 	if err := parts.Validate(); err != nil {
 		return err
 	}

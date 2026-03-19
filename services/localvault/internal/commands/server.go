@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"veilkey-localvault/internal/api"
-	"veilkey-localvault/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
 )
 

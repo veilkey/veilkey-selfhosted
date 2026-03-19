@@ -2,7 +2,7 @@ package hkm
 
 import (
 	"net/http"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handleAgentResolve(w http.ResponseWriter, r *http.Request) {

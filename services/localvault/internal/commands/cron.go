@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"veilkey-localvault/internal/api"
-	"veilkey-localvault/internal/httputil"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 func RunCron() {

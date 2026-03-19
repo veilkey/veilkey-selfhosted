@@ -3,35 +3,40 @@ package httputil
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
-	"regexp"
 	"strings"
+
+	agentapi "github.com/veilkey/veilkey-go-package/agentapi"
+	sharedhttp "github.com/veilkey/veilkey-go-package/httputil"
 )
 
-// Agent API path constants — localvault API endpoints called by vaultcenter.
-const (
-	AgentPathConfigs      = "/api/configs"
-	AgentPathConfigsBulk  = "/api/configs/bulk"
-	AgentPathSecrets      = "/api/secrets"
-	AgentPathSecretFields = "/api/secrets/fields"
-	AgentPathCipher       = "/api/cipher"
-	AgentPathResolve      = "/api/resolve"
-	AgentPathRekey        = "/api/rekey"
-)
+// Re-exports from shared package — use via this package to avoid double-import churn.
 
-// JoinPath joins a base URL with path elements. Panics if base is not a valid URL,
-// which would always indicate a programming error with a hard-coded base.
-func JoinPath(base string, elem ...string) string {
-	result, err := url.JoinPath(base, elem...)
-	if err != nil {
-		panic("httputil.JoinPath: " + err.Error())
-	}
-	return result
+func JoinPath(base string, elem ...string) string { return sharedhttp.JoinPath(base, elem...) }
+func IsValidResourceName(name string) bool         { return sharedhttp.IsValidResourceName(name) }
+func RespondJSON(w http.ResponseWriter, status int, data any) {
+	sharedhttp.RespondJSON(w, status, data)
 }
+func RespondError(w http.ResponseWriter, status int, message string) {
+	sharedhttp.RespondError(w, status, message)
+}
+func DecodeJSON(r *http.Request, dst any) error    { return sharedhttp.DecodeJSON(r, dst) }
+func PathVal(r *http.Request, key string) string   { return sharedhttp.PathVal(r, key) }
+
+const MaxBulkItems = sharedhttp.MaxBulkItems
+
+// Agent API path constants — re-exported from agentapi for backward compatibility.
+const (
+	AgentPathConfigs      = agentapi.PathConfigs
+	AgentPathConfigsBulk  = agentapi.PathConfigsBulk
+	AgentPathSecrets      = agentapi.PathSecrets
+	AgentPathSecretFields = agentapi.PathSecretFields
+	AgentPathCipher       = agentapi.PathCipher
+	AgentPathResolve      = agentapi.PathResolve
+	AgentPathRekey        = agentapi.PathRekey
+)
 
 // AgentScheme returns the URL scheme for agent communication.
 func AgentScheme() string {
@@ -42,33 +47,6 @@ func AgentScheme() string {
 		return "https"
 	}
 	return "http"
-}
-
-var validResourceName = regexp.MustCompile(`^[A-Z_][A-Z0-9_]*$`)
-
-// IsValidResourceName reports whether name matches [A-Z_][A-Z0-9_]*.
-func IsValidResourceName(name string) bool {
-	return validResourceName.MatchString(name)
-}
-
-func RespondJSON(w http.ResponseWriter, status int, data any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("failed to encode response: %v", err)
-	}
-}
-
-func RespondError(w http.ResponseWriter, status int, message string) {
-	RespondJSON(w, status, map[string]string{"error": message})
-}
-
-func PathVal(r *http.Request, key string) string {
-	return strings.TrimSpace(r.PathValue(key))
-}
-
-func DecodeJSON(r *http.Request, dst any) error {
-	return json.NewDecoder(r.Body).Decode(dst)
 }
 
 func RequestBaseURL(r *http.Request) string {

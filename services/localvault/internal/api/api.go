@@ -8,8 +8,15 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"veilkey-localvault/internal/crypto"
+	"time"
+
+	"veilkey-localvault/internal/api/bulk"
+	"veilkey-localvault/internal/api/configs"
+	"veilkey-localvault/internal/api/functions"
+	"veilkey-localvault/internal/api/secrets"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 type NodeIdentity struct {
@@ -30,9 +37,12 @@ type Server struct {
 	identity      *NodeIdentity
 	unlockLimiter *UnlockRateLimiter
 	httpClient    *http.Client
-}
 
-const vaultcenterOnlyDecryptMessage = "localvault direct plaintext handling is disabled; use vaultcenter"
+	secretsHandler   *secrets.Handler
+	configsHandler   *configs.Handler
+	bulkHandler      *bulk.Handler
+	functionsHandler *functions.Handler
+}
 
 func (s *Server) Close() { s.db.Close() }
 
@@ -54,7 +64,20 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		}
 		ipMap[entry] = true
 	}
-	return &Server{db: database, kek: kek, locked: kek == nil, trustedIPs: ipMap, trustedCIDRs: cidrs, unlockLimiter: NewUnlockRateLimiter(), httpClient: InitHTTPClientFromEnv()}
+	s := &Server{
+		db:            database,
+		kek:           kek,
+		locked:        kek == nil,
+		trustedIPs:    ipMap,
+		trustedCIDRs:  cidrs,
+		unlockLimiter: NewUnlockRateLimiter(),
+		httpClient:    InitHTTPClientFromEnv(),
+	}
+	s.secretsHandler = secrets.NewHandler(s)
+	s.configsHandler = configs.NewHandler(s)
+	s.bulkHandler = bulk.NewHandler()
+	s.functionsHandler = functions.NewHandler(s)
+	return s
 }
 
 func (s *Server) SetSalt(salt []byte) {
@@ -83,6 +106,59 @@ func (s *Server) IsLocked() bool {
 	defer s.kekMu.RUnlock()
 	return s.locked
 }
+
+// ── secrets.Deps implementation ───────────────────────────────────────────────
+
+func (s *Server) DB() *db.DB { return s.db }
+
+func (s *Server) GetKEK() []byte {
+	s.kekMu.RLock()
+	defer s.kekMu.RUnlock()
+	k := make([]byte, len(s.kek))
+	copy(k, s.kek)
+	return k
+}
+
+func (s *Server) GetLocalDEK() ([]byte, error) {
+	info, err := s.db.GetNodeInfo()
+	if err != nil {
+		return nil, fmt.Errorf("no node info: %w", err)
+	}
+	dek, err := crypto.Decrypt(s.GetKEK(), info.DEK, info.DEKNonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt DEK: %w", err)
+	}
+	return dek, nil
+}
+
+func (s *Server) VaultcenterURL() string {
+	return s.resolveVaultcenterTarget().URL
+}
+
+func (s *Server) HTTPClient() *http.Client { return s.httpClient }
+
+// ── functions.Deps implementation ─────────────────────────────────────────────
+
+func (s *Server) VaultHash() string {
+	if s.identity == nil {
+		return ""
+	}
+	return s.identity.VaultHash
+}
+
+// ── Forwarding methods for cron runner ───────────────────────────────────────
+
+// SyncGlobalFunctions delegates to functionsHandler.SyncGlobalFunctions.
+func (s *Server) SyncGlobalFunctions(endpoint string) (int, int, error) {
+	return s.functionsHandler.SyncGlobalFunctions(endpoint)
+}
+
+// CleanupExpiredTestFunctions delegates to functionsHandler.CleanupExpiredTestFunctions.
+func (s *Server) CleanupExpiredTestFunctions(now time.Time) (int, error) {
+	return s.functionsHandler.CleanupExpiredTestFunctions(now)
+}
+
+// ── Middleware ────────────────────────────────────────────────────────────────
 
 func (s *Server) requireUnlocked(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -142,21 +218,19 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("failed to encode JSON response: %v", err)
-	}
+	httputil.RespondJSON(w, status, data)
 }
 
 func (s *Server) respondError(w http.ResponseWriter, status int, message string) {
-	s.respondJSON(w, status, map[string]string{"error": message})
+	httputil.RespondError(w, status, message)
 }
+
+// ── Routes ────────────────────────────────────────────────────────────────────
 
 func (s *Server) SetupRoutes() http.Handler {
 	mux := http.NewServeMux()
 
-	// Serve install wizard UI at / (settings page in normal mode)
+	// Serve install wizard UI at /
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -168,10 +242,11 @@ func (s *Server) SetupRoutes() http.Handler {
 		mux.Handle("/assets/", http.FileServer(http.FS(assets)))
 	}
 
-	// Install status/settings APIs (available in normal mode too)
+	// Install status/settings APIs
 	mux.HandleFunc("GET /api/install/status", s.HandleInstallStatus)
 	mux.HandleFunc("PATCH /api/install/vaultcenter-url", s.requireTrustedIP(s.HandlePatchVaultcenterURL))
 
+	// Health + unlock
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/ready", s.handleReady)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
@@ -180,54 +255,18 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("GET /api/status", s.requireUnlocked(s.handleStatus))
 	mux.HandleFunc("GET /api/node-info", s.requireUnlocked(s.handleStatus))
 
-	// Secrets
-	mux.HandleFunc("POST /api/secrets", s.requireTrustedIP(s.requireUnlocked(s.handleSaveSecret)))
-	mux.HandleFunc("GET /api/secrets", s.requireUnlocked(s.handleListSecrets))
-	mux.HandleFunc("GET /api/secrets/{name}", s.requireUnlocked(s.handleGetSecret))
-	mux.HandleFunc("DELETE /api/secrets/{name}", s.requireTrustedIP(s.requireUnlocked(s.handleDeleteSecret)))
-
-	// Resolve scoped canonical refs like VK:{SCOPE}:{REF}
-	mux.HandleFunc("GET /api/resolve/{ref}", s.requireUnlocked(s.handleResolveSecret))
-
-	// Rekey (called by hub/parent)
-	mux.HandleFunc("POST /api/rekey", s.requireTrustedIP(s.requireUnlocked(s.handleRekey)))
-
-	// Cipher endpoint: return raw ciphertext+nonce for Hub-only decryption
-	mux.HandleFunc("GET /api/cipher/{ref}", s.requireTrustedIP(s.requireUnlocked(s.handleCipher)))
-	mux.HandleFunc("GET /api/cipher/{ref}/fields/{field}", s.requireTrustedIP(s.requireUnlocked(s.handleCipherField)))
-	mux.HandleFunc("POST /api/cipher", s.requireTrustedIP(s.requireUnlocked(s.handleSaveCipher)))
-	mux.HandleFunc("POST /api/decrypt", s.requireTrustedIP(s.requireUnlocked(s.handleDecrypt)))
-	mux.HandleFunc("POST /api/promote", s.requireTrustedIP(s.requireUnlocked(s.handlePromote)))
-
-	// Encrypt (CLI-compatible: plaintext → VK:TEMP:ref token)
-	mux.HandleFunc("POST /api/encrypt", s.requireUnlocked(s.handleEncrypt))
+	// Lifecycle (reencrypt + status transitions — spans VK and VE)
 	mux.HandleFunc("POST /api/reencrypt", s.requireUnlocked(s.handleReencrypt))
 	mux.HandleFunc("POST /api/activate", s.requireUnlocked(s.handleActivate))
 	mux.HandleFunc("POST /api/archive", s.requireUnlocked(s.handleArchive))
 	mux.HandleFunc("POST /api/block", s.requireUnlocked(s.handleBlock))
 	mux.HandleFunc("POST /api/revoke", s.requireUnlocked(s.handleRevoke))
 
-	// Secret metadata (no plaintext exposure)
-	mux.HandleFunc("GET /api/secrets/meta/{name}", s.requireUnlocked(s.handleGetSecretMeta))
-	mux.HandleFunc("POST /api/secrets/fields", s.requireTrustedIP(s.requireUnlocked(s.handleSaveSecretFields)))
-	mux.HandleFunc("DELETE /api/secrets/{name}/fields/{field}", s.requireTrustedIP(s.requireUnlocked(s.handleDeleteSecretField)))
-
-	// Configs (plaintext key-value, no encryption — no unlock required)
-	mux.HandleFunc("GET /api/configs", s.handleListConfigs)
-	mux.HandleFunc("GET /api/configs/{key}", s.handleGetConfig)
-	mux.HandleFunc("POST /api/configs", s.requireTrustedIP(s.handleSaveConfig))
-	mux.HandleFunc("PUT /api/configs/bulk", s.requireTrustedIP(s.handleSaveConfigsBulk))
-	mux.HandleFunc("DELETE /api/configs/{key}", s.requireTrustedIP(s.handleDeleteConfig))
-
-	// Bulk apply (trusted orchestration from VaultCenter)
-	mux.HandleFunc("POST /api/bulk-apply/precheck", s.requireTrustedIP(s.requireUnlocked(s.handleBulkApplyPrecheck)))
-	mux.HandleFunc("POST /api/bulk-apply/execute", s.requireTrustedIP(s.requireUnlocked(s.handleBulkApplyExecute)))
-
-	// Functions (vault-local rows, no plaintext secret storage)
-	mux.HandleFunc("GET /api/functions", s.requireUnlocked(s.handleFunctions))
-	mux.HandleFunc("POST /api/functions", s.requireTrustedIP(s.requireUnlocked(s.handleFunctions)))
-	mux.HandleFunc("GET /api/functions/{name...}", s.requireUnlocked(s.handleFunction))
-	mux.HandleFunc("DELETE /api/functions/{name...}", s.requireTrustedIP(s.requireUnlocked(s.handleFunction)))
+	// Domain subpackage routes
+	s.secretsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
+	s.configsHandler.Register(mux, s.requireTrustedIP)
+	s.bulkHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
+	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
 
 	return logMiddleware(mux)
 }

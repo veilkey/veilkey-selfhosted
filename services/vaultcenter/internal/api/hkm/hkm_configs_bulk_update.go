@@ -86,12 +86,12 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				Status string `json:"status"`
 			}
 			if json.NewDecoder(resp.Body).Decode(&data) == nil {
-				scope, status, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
+				normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(data.Scope), refStatus(data.Status), refScopeLocal)
 				if normalizeErr != nil {
 					return
 				}
 				mu.Lock()
-				targets = append(targets, agentConfig{ai: ai, value: data.Value, scope: scope, status: status})
+				targets = append(targets, agentConfig{ai: ai, value: data.Value, scope: string(normScope), status: string(normStatus)})
 				mu.Unlock()
 			}
 		}(ai)

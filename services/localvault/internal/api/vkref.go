@@ -4,31 +4,33 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
+
+	"veilkey-localvault/internal/db"
 )
 
 type RefFamily string
-type RefScope string
 
 const (
-	RefFamilyVK RefFamily = "VK"
-	RefFamilyVE RefFamily = "VE"
+	RefFamilyVK RefFamily = db.RefFamilyVK
+	RefFamilyVE RefFamily = db.RefFamilyVE
 )
 
+// Package-level aliases for db.RefScope constants — keeps api code concise.
 const (
-	RefScopeTemp     RefScope = "TEMP"
-	RefScopeLocal    RefScope = "LOCAL"
-	RefScopeExternal RefScope = "EXTERNAL"
+	RefScopeTemp     = db.RefScopeTemp
+	RefScopeLocal    = db.RefScopeLocal
+	RefScopeExternal = db.RefScopeExternal
 )
 
 type ParsedRef struct {
 	Raw    string
 	Family RefFamily
-	Scope  RefScope
+	Scope  db.RefScope
 	ID     string
 }
 
 func (r ParsedRef) CanonicalString() string {
-	return string(r.Family) + ":" + string(r.Scope) + ":" + r.ID
+	return db.MakeRef(string(r.Family), r.Scope, r.ID)
 }
 
 func ParseScopedRef(raw string) (ParsedRef, error) {
@@ -54,9 +56,9 @@ func ParseScopedRef(raw string) (ParsedRef, error) {
 		return ParsedRef{}, fmt.Errorf("family must be VK or VE")
 	}
 
-	switch RefScope(parts[1]) {
+	switch db.RefScope(parts[1]) {
 	case RefScopeTemp, RefScopeLocal, RefScopeExternal:
-		parsed.Scope = RefScope(parts[1])
+		parsed.Scope = db.RefScope(parts[1])
 	default:
 		return ParsedRef{}, fmt.Errorf("scope must be TEMP, LOCAL, or EXTERNAL")
 	}
@@ -79,8 +81,8 @@ func ParseScopedVKRef(raw string) (ParsedRef, error) {
 	return parsed, nil
 }
 
-func ParseActivationScope(raw string) (RefScope, error) {
-	switch RefScope(strings.TrimSpace(raw)) {
+func ParseActivationScope(raw string) (db.RefScope, error) {
+	switch db.RefScope(strings.TrimSpace(raw)) {
 	case RefScopeLocal:
 		return RefScopeLocal, nil
 	case RefScopeExternal:

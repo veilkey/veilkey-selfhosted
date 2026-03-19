@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	vcrypto "veilkey-vaultcenter/internal/crypto"
+	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 )
@@ -102,7 +102,7 @@ func (h *Handler) renderResolvedBulkApplyBody(vaultHash, body string) (string, e
 		name := strings.TrimSpace(match[2])
 
 		depKind := "secret"
-		if kind == "VE" {
+		if kind == db.RefFamilyVE {
 			depKind = "config"
 		}
 

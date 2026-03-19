@@ -14,8 +14,11 @@ const (
 	refScopeTemp     = db.RefScopeTemp
 	refScopeExternal = db.RefScopeExternal
 
-	refStatusActive = db.RefStatusActive
-	refStatusTemp   = db.RefStatusTemp
+	refStatusActive  = db.RefStatusActive
+	refStatusTemp    = db.RefStatusTemp
+	refStatusArchive = db.RefStatusArchive
+	refStatusBlock   = db.RefStatusBlock
+	refStatusRevoke  = db.RefStatusRevoke
 )
 
 // Package-local aliases for agent API path constants — keeps handler code concise.
@@ -30,4 +33,10 @@ const (
 )
 
 // makeRef constructs a canonical ref string from its components.
-func makeRef(family, scope, id string) string { return db.MakeRef(family, scope, id) }
+func makeRef(family string, scope db.RefScope, id string) string { return db.MakeRef(family, scope, id) }
+
+// refScope converts a string to db.RefScope.
+func refScope(s string) db.RefScope { return db.RefScope(s) }
+
+// refStatus converts a string to db.RefStatus.
+func refStatus(s string) db.RefStatus { return db.RefStatus(s) }

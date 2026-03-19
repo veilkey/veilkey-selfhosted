@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -66,7 +66,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	parts := db.RefParts{Family: "VK", Scope: "TEMP", ID: refID}
+	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
 	encoded := base64.StdEncoding.EncodeToString(ciphertext) + ":" + base64.StdEncoding.EncodeToString(nonce)
 	expiresAt := time.Now().UTC().Add(tempKeyTTL)
 
@@ -77,7 +77,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimSpace(req.Name)
-	if err := s.db.SaveRefWithExpiryAndHash(parts, encoded, nodeInfo.Version, "temp", expiresAt, name, plaintextHash); err != nil {
+	if err := s.db.SaveRefWithExpiryAndHash(parts, encoded, nodeInfo.Version, db.RefStatusTemp, expiresAt, name, plaintextHash); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to save temp ref")
 		return
 	}

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 )

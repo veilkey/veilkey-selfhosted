@@ -9,7 +9,7 @@ import (
 	"slices"
 	"strings"
 
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -28,22 +28,23 @@ type agentSecretMeta struct {
 }
 
 func normalizeFallbackSecretRef(raw string) (ref string, scope string, status string) {
-	scope = refScopeTemp
-	status = refStatusTemp
+	scope = string(refScopeTemp)
+	status = string(refStatusTemp)
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return "", scope, status
 	}
 	parts := strings.Split(raw, ":")
 	if len(parts) == 3 && strings.EqualFold(parts[0], refFamilyVK) {
-		scope = strings.ToUpper(strings.TrimSpace(parts[1]))
+		upperScope := strings.ToUpper(strings.TrimSpace(parts[1]))
 		ref = strings.TrimSpace(parts[2])
-		switch scope {
-		case refScopeLocal, refScopeExternal:
-			status = refStatusActive
+		switch upperScope {
+		case string(refScopeLocal), string(refScopeExternal):
+			scope = upperScope
+			status = string(refStatusActive)
 		default:
-			scope = refScopeTemp
-			status = refStatusTemp
+			scope = string(refScopeTemp)
+			status = string(refStatusTemp)
 		}
 		return ref, scope, status
 	}
@@ -228,10 +229,11 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 			if err := json.Unmarshal(fallbackBody, &secret); err == nil && strings.TrimSpace(secret.Ref) != "" {
 				ref, scope, status := normalizeFallbackSecretRef(secret.Ref)
 				if strings.TrimSpace(secret.Scope) != "" || strings.TrimSpace(secret.Status) != "" {
-					scope, status, err = normalizeScopeStatus(refFamilyVK, secret.Scope, secret.Status, refScopeTemp)
-					if err != nil {
-						return nil, 0, nil, err
+					normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVK, refScope(secret.Scope), refStatus(secret.Status), refScopeTemp)
+					if normalizeErr != nil {
+						return nil, 0, nil, normalizeErr
 					}
+					scope, status = string(normScope), string(normStatus)
 				}
 				resolvedName := secret.Name
 				if strings.TrimSpace(resolvedName) == "" {
@@ -269,10 +271,11 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 					}
 					ref, scope, status := normalizeFallbackSecretRef(item.Ref)
 					if strings.TrimSpace(item.Scope) != "" || strings.TrimSpace(item.Status) != "" {
-						scope, status, err = normalizeScopeStatus(refFamilyVK, item.Scope, item.Status, refScopeTemp)
-						if err != nil {
-							return nil, 0, nil, err
+						normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVK, refScope(item.Scope), refStatus(item.Status), refScopeTemp)
+						if normalizeErr != nil {
+							return nil, 0, nil, normalizeErr
 						}
+						scope, status = string(normScope), string(normStatus)
 					}
 					return &agentSecretMeta{
 						Name:   item.Name,
@@ -296,12 +299,13 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 }
 
 func normalizeMeta(meta *agentSecretMeta) error {
-	var err error
-	meta.Scope, meta.Status, err = normalizeScopeStatus(refFamilyVK, meta.Scope, meta.Status, refScopeTemp)
+	normScope, normStatus, err := normalizeScopeStatus(refFamilyVK, refScope(meta.Scope), refStatus(meta.Status), refScopeTemp)
 	if err != nil {
 		return err
 	}
-	meta.Token = "VK:" + meta.Scope + ":" + meta.Ref
+	meta.Scope = string(normScope)
+	meta.Status = string(normStatus)
+	meta.Token = makeRef(refFamilyVK, refScope(meta.Scope), meta.Ref)
 	return nil
 }
 
@@ -388,7 +392,7 @@ func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	resp := map[string]any{
 		"name":               name,
@@ -433,7 +437,7 @@ func (h *Handler) handleVaultKeyUsage(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	limit, offset, errMsg := httputil.ParseListWindow(r)
 	if errMsg != "" {
@@ -489,7 +493,7 @@ func (h *Handler) handleVaultKeyBindings(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	limit, offset, errMsg := httputil.ParseListWindow(r)
 	if errMsg != "" {
@@ -544,7 +548,7 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	var raw map[string]json.RawMessage
 	if err := httputil.DecodeJSON(r, &raw); err != nil {
@@ -751,7 +755,7 @@ func (h *Handler) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	limit, offset, errMsg := httputil.ParseListWindow(r)
 	if errMsg != "" {
@@ -858,7 +862,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(w http.ResponseWriter, hashOrLab
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return nil, nil, false
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 	return agent, meta, true
 }
 
@@ -1049,7 +1053,7 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, meta.Status, agent.AgentHash)
+	_ = h.upsertTrackedRef(meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
 	respondJSON(w, http.StatusOK, map[string]any{
 		"name":               name,

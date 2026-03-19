@@ -88,10 +88,10 @@ func buildTrackedRefAudit(refs []db.TokenRef, agents []db.Agent) trackedRefAudit
 			RefCanonical:     ref.RefCanonical,
 			VaultRuntimeHash: ref.AgentHash,
 			Family:           ref.RefFamily,
-			Scope:            ref.RefScope,
+			Scope:            string(ref.RefScope),
 			ID:               ref.RefID,
 			Version:          ref.Version,
-			Status:           ref.Status,
+			Status:           string(ref.Status),
 		}}
 		if ref.Status == "block" {
 			blocked = append(blocked, tokenRefToAuditEntry(entry))
@@ -208,11 +208,11 @@ func compareTrackedRefEntries(a, b trackedRefAuditEntry) int {
 
 func refScopeRank(scope string) int {
 	switch scope {
-	case refScopeLocal:
+	case string(refScopeLocal):
 		return 0
-	case refScopeExternal:
+	case string(refScopeExternal):
 		return 1
-	case refScopeTemp:
+	case string(refScopeTemp):
 		return 2
 	default:
 		return 9
@@ -221,15 +221,15 @@ func refScopeRank(scope string) int {
 
 func refStatusRank(status string) int {
 	switch status {
-	case refStatusActive:
+	case string(refStatusActive):
 		return 0
-	case "temp":
+	case string(refStatusTemp):
 		return 1
-	case "archive":
+	case string(refStatusArchive):
 		return 2
-	case "revoke":
+	case string(refStatusRevoke):
 		return 3
-	case "block":
+	case string(refStatusBlock):
 		return 4
 	default:
 		return 9

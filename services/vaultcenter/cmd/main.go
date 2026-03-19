@@ -16,7 +16,7 @@ import (
 	"golang.org/x/term"
 
 	"veilkey-vaultcenter/internal/api"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 )
 
@@ -212,10 +212,10 @@ func runHKMInit() {
 	if pwErr == nil {
 		pwRefID, refErr := generateInitRef(16)
 		if refErr == nil {
-			parts := db.RefParts{Family: "VK", Scope: "TEMP", ID: pwRefID}
+			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: pwRefID}
 			encoded := base64Encode(pwCiphertext) + ":" + base64Encode(pwNonce)
 			expiresAt := time.Now().UTC().Add(1 * time.Hour)
-			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, "temp", expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
 				tempRef = parts.Canonical()
 			}
 		}

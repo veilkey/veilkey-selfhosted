@@ -34,19 +34,19 @@ func (s *Server) handleListConfigs(w http.ResponseWriter, r *http.Request) {
 
 	result := make([]configResp, 0, len(configs))
 	for _, c := range configs {
-		scope, status, err := normalizeScopeStatus("VE", c.Scope, c.Status, "LOCAL")
+		normScope, normStatus, err := normalizeScopeStatus(db.RefFamilyVE, c.Scope, c.Status, db.RefScopeLocal)
 		if err != nil {
 			continue
 		}
-		ref := fmt.Sprintf("VE:%s:%s", scope, c.Key)
+		ref := db.MakeRef(db.RefFamilyVE, normScope, c.Key)
 		result = append(result, configResp{
 			Key:    c.Key,
 			Value:  c.Value,
 			Ref:    ref,
-			Scope:  scope,
-			Status: status,
+			Scope:  string(normScope),
+			Status: string(normStatus),
 		})
-		_ = s.upsertTrackedRef(ref, 1, status, "")
+		_ = s.upsertTrackedRef(ref, 1, normStatus, "")
 	}
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
@@ -68,20 +68,20 @@ func (s *Server) handleGetConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scope, status, err := normalizeScopeStatus("VE", config.Scope, config.Status, "LOCAL")
+	normScope, normStatus, err := normalizeScopeStatus(db.RefFamilyVE, config.Scope, config.Status, db.RefScopeLocal)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "invalid config state")
 		return
 	}
-	ref := fmt.Sprintf("VE:%s:%s", scope, config.Key)
-	_ = s.upsertTrackedRef(ref, 1, status, "")
+	ref := db.MakeRef(db.RefFamilyVE, normScope, config.Key)
+	_ = s.upsertTrackedRef(ref, 1, normStatus, "")
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
 		"key":    config.Key,
 		"value":  config.Value,
 		"ref":    ref,
-		"scope":  scope,
-		"status": status,
+		"scope":  string(normScope),
+		"status": string(normStatus),
 	})
 }
 
@@ -122,8 +122,8 @@ func (s *Server) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := "VE:LOCAL:" + req.Key
-	_ = s.upsertTrackedRef(ref, 1, "active", "")
+	ref := db.MakeRef(db.RefFamilyVE, db.RefScopeLocal, req.Key)
+	_ = s.upsertTrackedRef(ref, 1, db.RefStatusActive, "")
 	s.saveAuditEvent(
 		"config",
 		ref,
@@ -177,8 +177,8 @@ func (s *Server) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for key, value := range req.Configs {
-		ref := "VE:LOCAL:" + key
-		_ = s.upsertTrackedRef(ref, 1, "active", "")
+		ref := db.MakeRef(db.RefFamilyVE, db.RefScopeLocal, key)
+		_ = s.upsertTrackedRef(ref, 1, db.RefStatusActive, "")
 		s.saveAuditEvent(
 			"config",
 			ref,
@@ -225,7 +225,7 @@ func (s *Server) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ref := "VE:LOCAL:" + key
+	ref := db.MakeRef(db.RefFamilyVE, db.RefScopeLocal, key)
 	_ = s.deleteTrackedRef(ref)
 	s.saveAuditEvent(
 		"config",
@@ -247,13 +247,31 @@ func (s *Server) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// normalizeScopeStatus delegates to db.NormalizeRefState.
-func normalizeScopeStatus(family, scope, status, fallbackScope string) (string, string, error) {
-	return db.NormalizeRefState(family, scope, status, fallbackScope)
+// normalizeScopeStatus normalizes scope and status for a given ref family.
+func normalizeScopeStatus(family string, scope db.RefScope, status db.RefStatus, fallbackScope db.RefScope) (db.RefScope, db.RefStatus, error) {
+	if scope == "" {
+		scope = fallbackScope
+	}
+	if scope == "" {
+		scope = db.RefScopeTemp
+	}
+	switch scope {
+	case db.RefScopeLocal, db.RefScopeExternal:
+		if status == "" {
+			status = db.RefStatusActive
+		}
+	case db.RefScopeTemp:
+		if status == "" {
+			status = db.RefStatusTemp
+		}
+	default:
+		return "", "", fmt.Errorf("unsupported %s scope: %s", family, scope)
+	}
+	return scope, status, nil
 }
 
 // upsertTrackedRef upserts a tracked ref directly via the DB.
-func (s *Server) upsertTrackedRef(ref string, version int, status string, agentHash string) error {
+func (s *Server) upsertTrackedRef(ref string, version int, status db.RefStatus, agentHash string) error {
 	if s.hkmHandler != nil {
 		return s.hkmHandler.UpsertTrackedRef(ref, version, status, agentHash)
 	}

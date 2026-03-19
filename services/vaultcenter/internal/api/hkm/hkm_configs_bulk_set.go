@@ -44,11 +44,12 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	scope, status, err := normalizeScopeStatus(refFamilyVE, req.Scope, req.Status, refScopeLocal)
+	normScopeVal, normStatusVal, err := normalizeScopeStatus(refFamilyVE, refScope(req.Scope), refStatus(req.Status), refScopeLocal)
 	if err != nil {
 		respondError(w, http.StatusBadRequest, err.Error())
 		return
 	}
+	scope, status := string(normScopeVal), string(normStatusVal)
 
 	overwrite := true
 	if req.Overwrite != nil {
@@ -102,7 +103,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				Status string `json:"status"`
 			}
 			if json.NewDecoder(resp.Body).Decode(&data) == nil {
-				currentScope, currentStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
+				currentScope, currentStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(data.Scope), refStatus(data.Status), refScopeLocal)
 				if normalizeErr != nil {
 					checkMu.Lock()
 					checks = append(checks, bulkSetCheck{ai: ai, found: false})
@@ -110,7 +111,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				checkMu.Lock()
-				checks = append(checks, bulkSetCheck{ai: ai, oldValue: data.Value, oldScope: currentScope, oldStatus: currentStatus, found: true})
+				checks = append(checks, bulkSetCheck{ai: ai, oldValue: data.Value, oldScope: string(currentScope), oldStatus: string(currentStatus), found: true})
 				checkMu.Unlock()
 			}
 		}(ai)

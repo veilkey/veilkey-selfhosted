@@ -68,7 +68,7 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 			if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
 				return
 			}
-			scope, status, normalizeErr := normalizeScopeStatus(refFamilyVE, data.Scope, data.Status, refScopeLocal)
+			normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(data.Scope), refStatus(data.Status), refScopeLocal)
 			if normalizeErr != nil {
 				return
 			}
@@ -79,8 +79,8 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 				AgentHash:        ai.AgentHash,
 				Key:              data.Key,
 				Value:            data.Value,
-				Scope:            scope,
-				Status:           status,
+				Scope:            string(normScope),
+				Status:           string(normStatus),
 			})
 			mu.Unlock()
 		}(ai)

@@ -1,6 +1,8 @@
 package db
 
-import "time"
+import (
+	"time"
+)
 
 type EncryptionKey struct {
 	Version      int        `gorm:"primaryKey;autoIncrement;column:version" json:"version"`
@@ -17,14 +19,14 @@ func (EncryptionKey) TableName() string { return "encryption_keys" }
 type TokenRef struct {
 	RefCanonical  string     `gorm:"primaryKey;column:ref_canonical;size:96" json:"ref_canonical"`
 	RefFamily     string     `gorm:"column:ref_family;size:16;not null;index:idx_token_refs_family_scope" json:"ref_family"`
-	RefScope      string     `gorm:"column:ref_scope;size:16;not null;index:idx_token_refs_family_scope" json:"ref_scope"`
+	RefScope      RefScope   `gorm:"column:ref_scope;size:16;not null;index:idx_token_refs_family_scope" json:"ref_scope"`
 	RefID         string     `gorm:"column:ref_id;size:64;not null;index" json:"ref_id"`
 	SecretName    string     `gorm:"column:secret_name;size:255;not null;default:'';index" json:"secret_name"`
 	AgentHash     string     `gorm:"column:agent_hash;size:16;index" json:"agent_hash"`
 	PlaintextHash string     `gorm:"column:plaintext_hash;size:64;index" json:"plaintext_hash,omitempty"`
 	Ciphertext    string     `gorm:"column:ciphertext;not null" json:"ciphertext"`
 	Version       int        `gorm:"column:version;not null" json:"version"`
-	Status        string     `gorm:"column:status;default:temp" json:"status"`
+	Status        RefStatus  `gorm:"column:status;default:temp" json:"status"`
 	ExpiresAt     *time.Time `gorm:"column:expires_at;index" json:"expires_at"`
 	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 }
@@ -99,8 +101,8 @@ type SecretCatalog struct {
 	Description       string     `gorm:"column:description;not null;default:''" json:"description"`
 	TagsJSON          string     `gorm:"column:tags_json;not null;default:'[]'" json:"tags_json"`
 	Class             string     `gorm:"column:class;not null;default:key;index" json:"class"`
-	Scope             string     `gorm:"column:scope;not null" json:"scope"`
-	Status            string     `gorm:"column:status;not null;index" json:"status"`
+	Scope             RefScope   `gorm:"column:scope;not null" json:"scope"`
+	Status            RefStatus  `gorm:"column:status;not null;index" json:"status"`
 	VaultNodeUUID     string     `gorm:"column:vault_node_uuid;not null;index" json:"vault_node_uuid"`
 	VaultRuntimeHash  string     `gorm:"column:vault_runtime_hash;not null" json:"vault_runtime_hash"`
 	VaultHash         string     `gorm:"column:vault_hash;not null;index" json:"vault_hash"`
@@ -155,8 +157,6 @@ type KeyRegistryEntry struct {
 }
 
 func (KeyRegistryEntry) TableName() string { return "key_registry" }
-
-const DefaultAgentPort = 10180
 
 type Agent struct {
 	NodeID           string     `gorm:"primaryKey;column:node_id" json:"node_id"`
@@ -355,8 +355,8 @@ func (InstallRun) TableName() string { return "install_runs" }
 type Config struct {
 	Key       string    `gorm:"primaryKey;column:key" json:"key"`
 	Value     string    `gorm:"column:value;type:text;not null;default:''" json:"value"`
-	Scope     string    `gorm:"column:scope;not null;default:LOCAL" json:"scope"`
-	Status    string    `gorm:"column:status;not null;default:active" json:"status"`
+	Scope     RefScope  `gorm:"column:scope;not null;default:LOCAL" json:"scope"`
+	Status    RefStatus `gorm:"column:status;not null;default:active" json:"status"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 }
 

@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"veilkey-localvault/internal/db"
 )
 
 type trackedRefSyncResult struct {
@@ -16,7 +18,7 @@ type trackedRefSyncResult struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-func (s *Server) syncTrackedRefWithVaultcenter(ref string, previousRef string, version int, status string) trackedRefSyncResult {
+func (s *Server) syncTrackedRefWithVaultcenter(ref string, previousRef string, version int, status db.RefStatus) trackedRefSyncResult {
 	target := s.resolveVaultcenterTarget()
 	result := trackedRefSyncResult{
 		Status:   "skipped",

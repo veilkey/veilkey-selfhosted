@@ -35,9 +35,9 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	scope, status, err := normalizeScopeStatus(refFamilyVE, reqData.Scope, reqData.Status, refScopeLocal)
-	if err != nil {
-		respondError(w, http.StatusBadRequest, err.Error())
+	normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(reqData.Scope), refStatus(reqData.Status), refScopeLocal)
+	if normalizeErr != nil {
+		respondError(w, http.StatusBadRequest, normalizeErr.Error())
 		return
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPut, agent.URL()+agentPathConfigsBulk, bytes.NewReader(body))
@@ -56,10 +56,10 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 	}
 	if resp.StatusCode == http.StatusOK {
 		for key := range reqData.Configs {
-			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, normScope, key), agent.KeyVersion, normStatus, agent.AgentHash)
 			h.deps.SaveAuditEvent(
 				"config",
-				makeRef(refFamilyVE, scope, key),
+				makeRef(refFamilyVE, normScope, key),
 				"save",
 				"agent",
 				agent.AgentHash,
@@ -68,9 +68,9 @@ func (h *Handler) handleAgentSaveConfigsBulk(w http.ResponseWriter, r *http.Requ
 				nil,
 				map[string]any{
 					"key":                key,
-					"ref":                "VE:" + scope + ":" + key,
+					"ref":                makeRef(refFamilyVE, normScope, key),
 					"vault_runtime_hash": agent.AgentHash,
-					"status":             status,
+					"status":             string(normStatus),
 				},
 			)
 		}

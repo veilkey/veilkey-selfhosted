@@ -6,7 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 // handleFederatedRotate triggers key rotation across all children from root

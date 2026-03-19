@@ -34,17 +34,17 @@ func (h *Handler) handleAgentConfigs(w http.ResponseWriter, r *http.Request) {
 			for _, item := range configs {
 				if cfg, ok := item.(map[string]interface{}); ok {
 					if key, ok := cfg["key"].(string); ok && key != "" {
-						scope, _ := cfg["scope"].(string)
-						status, _ := cfg["status"].(string)
-						scope, status, err = normalizeScopeStatus(refFamilyVE, scope, status, refScopeLocal)
-						if err != nil {
-							respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
+						scopeStr, _ := cfg["scope"].(string)
+						statusStr, _ := cfg["status"].(string)
+						normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(scopeStr), refStatus(statusStr), refScopeLocal)
+						if normalizeErr != nil {
+							respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+normalizeErr.Error())
 							return
 						}
-						cfg["ref"] = "VE:" + scope + ":" + key
-						cfg["scope"] = scope
-						cfg["status"] = status
-						_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
+						cfg["ref"] = makeRef(refFamilyVE, normScope, key)
+						cfg["scope"] = string(normScope)
+						cfg["status"] = string(normStatus)
+						_ = h.upsertTrackedRef(makeRef(refFamilyVE, normScope, key), agent.KeyVersion, normStatus, agent.AgentHash)
 					}
 				}
 			}

@@ -51,22 +51,22 @@ func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 			for _, item := range secrets {
 				if sec, ok := item.(map[string]interface{}); ok {
 					if ref, ok := sec["ref"].(string); ok && ref != "" {
-						scope, _ := sec["scope"].(string)
-						status, _ := sec["status"].(string)
+						scopeStr, _ := sec["scope"].(string)
+						statusStr, _ := sec["status"].(string)
 						canonicalRef, fallbackScope, fallbackStatus := normalizeFallbackSecretRef(ref)
-						if strings.TrimSpace(scope) == "" && strings.TrimSpace(status) == "" {
-							scope, status = fallbackScope, fallbackStatus
+						if strings.TrimSpace(scopeStr) == "" && strings.TrimSpace(statusStr) == "" {
+							scopeStr, statusStr = fallbackScope, fallbackStatus
 						}
-						scope, status, err = normalizeScopeStatus(refFamilyVK, scope, status, refScopeTemp)
-						if err != nil {
-							respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+						normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVK, refScope(scopeStr), refStatus(statusStr), refScopeTemp)
+						if normalizeErr != nil {
+							respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+normalizeErr.Error())
 							return
 						}
 						sec["ref"] = canonicalRef
-						sec["token"] = "VK:" + scope + ":" + canonicalRef
-						sec["scope"] = scope
-						sec["status"] = status
-						_ = h.upsertTrackedRef(makeRef(refFamilyVK, scope, canonicalRef), agent.KeyVersion, status, agent.AgentHash)
+						sec["token"] = makeRef(refFamilyVK, normScope, canonicalRef)
+						sec["scope"] = string(normScope)
+						sec["status"] = string(normStatus)
+						_ = h.upsertTrackedRef(makeRef(refFamilyVK, normScope, canonicalRef), agent.KeyVersion, normStatus, agent.AgentHash)
 					}
 				}
 			}

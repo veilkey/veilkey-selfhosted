@@ -3,13 +3,12 @@ package hkm
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type agentSecretField struct {
@@ -54,7 +53,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
 		return
 	}
-	if meta.Status != refStatusActive || (meta.Scope != refScopeLocal && meta.Scope != refScopeExternal) {
+	if meta.Status != string(refStatusActive) || (meta.Scope != string(refScopeLocal) && meta.Scope != string(refScopeExternal)) {
 		respondError(w, http.StatusConflict, "additional secret fields require VK:LOCAL or VK:EXTERNAL active lifecycle")
 		return
 	}
@@ -177,7 +176,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 		"type":               cipher.FieldType,
 		"value":              string(plaintext),
 		"ref":                meta.Ref,
-		"token":              fmt.Sprintf("VK:%s:%s", meta.Scope, meta.Ref),
+		"token":              makeRef(refFamilyVK, refScope(meta.Scope), meta.Ref),
 		"scope":              meta.Scope,
 		"status":             meta.Status,
 		"vault":              agent.Label,

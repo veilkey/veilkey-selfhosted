@@ -32,19 +32,19 @@ func (h *Handler) handleAgentGetConfig(w http.ResponseWriter, r *http.Request) {
 	if resp.StatusCode == http.StatusOK {
 		var data map[string]interface{}
 		if json.Unmarshal(body, &data) == nil {
-			scope, _ := data["scope"].(string)
-			status, _ := data["status"].(string)
-			scope, status, err = normalizeScopeStatus(refFamilyVE, scope, status, refScopeLocal)
-			if err != nil {
-				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+err.Error())
+			scopeStr, _ := data["scope"].(string)
+			statusStr, _ := data["status"].(string)
+			normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(scopeStr), refStatus(statusStr), refScopeLocal)
+			if normalizeErr != nil {
+				respondError(w, http.StatusBadGateway, "agent returned unsupported config scope: "+normalizeErr.Error())
 				return
 			}
-			data["ref"] = "VE:" + scope + ":" + key
-			data["scope"] = scope
-			data["status"] = status
+			data["ref"] = makeRef(refFamilyVE, normScope, key)
+			data["scope"] = string(normScope)
+			data["status"] = string(normStatus)
 			data["vault"] = agent.Label
 			setRuntimeHashAliases(data, agent.AgentHash)
-			_ = h.upsertTrackedRef(makeRef(refFamilyVE, scope, key), agent.KeyVersion, status, agent.AgentHash)
+			_ = h.upsertTrackedRef(makeRef(refFamilyVE, normScope, key), agent.KeyVersion, normStatus, agent.AgentHash)
 			if marshaled, marshalErr := json.Marshal(data); marshalErr == nil {
 				body = marshaled
 			}

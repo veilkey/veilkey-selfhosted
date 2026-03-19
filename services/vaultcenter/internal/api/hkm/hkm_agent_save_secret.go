@@ -7,7 +7,7 @@ import (
 	"log"
 	"net/http"
 	"veilkey-vaultcenter/internal/httputil"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) {
@@ -69,18 +69,18 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 	var data map[string]interface{}
 	if json.Unmarshal(respBody, &data) == nil {
 		if ref, ok := data["ref"].(string); ok && ref != "" {
-			scope, _ := data["scope"].(string)
-			status, _ := data["status"].(string)
-			scope, status, err = normalizeScopeStatus(refFamilyVK, scope, status, refScopeTemp)
-			if err != nil {
-				respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+err.Error())
+			scopeStr, _ := data["scope"].(string)
+			statusStr, _ := data["status"].(string)
+			normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVK, refScope(scopeStr), refStatus(statusStr), refScopeTemp)
+			if normalizeErr != nil {
+				respondError(w, http.StatusBadGateway, "agent returned unsupported secret scope: "+normalizeErr.Error())
 				return
 			}
-			canonical := "VK:" + scope + ":" + ref
+			canonical := makeRef(refFamilyVK, normScope, ref)
 			data["token"] = canonical
-			data["scope"] = scope
-			data["status"] = status
-			_ = h.upsertTrackedRefNamed(canonical, agent.KeyVersion, status, agent.AgentHash, req.Name)
+			data["scope"] = string(normScope)
+			data["status"] = string(normStatus)
+			_ = h.upsertTrackedRefNamed(canonical, agent.KeyVersion, normStatus, agent.AgentHash, req.Name)
 			h.deps.SaveAuditEvent(
 				"secret",
 				canonical,
@@ -94,7 +94,7 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 					"name":               req.Name,
 					"ref":                canonical,
 					"vault_runtime_hash": agent.AgentHash,
-					"status":             status,
+					"status":             string(normStatus),
 				},
 			)
 		}

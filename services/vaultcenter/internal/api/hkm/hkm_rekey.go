@@ -5,7 +5,7 @@ import (
 	"log"
 	"net/http"
 	"veilkey-vaultcenter/internal/httputil"
-	"veilkey-vaultcenter/internal/crypto"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 // handleRekey accepts a new DEK from parent and re-encrypts all local secrets

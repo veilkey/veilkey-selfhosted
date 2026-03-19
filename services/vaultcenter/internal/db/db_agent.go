@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/veilkey/veilkey-go-package/agentapi"
 	"gorm.io/gorm"
 )
 
@@ -29,7 +30,7 @@ func generateNextAgentHash() (string, error) {
 
 func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, secretsCount, configsCount, version, keyVersion int) error {
 	if port == 0 {
-		port = DefaultAgentPort
+		port = agentapi.DefaultPort
 	}
 	if keyVersion == 0 {
 		keyVersion = 1

@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+
+	"veilkey-localvault/internal/db"
 )
 
 type lifecycleResponse struct {
@@ -80,11 +82,11 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			s.respondError(w, http.StatusNotFound, "ref not found: "+parsed.ID)
 			return
 		}
-		if secret.Status == "block" {
+		if secret.Status == db.RefStatusBlock {
 			s.respondError(w, http.StatusLocked, "ref is blocked: "+parsed.CanonicalString())
 			return
 		}
-		if err := s.db.UpdateSecretLifecycle(parsed.ID, string(targetScope), "active"); err != nil {
+		if err := s.db.UpdateSecretLifecycle(parsed.ID, targetScope, db.RefStatusActive); err != nil {
 			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
 			return
 		}
@@ -93,7 +95,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			Scope:  targetScope,
 			ID:     parsed.ID,
 		}
-		s.respondLifecycleJSON(w, activated.CanonicalString(), "active", true, s.syncTrackedRefWithVaultcenter(activated.CanonicalString(), parsed.CanonicalString(), secret.Version, "active"))
+		s.respondLifecycleJSON(w, activated.CanonicalString(), db.RefStatusActive, true, s.syncTrackedRefWithVaultcenter(activated.CanonicalString(), parsed.CanonicalString(), secret.Version, db.RefStatusActive))
 		return
 	case RefFamilyVE:
 		config, err := s.db.GetConfig(parsed.ID)
@@ -101,11 +103,11 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			s.respondError(w, http.StatusNotFound, "ref not found: "+parsed.ID)
 			return
 		}
-		if config.Status == "block" {
+		if config.Status == db.RefStatusBlock {
 			s.respondError(w, http.StatusLocked, "ref is blocked: "+parsed.CanonicalString())
 			return
 		}
-		if err := s.db.UpdateConfigLifecycle(parsed.ID, string(targetScope), "active"); err != nil {
+		if err := s.db.UpdateConfigLifecycle(parsed.ID, targetScope, db.RefStatusActive); err != nil {
 			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
 			return
 		}
@@ -114,7 +116,7 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 			Scope:  targetScope,
 			ID:     parsed.ID,
 		}
-		s.respondLifecycleJSON(w, activated.CanonicalString(), "active", true, s.syncTrackedRefWithVaultcenter(activated.CanonicalString(), parsed.CanonicalString(), 0, "active"))
+		s.respondLifecycleJSON(w, activated.CanonicalString(), db.RefStatusActive, true, s.syncTrackedRefWithVaultcenter(activated.CanonicalString(), parsed.CanonicalString(), 0, db.RefStatusActive))
 		return
 	default:
 		s.respondError(w, http.StatusBadRequest, "family must be VK or VE")
@@ -123,18 +125,18 @@ func (s *Server) handleActivate(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleArchive(w http.ResponseWriter, r *http.Request) {
-	s.handleStatusTransition(w, r, "archive")
+	s.handleStatusTransition(w, r, db.RefStatusArchive)
 }
 
 func (s *Server) handleBlock(w http.ResponseWriter, r *http.Request) {
-	s.handleStatusTransition(w, r, "block")
+	s.handleStatusTransition(w, r, db.RefStatusBlock)
 }
 
 func (s *Server) handleRevoke(w http.ResponseWriter, r *http.Request) {
-	s.handleStatusTransition(w, r, "revoke")
+	s.handleStatusTransition(w, r, db.RefStatusRevoke)
 }
 
-func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, status string) {
+func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, status db.RefStatus) {
 	var req struct {
 		Ciphertext string `json:"ciphertext"`
 	}
@@ -163,13 +165,13 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 			s.respondError(w, http.StatusNotFound, "ref not found: "+parsed.ID)
 			return
 		}
-		if secret.Status == "block" {
+		if secret.Status == db.RefStatusBlock {
 			s.respondError(w, http.StatusLocked, "ref is blocked: "+parsed.CanonicalString())
 			return
 		}
 		scope := secret.Scope
 		if scope == "" {
-			scope = string(parsed.Scope)
+			scope = parsed.Scope
 		}
 		if err := s.db.UpdateSecretLifecycle(parsed.ID, scope, status); err != nil {
 			s.respondError(w, http.StatusInternalServerError, "failed to update status: "+err.Error())
@@ -183,7 +185,7 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 			s.respondError(w, http.StatusNotFound, "ref not found: "+parsed.ID)
 			return
 		}
-		if config.Status == "block" {
+		if config.Status == db.RefStatusBlock {
 			s.respondError(w, http.StatusLocked, "ref is blocked: "+parsed.CanonicalString())
 			return
 		}
@@ -199,10 +201,10 @@ func (s *Server) handleStatusTransition(w http.ResponseWriter, r *http.Request, 
 	}
 }
 
-func (s *Server) respondLifecycleJSON(w http.ResponseWriter, ciphertext, status string, changed bool, sync trackedRefSyncResult) {
+func (s *Server) respondLifecycleJSON(w http.ResponseWriter, ciphertext string, status db.RefStatus, changed bool, sync trackedRefSyncResult) {
 	resp := lifecycleResponse{
 		Ciphertext: ciphertext,
-		Status:     status,
+		Status:     string(status),
 		Changed:    changed,
 		SyncStatus: sync.Status,
 		SyncTarget: sync.URL,

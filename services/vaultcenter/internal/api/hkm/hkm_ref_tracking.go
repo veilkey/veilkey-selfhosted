@@ -12,15 +12,33 @@ func parseCanonicalRef(ref string) (db.RefParts, error) {
 	return db.ParseCanonicalRef(strings.TrimSpace(ref))
 }
 
-func normalizeScopeStatus(family string, scope string, status string, fallbackScope string) (string, string, error) {
-	return db.NormalizeRefState(family, scope, status, fallbackScope)
+func normalizeScopeStatus(family string, scope db.RefScope, status db.RefStatus, fallbackScope db.RefScope) (db.RefScope, db.RefStatus, error) {
+	if scope == "" {
+		scope = fallbackScope
+	}
+	if scope == "" {
+		scope = db.RefScopeTemp
+	}
+	switch scope {
+	case db.RefScopeLocal, db.RefScopeExternal:
+		if status == "" {
+			status = db.RefStatusActive
+		}
+	case db.RefScopeTemp:
+		if status == "" {
+			status = db.RefStatusTemp
+		}
+	default:
+		return "", "", fmt.Errorf("unsupported %s scope: %s", family, scope)
+	}
+	return scope, status, nil
 }
 
-func (h *Handler) upsertTrackedRef(ref string, version int, status string, agentHash string) error {
+func (h *Handler) upsertTrackedRef(ref string, version int, status db.RefStatus, agentHash string) error {
 	return h.upsertTrackedRefNamed(ref, version, status, agentHash, "")
 }
 
-func (h *Handler) upsertTrackedRefNamed(ref string, version int, status string, agentHash string, secretName string) error {
+func (h *Handler) upsertTrackedRefNamed(ref string, version int, status db.RefStatus, agentHash string, secretName string) error {
 	parts, err := parseCanonicalRef(ref)
 	if err != nil {
 		return err
@@ -57,7 +75,7 @@ func (h *Handler) resolveTrackedRefVersion(ref string, previousRef string, versi
 	return 1
 }
 
-func (h *Handler) syncTrackedRef(ref string, previousRef string, version int, status string, agentHash string) error {
+func (h *Handler) syncTrackedRef(ref string, previousRef string, version int, status db.RefStatus, agentHash string) error {
 	resolvedVersion := h.resolveTrackedRefVersion(ref, previousRef, version)
 	if err := h.upsertTrackedRef(ref, resolvedVersion, status, agentHash); err != nil {
 		return err
@@ -121,13 +139,13 @@ func (h *Handler) deleteTrackedRef(ref string) error {
 
 // NormalizeScopeStatus is the exported wrapper for normalizeScopeStatus,
 // used by the api package for local config ref tracking.
-func NormalizeScopeStatus(family, scope, status, fallbackScope string) (string, string, error) {
+func NormalizeScopeStatus(family string, scope db.RefScope, status db.RefStatus, fallbackScope db.RefScope) (db.RefScope, db.RefStatus, error) {
 	return normalizeScopeStatus(family, scope, status, fallbackScope)
 }
 
 // UpsertTrackedRef is the exported wrapper for upsertTrackedRef,
 // used by the api package for local config ref tracking.
-func (h *Handler) UpsertTrackedRef(ref string, version int, status string, agentHash string) error {
+func (h *Handler) UpsertTrackedRef(ref string, version int, status db.RefStatus, agentHash string) error {
 	return h.upsertTrackedRef(ref, version, status, agentHash)
 }
 
@@ -156,8 +174,11 @@ func (h *Handler) handleTrackedRefSync(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "ref is required")
 		return
 	}
+	var resolvedStatus db.RefStatus
 	if parts, err := parseCanonicalRef(req.Ref); err == nil {
-		_, req.Status, _ = normalizeScopeStatus(parts.Family, parts.Scope, req.Status, "")
+		_, resolvedStatus, _ = normalizeScopeStatus(parts.Family, parts.Scope, db.RefStatus(req.Status), "")
+	} else {
+		resolvedStatus = db.RefStatus(req.Status)
 	}
 	var (
 		agent *agentInfo
@@ -193,7 +214,7 @@ func (h *Handler) handleTrackedRefSync(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := h.syncTrackedRef(req.Ref, req.PreviousRef, req.Version, req.Status, agent.AgentHash); err != nil {
+	if err := h.syncTrackedRef(req.Ref, req.PreviousRef, req.Version, resolvedStatus, agent.AgentHash); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to sync tracked ref: "+err.Error())
 		return
 	}
@@ -206,6 +227,6 @@ func (h *Handler) handleTrackedRefSync(w http.ResponseWriter, r *http.Request) {
 		"ref":                req.Ref,
 		"previous_ref":       req.PreviousRef,
 		"version":            h.resolveTrackedRefVersion(req.Ref, req.PreviousRef, req.Version),
-		"lifecycle":          req.Status,
+		"lifecycle":          resolvedStatus,
 	})
 }
