@@ -138,13 +138,14 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 	switch action {
 	case "send-code":
 		code := fmt.Sprintf("%06d", rand.IntN(1000000))
-		expiresAt := time.Now().UTC().Add(cmdutil.ParseDurationEnv("VEILKEY_EMAIL_OTP_EXPIRY", 5*time.Minute))
+		otpExpiry := cmdutil.ParseDurationEnv("VEILKEY_EMAIL_OTP_EXPIRY", 5*time.Minute)
+		expiresAt := time.Now().UTC().Add(otpExpiry)
 		if _, err := h.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
 			log.Printf("email-otp: failed to update code: %v", err)
 			respondErr(w, http.StatusInternalServerError, "failed to send code")
 			return
 		}
-		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: 300 seconds\n", code)
+		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: %d seconds\n", code, int(otpExpiry.Seconds()))
 		if err := mailer.Send(challenge.Email, "VeilKey one-time code", body); err != nil {
 			respondErr(w, http.StatusBadGateway, err.Error())
 			return
