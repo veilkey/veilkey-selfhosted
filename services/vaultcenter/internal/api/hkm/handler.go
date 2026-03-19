@@ -46,6 +46,9 @@ type Deps interface {
 	// SubmitTxAsync submits a write TX without waiting for block inclusion.
 	// Used for high-frequency, loss-tolerant operations (heartbeat).
 	SubmitTxAsync(ctx context.Context, txType chain.TxType, payload any) error
+
+	// ChainInfo returns genesis JSON and persistent_peers for child nodes joining the chain.
+	ChainInfo() (genesisJSON []byte, persistentPeers string)
 }
 
 // Handler owns all HKM HTTP handlers.

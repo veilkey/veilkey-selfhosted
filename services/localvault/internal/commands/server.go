@@ -36,21 +36,31 @@ func RunServer() {
 	}
 
 	server, addr, listenPort := mustLoadServer()
+	hubURL := server.LogResolvedVaultcenterURL("startup")
 
 	// CometBFT chain full node (optional — set VEILKEY_CHAIN_HOME to enable)
 	if chainHome := os.Getenv("VEILKEY_CHAIN_HOME"); chainHome != "" {
+		// Fetch genesis from vaultcenter if not already present
+		genesisFile := filepath.Join(chainHome, "config", "genesis.json")
+		if _, err := os.Stat(genesisFile); os.IsNotExist(err) {
+			if hubURL != "" {
+				fetchChainGenesis(hubURL, chainHome)
+			} else {
+				log.Println("Chain: no vaultcenter URL, skipping genesis fetch")
+			}
+		}
+
 		adapter := &db.ChainStoreAdapter{DB: server.DB()}
 		cometNode, chainErr := chain.StartNode(adapter, adapter, chainHome)
 		if chainErr != nil {
-			log.Fatalf("Failed to start chain node: %v", chainErr)
+			log.Printf("Failed to start chain node: %v (continuing without chain)", chainErr)
+		} else {
+			defer chain.StopNode(cometNode)
+			log.Printf("CometBFT full node started (home=%s)", chainHome)
 		}
-		defer chain.StopNode(cometNode)
-		log.Printf("CometBFT full node started (home=%s)", chainHome)
 	} else {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set)")
 	}
-
-	hubURL := server.LogResolvedVaultcenterURL("startup")
 	hostname, _ := os.Hostname()
 	server.StartHeartbeat(hubURL, hostname, listenPort, 5*time.Minute)
 

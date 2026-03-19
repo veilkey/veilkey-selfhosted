@@ -117,7 +117,9 @@ func runServer() {
 		}
 		defer chain.StopNode(cometNode)
 		server.SetChainClient(chain.NewClient(cometNode))
-		log.Printf("CometBFT chain node started (home=%s)", chainHome)
+		server.SetChainHome(chainHome)
+		server.SetChainNodeID(string(cometNode.NodeInfo().ID()))
+		log.Printf("CometBFT chain node started (home=%s, node=%s)", chainHome, cometNode.NodeInfo().ID())
 	} else {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set, using DB direct mode)")
 	}

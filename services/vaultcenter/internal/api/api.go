@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -61,6 +62,8 @@ type Server struct {
 	httpClient     *http.Client
 	chainClient    *chain.Client
 	chainStore     chain.Store
+	chainHome      string
+	chainNodeID    string
 	bulkApplyDir   string
 	updateMu       sync.RWMutex
 	updateState    systemUpdateState
@@ -112,7 +115,30 @@ func (s *Server) SaveAuditEvent(entityType, entityID, action, actorType, actorID
 // ── chain TX submission ─────────────────────────────────────────────────────
 
 // SetChainClient sets the CometBFT chain client. nil disables chain mode (DB fallback).
-func (s *Server) SetChainClient(c *chain.Client) { s.chainClient = c }
+func (s *Server) SetChainClient(c *chain.Client)      { s.chainClient = c }
+func (s *Server) SetChainHome(home string)             { s.chainHome = home }
+func (s *Server) SetChainNodeID(nodeID string)         { s.chainNodeID = nodeID }
+
+// ChainInfo returns genesis JSON and persistent_peers for child nodes joining the chain.
+// Returns nil, "" if chain is not enabled.
+func (s *Server) ChainInfo() (genesisJSON []byte, persistentPeers string) {
+	if s.chainHome == "" {
+		return nil, ""
+	}
+	genesis, err := os.ReadFile(filepath.Join(s.chainHome, "config", "genesis.json"))
+	if err != nil {
+		return nil, ""
+	}
+	if s.chainNodeID != "" {
+		// peer format: nodeID@host:port — host is the vaultcenter's listen address
+		addr := strings.TrimSpace(os.Getenv("VEILKEY_CHAIN_P2P_ADDR"))
+		if addr == "" {
+			addr = "127.0.0.1:26656"
+		}
+		persistentPeers = s.chainNodeID + "@" + addr
+	}
+	return genesis, persistentPeers
+}
 
 // SubmitTx submits a write TX and blocks until committed.
 func (s *Server) SubmitTx(ctx context.Context, txType chain.TxType, payload any) (string, error) {
@@ -507,6 +533,7 @@ func (s *Server) SetupRoutes() http.Handler {
 
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
+	mux.HandleFunc("GET /api/chain/info", s.handleChainInfo)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
 	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)

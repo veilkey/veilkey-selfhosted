@@ -82,8 +82,18 @@ func (h *Handler) handleRegister(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("Registered child node: %s (%s)", nodeID, req.Label)
 
-	respondJSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"dek":     childDEK,
 		"version": 1,
-	})
+	}
+
+	// Include chain genesis + peers if chain is enabled
+	if genesis, peers := h.deps.ChainInfo(); genesis != nil {
+		resp["chain_genesis"] = genesis
+		if peers != "" {
+			resp["chain_persistent_peers"] = peers
+		}
+	}
+
+	respondJSON(w, http.StatusOK, resp)
 }
