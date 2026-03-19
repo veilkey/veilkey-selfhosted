@@ -2,8 +2,8 @@ package hkm
 
 import (
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func secretCatalogPayload(entry db.SecretCatalog) map[string]any {
@@ -175,4 +175,3 @@ func (h *Handler) handleAuditEventsList(w http.ResponseWriter, r *http.Request) 
 		"offset":      offset,
 	})
 }
-

@@ -2,15 +2,14 @@ package hkm
 
 import (
 	"crypto/rand"
-	"encoding/base64"
 	"encoding/hex"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func joinPath(base string, elem ...string) string { return httputil.JoinPath(base, elem...) }
@@ -61,17 +60,9 @@ func (h *Handler) getLocalDEK() ([]byte, error) {
 
 // resolveTempRef decrypts a temporary (session-scoped) encrypted ref.
 func (h *Handler) resolveTempRef(tracked *db.TokenRef) (string, error) {
-	parts := strings.SplitN(tracked.Ciphertext, ":", 2)
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid temp ciphertext format")
-	}
-	ciphertext, err := base64.StdEncoding.DecodeString(parts[0])
+	ciphertext, nonce, err := crypto.DecodeCiphertext(tracked.Ciphertext)
 	if err != nil {
-		return "", fmt.Errorf("decode ciphertext: %w", err)
-	}
-	nonce, err := base64.StdEncoding.DecodeString(parts[1])
-	if err != nil {
-		return "", fmt.Errorf("decode nonce: %w", err)
+		return "", fmt.Errorf("decode temp ciphertext: %w", err)
 	}
 	dek, err := h.getLocalDEK()
 	if err != nil {

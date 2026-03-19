@@ -7,6 +7,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +39,7 @@ func (h *Handler) handleAgentMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathRekey, "application/json", bytes.NewReader(rekeyBody))
+	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathRekey, httputil.ContentTypeJSON, bytes.NewReader(rekeyBody))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return

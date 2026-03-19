@@ -202,7 +202,6 @@ type GlobalFunction struct {
 
 func (GlobalFunction) TableName() string { return "global_functions" }
 
-
 type SecretInputChallenge struct {
 	Token      string     `gorm:"primaryKey;column:token" json:"token"`
 	Email      string     `gorm:"column:email;not null" json:"email"`
@@ -300,7 +299,6 @@ type UIConfig struct {
 }
 
 func (UIConfig) TableName() string { return "ui_configs" }
-
 
 type Config struct {
 	Key       string    `gorm:"primaryKey;column:key" json:"key"`

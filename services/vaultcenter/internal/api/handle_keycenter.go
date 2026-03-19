@@ -3,19 +3,21 @@ package api
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
+
 	"strings"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/refs"
-	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/db"
 )
 
 type tempRefItem struct {
@@ -68,9 +70,9 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 	plaintextHash := hex.EncodeToString(hash[:])
 	if existing, err := s.db.FindActiveTempRefByHash(plaintextHash); err == nil && existing != nil {
 		s.respondJSON(w, http.StatusOK, map[string]any{
-			"ref":        existing.RefCanonical,
-			"name":       existing.SecretName,
-			"expires_at": existing.ExpiresAt,
+			"ref":          existing.RefCanonical,
+			"name":         existing.SecretName,
+			"expires_at":   existing.ExpiresAt,
 			"deduplicated": true,
 		})
 		return
@@ -94,7 +96,7 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 	}
 
 	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-	encoded := base64.StdEncoding.EncodeToString(ciphertext) + ":" + base64.StdEncoding.EncodeToString(nonce)
+	encoded := crypto.EncodeCiphertext(ciphertext, nonce)
 	expiresAt := time.Now().UTC().Add(1 * time.Hour)
 
 	nodeInfo, err := s.db.GetNodeInfo()
@@ -158,7 +160,7 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 	}
 	resp, err := s.httpClient.Post(
 		strings.TrimRight(agentURL, "/")+"/api/promote",
-		"application/json",
+		httputil.ContentTypeJSON,
 		bytes.NewReader(promoteBody),
 	)
 	if err != nil {

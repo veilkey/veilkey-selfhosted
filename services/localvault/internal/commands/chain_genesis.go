@@ -29,7 +29,7 @@ func fetchChainGenesis(vaultcenterURL, chainHome string) {
 	}
 
 	var data struct {
-		Genesis         string `json:"genesis"`          // base64-encoded (Go []byte → JSON)
+		Genesis         string `json:"genesis"` // base64-encoded (Go []byte → JSON)
 		PersistentPeers string `json:"persistent_peers"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {

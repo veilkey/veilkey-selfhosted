@@ -19,8 +19,8 @@ func (h *Handler) handleConfigsSummary(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
-		"total_configs":      totalConfigs,
-		"total_agents":       len(agents),
+		"total_configs":       totalConfigs,
+		"total_agents":        len(agents),
 		"agents_with_configs": agentsWithConfigs,
 	})
 }

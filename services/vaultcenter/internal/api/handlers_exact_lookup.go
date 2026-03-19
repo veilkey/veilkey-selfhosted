@@ -4,8 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type exactLookupMatch struct {

@@ -6,8 +6,9 @@ import (
 	"net/url"
 	"strings"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 // handleSetParent sets the parent_url in node_info

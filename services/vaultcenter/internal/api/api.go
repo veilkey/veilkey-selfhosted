@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -16,14 +17,17 @@ import (
 	"veilkey-vaultcenter/internal/api/approval"
 	"veilkey-vaultcenter/internal/api/bulk"
 	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/agentapi"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
 	"github.com/veilkey/veilkey-go-package/tlsutil"
-	"veilkey-vaultcenter/internal/db"
-	"veilkey-vaultcenter/internal/httputil"
 )
+
+const defaultChainP2PAddr = "127.0.0.1:26656"
 
 type NodeIdentity struct {
 	NodeID    string
@@ -49,24 +53,24 @@ func DefaultTimeouts() Timeouts {
 }
 
 type Server struct {
-	db             *db.DB
-	kek            []byte
-	kekMu          sync.RWMutex
-	locked         bool
-	salt           []byte
-	trustedIPs     map[string]bool
-	trustedCIDRs   []*net.IPNet
-	identity       *NodeIdentity
-	timeouts       Timeouts
-	unlockLimiter  *ratelimit.UnlockRateLimiter
-	httpClient     *http.Client
-	chainClient    *chain.Client
-	chainStore     chain.Store
-	chainHome      string
-	chainNodeID    string
-	bulkApplyDir   string
-	updateMu       sync.RWMutex
-	updateState    systemUpdateState
+	db              *db.DB
+	kek             []byte
+	kekMu           sync.RWMutex
+	locked          bool
+	salt            []byte
+	trustedIPs      map[string]bool
+	trustedCIDRs    []*net.IPNet
+	identity        *NodeIdentity
+	timeouts        Timeouts
+	unlockLimiter   *ratelimit.UnlockRateLimiter
+	httpClient      *http.Client
+	chainClient     *chain.Client
+	chainStore      chain.Store
+	chainHome       string
+	chainNodeID     string
+	bulkApplyDir    string
+	updateMu        sync.RWMutex
+	updateState     systemUpdateState
 	approvalHandler *approval.Handler
 	adminHandler    *admin.Handler
 	hkmHandler      *hkm.Handler
@@ -115,9 +119,9 @@ func (s *Server) SaveAuditEvent(entityType, entityID, action, actorType, actorID
 // ── chain TX submission ─────────────────────────────────────────────────────
 
 // SetChainClient sets the CometBFT chain client. nil disables chain mode (DB fallback).
-func (s *Server) SetChainClient(c *chain.Client)      { s.chainClient = c }
-func (s *Server) SetChainHome(home string)             { s.chainHome = home }
-func (s *Server) SetChainNodeID(nodeID string)         { s.chainNodeID = nodeID }
+func (s *Server) SetChainClient(c *chain.Client) { s.chainClient = c }
+func (s *Server) SetChainHome(home string)       { s.chainHome = home }
+func (s *Server) SetChainNodeID(nodeID string)   { s.chainNodeID = nodeID }
 
 // ChainInfo returns genesis JSON and persistent_peers for child nodes joining the chain.
 // Returns nil, "" if chain is not enabled.
@@ -133,7 +137,7 @@ func (s *Server) ChainInfo() (genesisJSON []byte, persistentPeers string) {
 		// peer format: nodeID@host:port — host is the vaultcenter's listen address
 		addr := strings.TrimSpace(os.Getenv("VEILKEY_CHAIN_P2P_ADDR"))
 		if addr == "" {
-			addr = "127.0.0.1:26656"
+			addr = defaultChainP2PAddr
 		}
 		persistentPeers = s.chainNodeID + "@" + addr
 	}
@@ -171,7 +175,7 @@ func (s *Server) SubmitTx(ctx context.Context, txType chain.TxType, payload any)
 	}
 	code, resultLog := chain.Execute(s.chainStore, env)
 	if code != 0 {
-		return "", fmt.Errorf(resultLog)
+		return "", errors.New(resultLog)
 	}
 	return resultLog, nil
 }
@@ -197,7 +201,7 @@ func (s *Server) SubmitTxAsync(ctx context.Context, txType chain.TxType, payload
 	}
 	code, resultLog := chain.Execute(s.chainStore, env)
 	if code != 0 {
-		return fmt.Errorf(resultLog)
+		return errors.New(resultLog)
 	}
 	return nil
 }

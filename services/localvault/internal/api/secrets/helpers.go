@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"veilkey-localvault/internal/db"
+
 	"github.com/veilkey/veilkey-go-package/httputil"
 )
 

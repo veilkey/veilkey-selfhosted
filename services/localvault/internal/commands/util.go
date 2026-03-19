@@ -5,8 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"veilkey-localvault/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
 
 func readPasswordFromFileEnv() string {

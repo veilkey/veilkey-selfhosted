@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
@@ -40,7 +42,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agent.URL()+agentPathConfigs, bytes.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
@@ -75,7 +77,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
 }

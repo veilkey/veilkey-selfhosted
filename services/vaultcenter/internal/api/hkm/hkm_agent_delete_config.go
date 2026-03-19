@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request) {
@@ -51,7 +53,7 @@ func (h *Handler) handleAgentDeleteConfig(w http.ResponseWriter, r *http.Request
 	if resp.StatusCode == http.StatusOK && trackedRef != "" {
 		_ = h.deleteTrackedRef(r.Context(), trackedRef)
 	}
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(resp.StatusCode)
 	w.Write(body)
 }

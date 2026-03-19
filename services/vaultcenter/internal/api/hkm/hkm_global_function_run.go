@@ -7,16 +7,17 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-vaultcenter/internal/db"
 )
 
 var functionRunAllowlist = map[string]struct{}{
@@ -59,7 +60,7 @@ func (h *Handler) localFunctionBaseURL() string {
 		return ""
 	}
 	if strings.HasPrefix(addr, ":") {
-		return scheme + "://127.0.0.1" + addr
+		return scheme + "://localhost" + addr
 	}
 	if strings.HasPrefix(addr, "http://") || strings.HasPrefix(addr, "https://") {
 		return addr

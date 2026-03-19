@@ -14,11 +14,12 @@ import (
 	"veilkey-localvault/internal/api/configs"
 	"veilkey-localvault/internal/api/functions"
 	"veilkey-localvault/internal/api/secrets"
+	"veilkey-localvault/internal/db"
+
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/httputil"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
 	"github.com/veilkey/veilkey-go-package/tlsutil"
-	"veilkey-localvault/internal/db"
 )
 
 type NodeIdentity struct {

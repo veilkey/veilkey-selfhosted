@@ -2,17 +2,17 @@ package api
 
 import (
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
 
+	"veilkey-vaultcenter/internal/api/hkm"
+	"veilkey-vaultcenter/internal/db"
+
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/refs"
-	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/db"
 )
 
 const tempKeyTTL = 1 * time.Hour
@@ -69,7 +69,7 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-	encoded := base64.StdEncoding.EncodeToString(ciphertext) + ":" + base64.StdEncoding.EncodeToString(nonce)
+	encoded := crypto.EncodeCiphertext(ciphertext, nonce)
 	expiresAt := time.Now().UTC().Add(tempKeyTTL)
 
 	nodeInfo, err := s.db.GetNodeInfo()

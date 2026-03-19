@@ -6,13 +6,14 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"slices"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type agentSecretMeta struct {
@@ -381,7 +382,7 @@ func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -426,7 +427,7 @@ func (h *Handler) handleVaultKeyUsage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -482,7 +483,7 @@ func (h *Handler) handleVaultKeyBindings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -537,7 +538,7 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -766,7 +767,7 @@ func (h *Handler) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -826,7 +827,7 @@ func (h *Handler) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -875,7 +876,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(ctx context.Context, w http.Resp
 		return nil, nil, false
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return nil, nil, false
@@ -1042,7 +1043,7 @@ func (h *Handler) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 	r.Body = ioNopCloser{bytes.NewReader(payload)}
 	r.ContentLength = int64(len(payload))
-	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	h.handleAgentSaveSecret(w, r)
 }
 
@@ -1066,7 +1067,7 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -1138,7 +1139,7 @@ func (h *Handler) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Reque
 	})
 	r.Body = ioNopCloser{bytes.NewReader(payload)}
 	r.ContentLength = int64(len(payload))
-	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	h.handleAgentSaveSecretFields(w, r)
 }
 

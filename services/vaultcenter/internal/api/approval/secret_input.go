@@ -8,9 +8,10 @@ import (
 	"net/http"
 	"strings"
 
-	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type secretInputRequest struct {
@@ -91,7 +92,7 @@ func (h *Handler) handleSecretInputPage(w http.ResponseWriter, r *http.Request) 
 
 func (h *Handler) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request) {
 	var req secretInputSubmitRequest
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), httputil.ContentTypeJSON) {
 		if err := httputil.DecodeJSON(r, &req); err != nil {
 			respondErr(w, http.StatusBadRequest, "invalid request body")
 			return
@@ -140,7 +141,7 @@ func (h *Handler) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request
 		Reason:     "secret_input_submitted",
 		Source:     "vaultcenter_ui",
 	})
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), httputil.ContentTypeJSON) {
 		respond(w, http.StatusOK, map[string]any{
 			"status":      "submitted",
 			"secret_name": challenge.SecretName,
@@ -168,7 +169,7 @@ func (h *Handler) storeSecretViaAgentEndpoint(endpoint, name, value string) erro
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
 	resp, err := h.httpClient.Do(req)
 	if err != nil {
 		return err

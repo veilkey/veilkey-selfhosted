@@ -2,9 +2,9 @@ package hkm
 
 import (
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"time"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleAgentList(w http.ResponseWriter, r *http.Request) {

@@ -4,8 +4,9 @@ import (
 	"log"
 	"net/http"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
 )
 
 // handleHeartbeat accepts URL updates from child nodes with version chain verification.

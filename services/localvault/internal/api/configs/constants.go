@@ -13,4 +13,6 @@ const (
 )
 
 // makeRef constructs a canonical ref string from its components.
-func makeRef(family string, scope db.RefScope, id string) string { return db.MakeRef(family, scope, id) }
+func makeRef(family string, scope db.RefScope, id string) string {
+	return db.MakeRef(family, scope, id)
+}

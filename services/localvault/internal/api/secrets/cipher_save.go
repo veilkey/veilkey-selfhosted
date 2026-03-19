@@ -5,8 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {

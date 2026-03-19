@@ -4,21 +4,22 @@ import (
 	"log"
 	"net"
 	"net/http"
-	chain "github.com/veilkey/veilkey-chain"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
 	"time"
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) preferredHeartbeatIP(r *http.Request) string {
 	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if h.deps.IsTrustedIPString(clientIP) {
 		for _, value := range []string{
-			r.Header.Get("CF-Connecting-IP"),
-			r.Header.Get("X-Real-IP"),
-			r.Header.Get("X-Forwarded-For"),
+			r.Header.Get(httputil.HeaderCFConnectingIP),
+			r.Header.Get(httputil.HeaderXRealIP),
+			r.Header.Get(httputil.HeaderXForwardedFor),
 		} {
 			value = strings.TrimSpace(value)
 			if value == "" {
@@ -92,7 +93,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = role != "" // role is included in UpsertAgentPayload directly
 	if role == "" {
-		role = "agent"
+		role = db.DefaultAgentRole
 	}
 
 	if req.IP == "" {
@@ -212,7 +213,6 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		localEnabled = *req.LocalEnabled
 	}
 
-	isNewAgent := agent == nil
 	upsertPayload := chain.UpsertAgentPayload{
 		NodeID:       nodeID,
 		Label:        req.Label,
@@ -229,17 +229,10 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Version:      req.Version,
 		KeyVersion:   req.KeyVersion,
 	}
-	// New agents use Commit (need DB row for subsequent reads); existing use Async.
-	if isNewAgent {
-		if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to register agent: "+err.Error())
-			return
-		}
-	} else {
-		if err := h.deps.SubmitTxAsync(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
-			respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
-			return
-		}
+	// Both new and existing agents use Commit to avoid read-after-write race.
+	if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {
+		respondError(w, http.StatusInternalServerError, "failed to upsert agent: "+err.Error())
+		return
 	}
 
 	agent, err = h.deps.DB().GetAgentByNodeID(nodeID)
@@ -336,4 +329,3 @@ func heartbeatAgentState(agent *db.Agent, status string) map[string]interface{} 
 	}
 	return resp
 }
-

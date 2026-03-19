@@ -6,8 +6,9 @@ import (
 	"net/http"
 	"strings"
 	"time"
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (s *Server) saveAuditEvent(entityType, entityID, action, actorType, actorID, reason, source string, before, after map[string]any) {

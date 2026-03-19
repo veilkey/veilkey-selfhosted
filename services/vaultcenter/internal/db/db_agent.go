@@ -60,7 +60,7 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 		return d.UpsertVaultInventoryFromAgent(&agent)
 	}
 	if strings.TrimSpace(existing.AgentRole) == "" {
-		existing.AgentRole = "agent"
+		existing.AgentRole = DefaultAgentRole
 	}
 	existing.Label = label
 	existing.VaultHash = vaultHash
@@ -130,14 +130,14 @@ func canonicalAgentRole(role string, host, local bool) string {
 	case host:
 		return "host-only"
 	default:
-		return "agent"
+		return DefaultAgentRole
 	}
 }
 
 func (d *DB) UpdateAgentRole(nodeID, role string) error {
 	role = strings.TrimSpace(role)
 	if role == "" {
-		role = "agent"
+		role = DefaultAgentRole
 	}
 	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("agent_role", role)
 	if result.Error != nil {
@@ -184,7 +184,7 @@ func (d *DB) BackfillAgentCapabilities() error {
 	}
 	for _, agent := range agents {
 		role := strings.ToLower(strings.TrimSpace(agent.AgentRole))
-		if role == "" || role == "agent" {
+		if role == "" || role == DefaultAgentRole {
 			continue
 		}
 		host, local := normalizeAgentCapabilities(agent.AgentRole, nil, nil)

@@ -9,10 +9,11 @@ import (
 	"strings"
 	"time"
 
-	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/mailer"
+
+	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type emailOTPRequest struct {

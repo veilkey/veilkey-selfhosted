@@ -8,10 +8,13 @@ import (
 	"io"
 	"log"
 	"net/http"
+
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
 // ErrRotationRequired is returned by SendHeartbeatOnce when the hub requires a key rotation.
@@ -91,7 +94,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
 
-	resp, err := s.httpClient.Post(endpoint, "application/json", bytes.NewReader(body))
+	resp, err := s.httpClient.Post(endpoint, httputil.ContentTypeJSON, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

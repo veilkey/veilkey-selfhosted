@@ -1,19 +1,21 @@
 package commands
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"log"
 	"net/http"
+
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
 
 	"veilkey-vaultcenter/internal/api/admin"
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 var setupMu sync.Mutex
@@ -58,7 +60,7 @@ func RunSetupServer(dbPath, dataDir string) {
 	}
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.Write([]byte(`{"status":"setup"}`))
 	})
 
@@ -103,13 +105,13 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	req.Password = strings.TrimSpace(req.Password)
 	req.AdminPassword = strings.TrimSpace(req.AdminPassword)
 	if len(req.Password) < 8 {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "password must be at least 8 characters"})
 		return
 	}
 	if len(req.AdminPassword) < 8 {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(http.StatusBadRequest)
 		json.NewEncoder(w).Encode(map[string]string{"error": "admin_password must be at least 8 characters"})
 		return
@@ -156,8 +158,8 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	if pwCipher, pwNonce, pwErr := crypto.Encrypt(dek, []byte(req.Password)); pwErr == nil {
 		if refID, refErr := generateInitRef(16); refErr == nil {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-			encoded := base64.StdEncoding.EncodeToString(pwCipher) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
-			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "VAULTCENTER_PASSWORD"); saveErr == nil {
+			encoded := crypto.EncodeCiphertext(pwCipher, pwNonce)
+			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyVaultcenterPassword); saveErr == nil {
 				tempRef = parts.Canonical()
 			}
 		}
@@ -193,8 +195,8 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 		log.Printf("setup: failed to generate admin temp ref ID: %v", refErr)
 	} else {
 		parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
-		encoded := base64.StdEncoding.EncodeToString(pwCipher) + ":" + base64.StdEncoding.EncodeToString(pwNonce)
-		if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, "ADMIN_PASSWORD"); saveErr != nil {
+		encoded := crypto.EncodeCiphertext(pwCipher, pwNonce)
+		if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyAdminPassword); saveErr != nil {
 			log.Printf("setup: failed to save admin temp ref: %v", saveErr)
 		} else {
 			adminTempRef = parts.Canonical()
@@ -203,7 +205,7 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 
 	log.Printf("setup: initialization complete, node_id=%s, temp_ref=%s, admin_temp_ref=%s", nodeID, tempRef, adminTempRef)
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	json.NewEncoder(w).Encode(map[string]any{
 		"node_id":        nodeID,
 		"temp_ref":       tempRef,

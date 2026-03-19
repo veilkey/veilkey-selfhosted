@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
@@ -40,7 +40,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -90,7 +90,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		"name":   name,
 		"fields": payloadFields,
 	})
-	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathSecretFields, "application/json", bytes.NewReader(reqBody))
+	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathSecretFields, httputil.ContentTypeJSON, bytes.NewReader(reqBody))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
@@ -99,13 +99,13 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"name":               name,
@@ -135,7 +135,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	if statusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(statusCode)
 		w.Write(body)
 		return
@@ -208,13 +208,13 @@ func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Re
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
-		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 		w.WriteHeader(resp.StatusCode)
 		w.Write(body)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 	w.WriteHeader(http.StatusOK)
 	w.Write(body)
 }

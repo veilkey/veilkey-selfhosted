@@ -8,9 +8,10 @@ import (
 	"strings"
 	"time"
 
-	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
+
+	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
 type approvalTokenSubmitRequest struct {
@@ -65,7 +66,7 @@ func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *h
 	}
 
 	var req approvalTokenSubmitRequest
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), httputil.ContentTypeJSON) {
 		if err := httputil.DecodeJSON(r, &req); err != nil {
 			respondErr(w, http.StatusBadRequest, "invalid request body")
 			return
@@ -115,7 +116,7 @@ func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *h
 		AfterJSON:           mustMarshalJSON(after),
 		CreatedAt:           time.Now().UTC(),
 	})
-	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), "application/json") {
+	if strings.Contains(strings.ToLower(r.Header.Get("Content-Type")), httputil.ContentTypeJSON) {
 		respond(w, http.StatusOK, map[string]any{
 			"status":      "submitted",
 			"token":       challenge.Token,

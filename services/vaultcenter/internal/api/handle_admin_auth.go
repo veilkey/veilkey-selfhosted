@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"veilkey-vaultcenter/internal/db"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 const adminSessionCookie = "vk_session"
@@ -82,12 +83,12 @@ func remoteIP(r *http.Request) string {
 		addr = r.RemoteAddr
 	}
 	if ip := net.ParseIP(addr); ip != nil && isPrivateIP(ip) {
-		if h := r.Header.Get("X-Real-IP"); h != "" {
+		if h := r.Header.Get(httputil.HeaderXRealIP); h != "" {
 			if parsed := net.ParseIP(strings.TrimSpace(h)); parsed != nil {
 				return parsed.String()
 			}
 		}
-		if h := r.Header.Get("X-Forwarded-For"); h != "" {
+		if h := r.Header.Get(httputil.HeaderXForwardedFor); h != "" {
 			first := strings.TrimSpace(strings.SplitN(h, ",", 2)[0])
 			if parsed := net.ParseIP(first); parsed != nil {
 				return parsed.String()

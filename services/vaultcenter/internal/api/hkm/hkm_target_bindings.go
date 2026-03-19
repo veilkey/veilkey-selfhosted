@@ -2,12 +2,13 @@ package hkm
 
 import (
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"strings"
+	"veilkey-vaultcenter/internal/httputil"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
-	chain "github.com/veilkey/veilkey-chain"
 	"veilkey-vaultcenter/internal/db"
+
+	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func (h *Handler) handleTargetBindings(w http.ResponseWriter, r *http.Request) {

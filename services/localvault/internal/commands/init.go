@@ -12,8 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-localvault/internal/db"
+
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func RunInit() {

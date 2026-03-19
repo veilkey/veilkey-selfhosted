@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"veilkey-vaultcenter/internal/httputil"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
 )
 
 func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +164,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				results[idx] = applyResult{ac: ac, err: err}
 				return
 			}
-			httpReq.Header.Set("Content-Type", "application/json")
+			httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ac: ac, err: err}
@@ -209,7 +209,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				}
 				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ac.ai.URL()+agentPathConfigs, bytes.NewReader(body))
 				if httpReq != nil {
-					httpReq.Header.Set("Content-Type", "application/json")
+					httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {
 						resp.Body.Close()

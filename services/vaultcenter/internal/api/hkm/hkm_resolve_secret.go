@@ -6,13 +6,16 @@ import (
 	"io"
 	"log"
 	"net/http"
+
 	"strings"
 	"sync"
 	"time"
+	"veilkey-vaultcenter/internal/httputil"
+
+	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/crypto"
-	"veilkey-vaultcenter/internal/db"
 )
 
 // handleResolveSecret resolves a scoped VK ref to its plaintext value
@@ -128,7 +131,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 		}()
 
 		if result, ok := <-resultCh; ok {
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 			w.WriteHeader(http.StatusOK)
 			w.Write(result.body)
 			return
@@ -154,7 +157,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				respondError(w, http.StatusNotFound, "ref not found: "+ref)
 				return
 			}
-			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Content-Type", httputil.ContentTypeJSON)
 			w.WriteHeader(http.StatusOK)
 			w.Write(body)
 			return

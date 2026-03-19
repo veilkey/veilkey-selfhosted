@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"veilkey-localvault/internal/api"
+
 	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
