@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/tls"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -142,8 +144,9 @@ func runSetupServer(dbPath, dataDir string) {
 
 func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string, server *api.Server) {
 	var req struct {
-		Password       string `json:"password"`
-		VaultcenterURL string `json:"vaultcenter_url"`
+		Password          string `json:"password"`
+		VaultcenterURL    string `json:"vaultcenter_url"`
+		RegistrationToken string `json:"registration_token"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
@@ -209,6 +212,21 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		return
 	}
 
+	// Parse registration token if provided — overrides VC URL
+	if req.RegistrationToken != "" {
+		tokenID, tokenURL, _, tokenErr := decodeRegistrationToken(req.RegistrationToken)
+		if tokenErr != nil {
+			http.Error(w, "invalid registration token: "+tokenErr.Error(), http.StatusBadRequest)
+			return
+		}
+		if tokenURL != "" {
+			req.VaultcenterURL = tokenURL
+		}
+		if err := database.SaveConfig("VEILKEY_REGISTRATION_TOKEN", tokenID); err != nil {
+			log.Printf("install: failed to save registration token: %v", err)
+		}
+	}
+
 	// Save vaultcenter URL to DB config if provided
 	if req.VaultcenterURL != "" {
 		normalized := strings.TrimRight(req.VaultcenterURL, "/")
@@ -218,6 +236,15 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 			return
 		}
 		log.Printf("install: vaultcenter URL saved: %s", normalized)
+	}
+
+	// Save password file BEFORE salt — salt existence signals "init complete"
+	passwordFile := filepath.Join(dataDir, "password")
+	if err := os.WriteFile(passwordFile, []byte(req.Password), 0600); err != nil {
+		log.Printf("install: failed to write password file: %v", err)
+		// non-fatal: server can still be unlocked manually
+	} else {
+		log.Printf("install: password file saved to %s", passwordFile)
 	}
 
 	// Write salt file (this is the trigger that switches from setup to normal mode)
@@ -306,6 +333,13 @@ func mustLoadServer() (*api.Server, string, int) {
 		}
 		server.Unlock(kek)
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
+	} else if pw := readDataDirPassword(dataDir); pw != "" {
+		kek := crypto.DeriveKEK(pw, salt)
+		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
+			log.Fatalf("Failed to unlock with data dir password file: invalid password")
+		}
+		server.Unlock(kek)
+		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {
@@ -447,20 +481,60 @@ func defaultVaultHash(nodeID string) string {
 
 func runInit() {
 	isRoot := false
+	tokenStr := ""
+	centerURL := ""
 	for i := 2; i < len(os.Args); i++ {
-		switch os.Args[i] {
-		case "--root":
+		switch {
+		case os.Args[i] == "--root":
 			isRoot = true
-		case "--password":
+		case os.Args[i] == "--token" && i+1 < len(os.Args):
+			i++
+			tokenStr = os.Args[i]
+		case strings.HasPrefix(os.Args[i], "--token="):
+			tokenStr = strings.TrimPrefix(os.Args[i], "--token=")
+		case os.Args[i] == "--center" && i+1 < len(os.Args):
+			i++
+			centerURL = os.Args[i]
+		case strings.HasPrefix(os.Args[i], "--center="):
+			centerURL = strings.TrimPrefix(os.Args[i], "--center=")
+		case os.Args[i] == "--password":
 			log.Fatal("--password flag is no longer supported (password exposed in ps/proc). Provide password via stdin or interactive prompt.")
 		}
 	}
 
 	if !isRoot {
-		fmt.Println("Usage: veilkey-localvault init --root")
+		fmt.Println("Usage: veilkey-localvault init --root [--token vk_reg_...] [--center https://vc.example.com]")
 		fmt.Println("  --root      Initialize as HKM node")
+		fmt.Println("  --token     Registration token from VaultCenter (carries VC URL + label)")
+		fmt.Println("  --center    VaultCenter URL (alternative to token)")
 		fmt.Println("  Password is read from stdin (pipe) or interactive TTY prompt.")
 		os.Exit(1)
+	}
+
+	// Parse registration token if provided
+	var tokenID, tokenLabel string
+	if tokenStr != "" {
+		var tokenURL string
+		var err error
+		tokenID, tokenURL, tokenLabel, err = decodeRegistrationToken(tokenStr)
+		if err != nil {
+			log.Fatalf("Invalid registration token: %v", err)
+		}
+		// Token URL overrides --center, but --center can fill empty token URL
+		if tokenURL != "" {
+			centerURL = tokenURL
+		}
+		if centerURL == "" {
+			log.Fatal("VaultCenter URL is required. Provide via --center or include in token.")
+		}
+		fmt.Printf("  Token: %s (label: %s)\n", tokenID[:8]+"...", tokenLabel)
+		fmt.Printf("  VaultCenter: %s\n", centerURL)
+
+		// Validate token against VC
+		if err := validateTokenRemote(centerURL, tokenID); err != nil {
+			log.Fatalf("Token validation failed: %v", err)
+		}
+		fmt.Println("  Token validated successfully.")
 	}
 
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
@@ -523,6 +597,27 @@ func runInit() {
 		log.Fatalf("Failed to save node info: %v", err)
 	}
 
+	// Save VC URL and registration token to DB config (if provided)
+	if centerURL != "" {
+		normalized := strings.TrimRight(centerURL, "/")
+		if err := database.SaveConfig("VEILKEY_VAULTCENTER_URL", normalized); err != nil {
+			log.Printf("Warning: failed to save vaultcenter URL: %v", err)
+		} else {
+			fmt.Printf("  VaultCenter URL saved: %s\n", normalized)
+		}
+	}
+	if tokenID != "" {
+		if err := database.SaveConfig("VEILKEY_REGISTRATION_TOKEN", tokenID); err != nil {
+			log.Printf("Warning: failed to save registration token: %v", err)
+		}
+	}
+
+	// Save password file for auto-unlock on restart
+	passwordFile := filepath.Join(dataDir, "password")
+	if err := os.WriteFile(passwordFile, []byte(password), 0600); err != nil {
+		log.Printf("Warning: failed to write password file: %v", err)
+	}
+
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
@@ -541,4 +636,53 @@ func readPasswordFromFileEnv() string {
 
 func readPassword(prompt string) string {
 	return cmdutil.ReadPassword(prompt)
+}
+
+func readDataDirPassword(dataDir string) string {
+	path := filepath.Join(dataDir, "password")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func decodeRegistrationToken(token string) (tokenID, vcURL, label string, err error) {
+	const prefix = "vk_reg_"
+	if !strings.HasPrefix(token, prefix) {
+		return "", "", "", fmt.Errorf("token must start with %s", prefix)
+	}
+	data, err := base64.RawURLEncoding.DecodeString(strings.TrimPrefix(token, prefix))
+	if err != nil {
+		return "", "", "", fmt.Errorf("invalid base64 encoding: %w", err)
+	}
+	var payload struct {
+		TokenID   string `json:"t"`
+		URL       string `json:"u"`
+		Label     string `json:"l"`
+		ExpiresAt int64  `json:"x"`
+	}
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return "", "", "", fmt.Errorf("invalid token payload: %w", err)
+	}
+	if payload.TokenID == "" {
+		return "", "", "", fmt.Errorf("token has no ID")
+	}
+	return payload.TokenID, payload.URL, payload.Label, nil
+}
+
+func validateTokenRemote(vcURL, tokenID string) error {
+	url := strings.TrimRight(vcURL, "/") + "/api/registration-tokens/" + tokenID + "/validate"
+	client := &http.Client{Timeout: 10 * time.Second, Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}}
+	resp, err := client.Get(url)
+	if err != nil {
+		return fmt.Errorf("cannot reach VaultCenter: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("token rejected by VaultCenter (HTTP %d)", resp.StatusCode)
+	}
+	return nil
 }

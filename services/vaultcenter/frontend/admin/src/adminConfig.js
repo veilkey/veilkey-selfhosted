@@ -1,4 +1,5 @@
 export const pageConfig = {
+    keycenter: { labelKey: 'page_keycenter', tabs: ['TEMP_REFS'] },
     vaults: { labelKey: 'page_vaults', tabs: ['ALL_VAULTS', 'VAULT_ITEMS', 'BULK_APPLY'] },
     functions: { labelKey: 'page_functions', tabs: ['FUNCTION_LIST', 'FUNCTION_BINDINGS', 'FUNCTION_IMPACT', 'FUNCTION_RUN'] },
     audit: { labelKey: 'page_audit', tabs: ['AUDIT_LOG'] },
@@ -6,6 +7,7 @@ export const pageConfig = {
 };
 
 export const routeEntries = [
+    { page: 'keycenter', tab: 'TEMP_REFS', path: '/keycenter' },
     { page: 'vaults', tab: 'ALL_VAULTS', path: '/vaults/all' },
     { page: 'functions', tab: 'FUNCTION_LIST', path: '/functions/list' },
     { page: 'functions', tab: 'FUNCTION_BINDINGS', path: '/functions/bindings' },

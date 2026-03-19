@@ -28,6 +28,7 @@ export function useAdminApp() {
 const state = reactive({
     activePage: 'vaults',
     activeTabByPage: {
+        keycenter: 'TEMP_REFS',
         vaults: 'ALL_VAULTS',
         functions: 'FUNCTION_LIST',
         audit: 'AUDIT_LOG',
@@ -78,6 +79,14 @@ const state = reactive({
     auditCountByVault: {},
     trackedRefAudit: null,
     adminAuditRows: [],
+    keycenterTempRefs: [],
+    selectedTempRef: null,
+    revealedValues: {},
+    routeSelectedRefCanonical: null,
+    regTokens: [],
+    createdRegToken: null,
+    showRegTokenForm: false,
+    showTempRefForm: false,
     busy: {},
     ui: {
         sidebarHTML: '',
@@ -89,7 +98,11 @@ const state = reactive({
         leftVisible: true,
         centerHTML: '',
         rightHTML: '',
-        twoPane: false
+        twoPane: false,
+        adminRequired: false,
+        adminLoginError: '',
+        locked: false,
+        unlockError: ''
     }
 });
 
@@ -146,6 +159,7 @@ function activeTab() {
 
 function tabLabelKey(tab) {
     return {
+        TEMP_REFS: 'tab_temp_refs',
         ALL_VAULTS: 'tab_all_vaults',
         VAULT_ITEMS: 'tab_vault_items',
         BULK_APPLY: 'tab_bulk_apply',
@@ -188,6 +202,10 @@ function routePath(page, tab) {
         const vaultHash = state.auditVault;
         return vaultHash ? `/audit/${encodeURIComponent(vaultHash)}` : '/audit';
     }
+    if (page === 'keycenter') {
+        const canonical = state.selectedTempRef?.ref_canonical;
+        return canonical ? `/keycenter/${encodeURIComponent(canonical)}` : '/keycenter';
+    }
     const entry = routeEntries.find((item) => item.page === page && item.tab === tab);
     return entry ? entry.path : '/';
 }
@@ -212,6 +230,13 @@ function applyRoute(pathname, search = window.location.search) {
         }
         return;
     }
+    const keycenterMatch = normalized.match(/^\/keycenter(?:\/(.+))?$/);
+    if (keycenterMatch) {
+        state.activePage = 'keycenter';
+        state.activeTabByPage.keycenter = 'TEMP_REFS';
+        state.routeSelectedRefCanonical = keycenterMatch[1] ? decodeURIComponent(keycenterMatch[1]) : null;
+        return;
+    }
     const matched = normalized === '/' ? { page: 'vaults', tab: 'ALL_VAULTS' } : routeByPath[normalized];
     if (!matched) return;
     state.activePage = matched.page;
@@ -234,6 +259,7 @@ function matchesQuery(text) {
 }
 
 function navCount(page) {
+    if (page === 'keycenter') return state.keycenterTempRefs.length || '';
     if (page === 'vaults') return state.vaults.length;
     if (page === 'functions') return state.functions.length;
     if (page === 'audit') return auditTotalCount();
@@ -350,6 +376,7 @@ function configRelationsByScope() {
 
 function renderSidebar() {
     const sections = [
+        { page: 'keycenter', label: pageLabel('keycenter') },
         { page: 'vaults', label: pageLabel('vaults') },
         { page: 'functions', label: pageLabel('functions') },
         { page: 'audit', label: pageLabel('audit') },
@@ -406,6 +433,7 @@ function renderTopbarStatus() {
 }
 
 function pageContextText() {
+    if (state.activePage === 'keycenter') return t('tab_temp_refs');
     if (state.activePage === 'vaults') return t('vault_inventory');
     if (state.activePage === 'functions') return t('function_list');
     if (state.activePage === 'audit') return t('tab_audit_log');
@@ -1504,8 +1532,277 @@ function render() {
         renderAuditPage();
         return;
     }
+    if (state.activePage === 'keycenter') {
+        renderKeycenterPage();
+        return;
+    }
     renderSecondarySidebar();
     if (state.activePage === 'configs') renderConfigs();
+}
+
+function renderKeycenterPage() {
+    state.ui.leftHTML = '';
+    state.ui.leftVisible = false;
+    state.ui.twoPane = true;
+    state.ui.secondarySidebarHidden = true;
+
+    const refs = state.keycenterTempRefs;
+    const selected = state.selectedTempRef;
+
+    const fmtAbs = (iso) => {
+        if (!iso) return '-';
+        try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    };
+    const fmtRemaining = (iso) => {
+        if (!iso) return null;
+        const ms = new Date(iso) - Date.now();
+        if (ms <= 0) return t('keycenter_expired');
+        const mins = Math.round(ms / 60000);
+        if (mins < 60) return `${mins}${t('keycenter_min_left')}`;
+        const hrs = Math.floor(mins / 60);
+        const rem = mins % 60;
+        return rem > 0 ? `${hrs}${t('keycenter_hr')} ${rem}${t('keycenter_min_left')}` : `${hrs}${t('keycenter_hr_left')}`;
+    };
+
+    // Center: list
+    state.ui.centerHTML = `
+        <div class="pane-header">
+            <div class="pane-title"><strong>${escapeHTML(t('keycenter_temp_refs_title'))}</strong></div>
+            <div class="toolbar">
+                <span class="pill">${refs.length}</span>
+                <button class="btn btn-soft" data-action="show-create-temp-ref" style="margin-left:8px;font-size:0.8rem">+ 임시키</button>
+                <button class="btn btn-soft" data-action="show-create-reg-token" style="margin-left:8px;font-size:0.8rem">+ 등록 토큰</button>
+            </div>
+        </div>
+        <div class="pane-content">
+            <div class="table-wrap">
+                <table>
+                    <thead><tr>
+                        <th>${escapeHTML(t('keycenter_secret_name'))}</th>
+                        <th>Value</th>
+                        <th>${escapeHTML(t('keycenter_expires_at'))}</th>
+                    </tr></thead>
+                    <tbody>
+                        ${refs.length ? refs.map((ref, i) => {
+                            const remaining = fmtRemaining(ref.expires_at);
+                            const rv = state.revealedValues[ref.ref_canonical];
+                            const isRev = rv !== undefined;
+                            return `
+                            <tr class="is-clickable${selected && selected.ref_canonical === ref.ref_canonical ? ' is-selected' : ''}"
+                                data-action="select-temp-ref" data-index="${i}">
+                                <td><strong>${escapeHTML(ref.secret_name || '-')}</strong></td>
+                                <td style="white-space:nowrap">
+                                    <code style="font-size:0.8rem;color:#c8f0a0">${isRev ? escapeHTML(rv) : '••••••••'}</code>
+                                    <button class="action-btn" style="font-size:0.75rem;padding:1px 6px;margin-left:4px"
+                                        data-action="toggle-reveal-temp-ref"
+                                        data-canonical="${escapeHTML(ref.ref_canonical)}"
+                                        onclick="event.stopPropagation()">
+                                        ${isRev ? '🙈' : '👁'}
+                                    </button>
+                                </td>
+                                <td>
+                                    ${remaining ? `<span style="color:#e0a040;font-weight:500">${escapeHTML(remaining)}</span>` : '-'}
+                                </td>
+                            </tr>`;
+                        }).join('') : `<tr><td colspan="3"><div class="empty">${escapeHTML(t('keycenter_no_temp_refs'))}</div></td></tr>`}
+                    </tbody>
+                </table>
+            </div>
+
+            ${state.vaults.length ? `
+            <div style="margin-top:20px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>${escapeHTML(t('page_vaults'))}</strong></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr>
+                            <th>${escapeHTML(t('name'))}</th>
+                            <th>status</th>
+                            <th></th>
+                        </tr></thead>
+                        <tbody>
+                            ${state.vaults.map(v => `
+                                <tr>
+                                    <td>${escapeHTML(v.display_name || v.vault_name || v.vault_runtime_hash)}</td>
+                                    <td>${renderStatusPill(v.status || 'active', statusClass(v.status || 'active'))}</td>
+                                    <td><button class="action-btn" style="font-size:0.8rem;padding:3px 10px"
+                                        data-action="navigate-to-vault"
+                                        data-key="${escapeHTML(v.vault_runtime_hash)}">
+                                        ${escapeHTML(t('keycenter_goto_vault'))} →
+                                    </button></td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>` : ''}
+
+            ${state.showTempRefForm ? `
+            <div style="margin-top:20px;padding:12px;border:1px solid #444;border-radius:6px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>임시키 등록</strong></div>
+                <form data-action="create-temp-ref-form">
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">키 이름</label>
+                        <input class="form-input" type="text" name="name" placeholder="MY_SECRET_KEY" style="width:100%" required/>
+                    </div>
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">값</label>
+                        <input class="form-input" type="password" name="value" placeholder="비밀번호 또는 키 값" style="width:100%" required/>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">등록 (1시간 후 만료)</button>
+                </form>
+            </div>` : ''}
+
+            ${state.showRegTokenForm ? `
+            <div style="margin-top:20px;padding:12px;border:1px solid #444;border-radius:6px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>등록 토큰 발급</strong></div>
+                <form data-action="create-reg-token-form">
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">라벨 (선택)</label>
+                        <input class="form-input" type="text" name="label" placeholder="my-vault-01" style="width:100%"/>
+                    </div>
+                    <div style="margin-bottom:8px">
+                        <label style="font-size:0.8rem;color:#999">만료</label>
+                        <select class="form-input" name="expires" style="width:100%">
+                            <option value="60">1시간</option>
+                            <option value="360">6시간</option>
+                            <option value="1440" selected>24시간</option>
+                            <option value="10080">7일</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" style="width:100%">토큰 생성</button>
+                </form>
+                ${state.createdRegToken ? `
+                <div style="margin-top:12px;padding:8px;background:#1a2a1a;border-radius:4px">
+                    <div style="font-size:0.75rem;color:#999;margin-bottom:4px">생성된 토큰</div>
+                    <code style="font-size:0.7rem;word-break:break-all;color:#c8f0a0">${escapeHTML(state.createdRegToken.token)}</code>
+                    <div style="margin-top:8px">
+                        <button class="btn btn-soft" data-action="copy-reg-token" style="font-size:0.75rem">복사</button>
+                    </div>
+                    <div style="margin-top:8px;font-size:0.7rem;color:#888">
+                        <code>${escapeHTML(state.createdRegToken.command)}</code>
+                    </div>
+                </div>` : ''}
+            </div>` : ''}
+
+            ${state.regTokens.length ? `
+            <div style="margin-top:20px">
+                <div class="pane-title" style="margin-bottom:8px"><strong>등록 토큰 목록</strong></div>
+                <div class="table-wrap">
+                    <table>
+                        <thead><tr><th>라벨</th><th>상태</th><th>만료</th><th></th></tr></thead>
+                        <tbody>
+                            ${state.regTokens.map(tk => {
+                                const statusColor = tk.status === 'active' ? '#a8f0a0' : tk.status === 'used' ? '#888' : '#f0a0a0';
+                                return `<tr>
+                                    <td>${escapeHTML(tk.label || '-')}</td>
+                                    <td><span style="color:${statusColor}">${escapeHTML(tk.status)}</span></td>
+                                    <td style="font-size:0.8rem">${fmtRemaining(tk.expires_at) || fmtAbs(tk.expires_at)}</td>
+                                    <td>${tk.status === 'active' ? `<button class="btn btn-soft" data-action="revoke-reg-token" data-token-id="${escapeHTML(tk.token_id)}" style="font-size:0.7rem">폐기</button>` : ''}</td>
+                                </tr>`;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>` : ''}
+        </div>`;
+
+    // Right: detail
+    if (selected) {
+        const linkedVault = selected.agent_hash
+            ? state.vaults.find(v => v.vault_runtime_hash === selected.agent_hash)
+            : null;
+        const remaining = fmtRemaining(selected.expires_at);
+        const revealedValue = state.revealedValues[selected.ref_canonical];
+        const isRevealed = revealedValue !== undefined;
+        const displayValue = isRevealed ? revealedValue : '••••••••';
+
+        state.ui.rightHTML = `
+            <div class="pane-header">
+                <div class="pane-title"><strong>${escapeHTML(selected.secret_name || selected.ref_canonical)}</strong></div>
+            </div>
+            <div class="pane-content">
+                <div class="card">
+                    <div class="card-title">Ref</div>
+                    <div style="margin-bottom:12px">
+                        <code style="font-size:0.82rem;word-break:break-all;color:#a8d0ff">${escapeHTML(selected.ref_canonical)}</code>
+                    </div>
+                    <div class="card-title">Value</div>
+                    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+                        <code style="font-size:0.82rem;word-break:break-all;flex:1;color:#c8f0a0">${isRevealed ? escapeHTML(displayValue) : '••••••••'}</code>
+                        <button class="action-btn" data-action="toggle-reveal-temp-ref" style="white-space:nowrap">
+                            ${isRevealed ? t('hide') : t('reveal')}
+                        </button>
+                    </div>
+                    <div class="inline-grid">
+                        <div class="kv"><span class="label">${escapeHTML(t('keycenter_secret_name'))}</span><span class="value">${escapeHTML(selected.secret_name || '-')}</span></div>
+                        <div class="kv"><span class="label">status</span><span class="value">${escapeHTML(selected.status || '-')}</span></div>
+                        <div class="kv">
+                            <span class="label">${escapeHTML(t('keycenter_expires_at'))}</span>
+                            <span class="value">
+                                <span style="color:#e0a040">${remaining ? escapeHTML(remaining) : '-'}</span>
+                                <span style="color:#8a8fa8;font-size:0.8rem;margin-left:6px">${escapeHTML(fmtAbs(selected.expires_at))}</span>
+                            </span>
+                        </div>
+                        <div class="kv"><span class="label">${escapeHTML(t('keycenter_created_at'))}</span><span class="value">${escapeHTML(fmtAbs(selected.created_at))}</span></div>
+                    </div>
+                    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+                        <button class="action-btn" data-action="copy-temp-ref" data-ref="${escapeHTML(selected.ref_canonical)}">${escapeHTML(t('copy'))} Ref</button>
+                        ${linkedVault ? `
+                            <button class="action-btn"
+                                data-action="navigate-to-vault"
+                                data-key="${escapeHTML(linkedVault.vault_runtime_hash)}">
+                                ${escapeHTML(t('keycenter_goto_vault'))} →
+                            </button>
+                        ` : `
+                            <button class="action-btn" data-action="set-page" data-page="vaults">
+                                ${escapeHTML(t('keycenter_goto_vault_list'))} →
+                            </button>
+                        `}
+                    </div>
+                    ${state.vaults.length ? `
+                    <div style="margin-top:16px;padding:12px;border:1px solid #444;border-radius:6px">
+                        <div style="font-size:0.8rem;color:#999;margin-bottom:6px">볼트에 저장 (격상)</div>
+                        <div style="display:flex;gap:6px;align-items:center">
+                            <select class="form-input" id="promote-vault-select" style="flex:1;font-size:0.8rem">
+                                ${state.vaults.map(v => `<option value="${escapeHTML(v.vault_runtime_hash)}">${escapeHTML(v.display_name || v.vault_name)}</option>`).join('')}
+                            </select>
+                            <button class="btn btn-primary" data-action="promote-to-vault"
+                                data-ref="${escapeHTML(selected.ref_canonical)}"
+                                data-name="${escapeHTML(selected.secret_name || '')}"
+                                style="font-size:0.8rem;white-space:nowrap">저장</button>
+                        </div>
+                    </div>` : ''}
+                </div>
+            </div>`;
+    } else {
+        state.ui.rightHTML = `
+            <div class="pane-header"><div class="pane-title"><strong>${escapeHTML(t('keycenter_ref'))}</strong></div></div>
+            <div class="pane-content"><div class="empty">${escapeHTML(t('keycenter_select_ref'))}</div></div>`;
+    }
+}
+
+async function loadKeycenterTempRefs() {
+    try {
+        const data = await request('/api/keycenter/temp-refs');
+        state.keycenterTempRefs = data.refs || [];
+        // Auto-select ref from URL if set
+        if (state.routeSelectedRefCanonical) {
+            const found = state.keycenterTempRefs.find(r => r.ref_canonical === state.routeSelectedRefCanonical);
+            if (found) state.selectedTempRef = found;
+            state.routeSelectedRefCanonical = null;
+        }
+    } catch (err) {
+        state.keycenterTempRefs = [];
+    }
+}
+
+async function loadRegTokens() {
+    try {
+        const data = await request('/api/admin/registration-tokens');
+        state.regTokens = data.tokens || [];
+    } catch (err) {
+        state.regTokens = [];
+    }
 }
 
 async function loadStatus() {
@@ -1879,6 +2176,10 @@ function auditTotalCount() {
     return Object.values(state.auditCountByVault).reduce((sum, n) => sum + n, 0);
 }
 
+function auditSelectedVault() {
+    return state.auditVault;
+}
+
 async function loadAuditVaultFeed() {
     if (!state.auditVault) {
         state.auditRows = [];
@@ -2001,7 +2302,9 @@ async function loadGroupedEntryDetail() {
 
 async function syncPageData() {
     try {
-        if (state.activePage === 'vaults') {
+        if (state.activePage === 'keycenter') {
+            await loadKeycenterTempRefs();
+        } else if (state.activePage === 'vaults') {
             if (!state.vaults.length) await loadVaults();
             if (state.selectedVault) {
                 await loadSelectedVaultDetail();
@@ -2528,6 +2831,104 @@ async function handleAction(action, dataset) {
             return syncPageData();
         }
         if (action === 'load-admin-audit') return loadAdminAudit().then(render);
+        if (action === 'select-temp-ref') {
+            const idx = parseInt(dataset.index, 10);
+            state.selectedTempRef = state.keycenterTempRefs[idx] || null;
+            syncRoute(false);
+            render();
+            return;
+        }
+        if (action === 'toggle-reveal-temp-ref') {
+            const canonical = dataset.canonical || state.selectedTempRef?.ref_canonical;
+            if (!canonical) return;
+            if (state.revealedValues[canonical] !== undefined) {
+                // already fetched — toggle off
+                const next = { ...state.revealedValues };
+                delete next[canonical];
+                state.revealedValues = next;
+                render();
+                return;
+            }
+            try {
+                const encodedRef = encodeURIComponent(canonical);
+                const data = await request(`/api/keycenter/temp-refs/${encodedRef}/value`);
+                state.revealedValues = { ...state.revealedValues, [canonical]: data.value };
+            } catch {
+                setMessage('warn', '값을 복호화할 수 없습니다.');
+            }
+            render();
+            return;
+        }
+        if (action === 'copy-temp-ref') {
+            const btn = event?.target?.closest('[data-action="copy-temp-ref"]');
+            try {
+                await navigator.clipboard.writeText(dataset.ref || '');
+                if (btn) { btn.textContent = '✓'; setTimeout(() => { btn.textContent = t('copy') + ' Ref'; }, 1500); }
+            } catch {
+                if (btn) { btn.textContent = '복사 실패'; setTimeout(() => { btn.textContent = t('copy') + ' Ref'; }, 1500); }
+            }
+            return;
+        }
+        if (action === 'navigate-to-vault') {
+            const vault = state.vaults.find(v => v.vault_runtime_hash === dataset.key);
+            if (!vault) {
+                setMessage('warn', '연결된 볼트를 찾을 수 없습니다.');
+                render();
+                return;
+            }
+            await selectVaultByKey(dataset.key);
+            state.activePage = 'vaults';
+            syncRoute(false);
+            render();
+            return;
+        }
+        if (action === 'promote-to-vault') {
+            const vaultSelect = document.getElementById('promote-vault-select');
+            const vaultHash = vaultSelect?.value;
+            const ref = dataset.ref;
+            const name = dataset.name;
+            if (!vaultHash || !ref || !name) {
+                setMessage('warn', 'ref, name, vault를 모두 선택해주세요.');
+                render();
+                return;
+            }
+            try {
+                await request('/api/keycenter/promote', {
+                    method: 'POST',
+                    body: JSON.stringify({ ref, name, vault_hash: vaultHash })
+                });
+                setMessage('ok', `${name} → 볼트에 저장 완료`);
+            } catch (err) {
+                setMessage('error', '격상 실패: ' + err.message);
+            }
+            render();
+            return;
+        }
+        if (action === 'show-create-temp-ref') {
+            state.showTempRefForm = !state.showTempRefForm;
+            render();
+            return;
+        }
+        if (action === 'show-create-reg-token') {
+            state.showRegTokenForm = !state.showRegTokenForm;
+            state.createdRegToken = null;
+            render();
+            return;
+        }
+        if (action === 'copy-reg-token') {
+            if (state.createdRegToken?.token) {
+                navigator.clipboard.writeText(state.createdRegToken.token);
+                setMessage('ok', '토큰이 복사되었습니다.');
+                render();
+            }
+            return;
+        }
+        if (action === 'revoke-reg-token') {
+            await request(`/api/admin/registration-tokens/${dataset.tokenId}`, { method: 'DELETE' });
+            await loadRegTokens();
+            render();
+            return;
+        }
     } catch (err) {
         setMessage('error', err.message);
         render();
@@ -2535,10 +2936,45 @@ async function handleAction(action, dataset) {
 }
 
   function onSubmit(event) {
-    const form = event.target.closest('form[data-form]');
-    if (!form) return;
+    const form = event.target.closest('form[data-action]');
+    if (form && form.dataset.action === 'create-temp-ref-form') {
+        event.preventDefault();
+        const name = form.querySelector('[name=name]')?.value || '';
+        const value = form.querySelector('[name=value]')?.value || '';
+        if (!value) return;
+        request('/api/keycenter/temp-refs', {
+            method: 'POST',
+            body: JSON.stringify({ name, value })
+        }).then(() => {
+            state.showTempRefForm = false;
+            setMessage('ok', '임시키가 등록되었습니다.');
+            loadKeycenterTempRefs().then(() => render());
+        }).catch(err => {
+            setMessage('error', err.message);
+            render();
+        });
+        return;
+    }
+    if (form && form.dataset.action === 'create-reg-token-form') {
+        event.preventDefault();
+        const label = form.querySelector('[name=label]')?.value || '';
+        const expires = parseInt(form.querySelector('[name=expires]')?.value || '1440', 10);
+        request('/api/admin/registration-tokens', {
+            method: 'POST',
+            body: JSON.stringify({ label, expires_in_minutes: expires })
+        }).then(data => {
+            state.createdRegToken = data;
+            loadRegTokens().then(() => render());
+        }).catch(err => {
+            setMessage('error', err.message);
+            render();
+        });
+        return;
+    }
+    const dataForm = event.target.closest('form[data-form]');
+    if (!dataForm) return;
     event.preventDefault();
-    handleFormSubmit(form);
+    handleFormSubmit(dataForm);
   }
 
   function onClick(event) {
@@ -2561,14 +2997,75 @@ async function handleAction(action, dataset) {
     syncPageData();
   }
 
+async function adminLogin(password) {
+    state.ui.adminLoginError = '';
+    try {
+        await request('/api/admin/login', { method: 'POST', body: JSON.stringify({ password }) });
+        state.ui.adminRequired = false;
+        await loadStatus();
+        if (state.status?.locked) {
+            state.ui.locked = true;
+            return;
+        }
+        await loadUIConfig();
+        await loadVaults();
+        await loadConfigsSummary();
+        await loadFunctions();
+        await loadTrackedRefAudit();
+        await loadKeycenterTempRefs();
+        await syncPageData();
+        render();
+    } catch (err) {
+        state.ui.adminLoginError = err.message || '비밀번호가 올바르지 않습니다.';
+    }
+}
+
+async function unlock(password) {
+    state.ui.unlockError = '';
+    try {
+        await request('/api/unlock', { method: 'POST', body: JSON.stringify({ password }) });
+        state.ui.locked = false;
+        await loadUIConfig();
+        await loadVaults();
+        await loadConfigsSummary();
+        await loadFunctions();
+        await loadTrackedRefAudit();
+        await loadKeycenterTempRefs();
+        await syncPageData();
+        render();
+    } catch (err) {
+        state.ui.unlockError = err.message || '비밀번호가 올바르지 않습니다.';
+    }
+}
+
 async function boot() {
     applyRoute(window.location.pathname, window.location.search);
+    // 1. Check admin auth
+    try {
+        const check = await request('/api/admin/check');
+        if (check && check.setup_required) {
+            state.ui.adminRequired = true;
+            return;
+        }
+    } catch (err) {
+        // 401 = not authenticated
+        state.ui.adminRequired = true;
+        return;
+    }
+    // 2. Check vault lock
     await loadStatus();
+    if (state.status?.locked) {
+        state.ui.locked = true;
+        return;
+    }
+    // 3. Load everything
     await loadUIConfig();
     await loadVaults();
     await loadConfigsSummary();
     await loadFunctions();
     await loadTrackedRefAudit();
+    await loadKeycenterTempRefs();
+    await loadRegTokens();
     await syncPageData();
     render();
 }
@@ -2591,6 +3088,8 @@ async function boot() {
 
 return {
                 state,
+                adminLogin,
+                unlock,
                 onGlobalSearchInput,
                 routePath,
                 activeTab,
@@ -2627,6 +3126,7 @@ return {
                 configRelationsByScope,
                 auditVaultCount,
                 auditTotalCount,
+                auditSelectedVault,
                 encodeURIComponent
     };
 }

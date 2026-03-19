@@ -24,13 +24,6 @@ func (h *Handler) handleApprovalTokenPage(w http.ResponseWriter, r *http.Request
 		respondErr(w, http.StatusBadRequest, "token is required")
 		return
 	}
-	if challenge, err := h.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
-		q := r.URL.Query()
-		q.Set("token", token)
-		r.URL.RawQuery = q.Encode()
-		h.custody.HandleInstallCustodyPage(w, r)
-		return
-	}
 	if challenge, err := h.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
 		if challenge.Status == "submitted" {
 			respondErr(w, http.StatusGone, "challenge already used")
@@ -56,16 +49,6 @@ func (h *Handler) handleApprovalTokenSubmit(w http.ResponseWriter, r *http.Reque
 	token := strings.TrimSpace(r.PathValue("token"))
 	if token == "" {
 		respondErr(w, http.StatusBadRequest, "token is required")
-		return
-	}
-	if challenge, err := h.db.GetInstallCustodyChallenge(token); err == nil && challenge != nil {
-		if err := r.ParseForm(); err == nil {
-			if strings.TrimSpace(r.FormValue("token")) == "" {
-				r.Form.Set("token", token)
-			}
-		}
-		h.custody.HandleSubmitInstallCustody(w, r)
-		_ = challenge
 		return
 	}
 	if challenge, err := h.db.GetApprovalTokenChallenge(token); err == nil && challenge != nil {
@@ -112,14 +95,6 @@ func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *h
 		respondErr(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if challenge.Kind == "install_bootstrap" && challenge.TargetName != "" {
-		if session, err := h.db.GetInstallSession(challenge.TargetName); err == nil {
-			completed := appendUniqueStage(httputil.DecodeStringList(session.CompletedStagesJSON), "bootstrap")
-			session.CompletedStagesJSON = httputil.EncodeStringList(completed)
-			session.LastStage = "bootstrap"
-			_ = h.db.SaveInstallSession(session)
-		}
-	}
 	after := map[string]any{
 		"kind":        challenge.Kind,
 		"target_name": challenge.TargetName,
@@ -151,15 +126,6 @@ func (h *Handler) handleApprovalTokenChallengeSubmit(w http.ResponseWriter, r *h
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, secureInputApprovalSuccessHTML, escapeApprovalHTML(challenge.Title), escapeApprovalHTML(challenge.Title))
-}
-
-func appendUniqueStage(items []string, value string) []string {
-	for _, item := range items {
-		if item == value {
-			return items
-		}
-	}
-	return append(items, value)
 }
 
 func deriveApprovalTokenKey(salt []byte, token, kind string) []byte {

@@ -31,7 +31,7 @@ type installStatus struct {
 
 // HandleInstallStatus returns setup and vaultcenter connection status.
 func (s *Server) HandleInstallStatus(w http.ResponseWriter, r *http.Request) {
-	status := installStatus{Initialized: true}
+	status := installStatus{Initialized: s.db.HasNodeInfo()}
 
 	target := s.resolveVaultcenterTarget()
 	status.VaultcenterURL = target.URL

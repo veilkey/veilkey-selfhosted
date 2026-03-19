@@ -38,18 +38,16 @@ func (d *DB) migrate() error {
 		&Secret{},
 		&Agent{},
 		&GlobalFunction{},
-		&InstallSession{},
-		&InstallCustodyChallenge{},
 		&SecretInputChallenge{},
 		&EmailOTPChallenge{},
 		&ApprovalTokenChallenge{},
 		&AdminAuthConfig{},
 		&AdminSession{},
 		&UIConfig{},
-		&InstallRun{},
 		&Config{},
 		&BulkApplyTemplate{},
 		&BulkApplyRun{},
+		&RegistrationToken{},
 	); err != nil {
 		return err
 	}

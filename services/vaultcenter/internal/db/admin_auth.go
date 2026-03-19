@@ -3,7 +3,35 @@ package db
 import (
 	"fmt"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 )
+
+func (d *DB) SetAdminPassword(password string) error {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	cfg, err := d.GetOrCreateAdminAuthConfig()
+	if err != nil {
+		return err
+	}
+	cfg.PasswordHash = string(hash)
+	return d.SaveAdminAuthConfig(cfg)
+}
+
+func (d *DB) HasAdminPassword() bool {
+	cfg, err := d.GetAdminAuthConfig()
+	return err == nil && cfg.PasswordHash != ""
+}
+
+func (d *DB) VerifyAdminPassword(password string) bool {
+	cfg, err := d.GetAdminAuthConfig()
+	if err != nil || cfg.PasswordHash == "" {
+		return false
+	}
+	return bcrypt.CompareHashAndPassword([]byte(cfg.PasswordHash), []byte(password)) == nil
+}
 
 const defaultAdminConfigID = "default"
 

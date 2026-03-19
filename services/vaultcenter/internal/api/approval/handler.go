@@ -7,26 +7,19 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 )
 
-// CustodyRouter delegates install-custody page/submit requests to the install handler.
-type CustodyRouter interface {
-	HandleInstallCustodyPage(http.ResponseWriter, *http.Request)
-	HandleSubmitInstallCustody(http.ResponseWriter, *http.Request)
-}
 
 // Handler owns all approval-flow HTTP handlers.
 type Handler struct {
 	db         *db.DB
 	salt       []byte
 	httpClient *http.Client
-	custody    CustodyRouter
 }
 
-func NewHandler(database *db.DB, salt []byte, httpClient *http.Client, custody CustodyRouter) *Handler {
+func NewHandler(database *db.DB, salt []byte, httpClient *http.Client) *Handler {
 	return &Handler{
 		db:         database,
 		salt:       salt,
 		httpClient: httpClient,
-		custody:    custody,
 	}
 }
 

@@ -14,7 +14,6 @@ import (
 	"veilkey-vaultcenter/internal/api/approval"
 	"veilkey-vaultcenter/internal/api/bulk"
 	"veilkey-vaultcenter/internal/api/hkm"
-	"veilkey-vaultcenter/internal/api/install"
 	"github.com/veilkey/veilkey-go-package/agentapi"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/ratelimit"
@@ -61,7 +60,6 @@ type Server struct {
 	bulkApplyDir   string
 	updateMu       sync.RWMutex
 	updateState    systemUpdateState
-	installHandler  *install.Handler
 	approvalHandler *approval.Handler
 	adminHandler    *admin.Handler
 	hkmHandler      *hkm.Handler
@@ -311,8 +309,7 @@ func (s *Server) BulkApplyDir() string {
 
 func (s *Server) SetSalt(salt []byte) {
 	s.salt = salt
-	s.installHandler = install.NewHandler(s.db, salt)
-	s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient, s.installHandler)
+	s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient)
 }
 
 func (s *Server) Unlock(kek []byte) error {
@@ -338,81 +335,6 @@ func (s *Server) IsLocked() bool {
 	return s.locked
 }
 
-type installAccessState struct {
-	Exists     bool     `json:"exists"`
-	Complete   bool     `json:"complete"`
-	SessionID  string   `json:"session_id,omitempty"`
-	Flow       string   `json:"flow,omitempty"`
-	LastStage  string   `json:"last_stage,omitempty"`
-	FinalStage string   `json:"final_stage,omitempty"`
-	Planned    []string `json:"planned_stages,omitempty"`
-	Completed  []string `json:"completed_stages,omitempty"`
-}
-
-func (s *Server) installGateState() (bool, *db.InstallSession) {
-	session, err := s.db.GetLatestInstallSession()
-	if err != nil || session == nil {
-		return true, nil
-	}
-
-	completed := make(map[string]bool)
-	for _, stage := range httputil.DecodeStringList(session.CompletedStagesJSON) {
-		stage = strings.TrimSpace(strings.ToLower(stage))
-		if stage != "" {
-			completed[stage] = true
-		}
-	}
-	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
-	if len(planned) > 0 {
-		allPlannedDone := true
-		for _, stage := range planned {
-			stage = strings.TrimSpace(strings.ToLower(stage))
-			if stage == "" {
-				continue
-			}
-			if !completed[stage] {
-				allPlannedDone = false
-				break
-			}
-		}
-		if allPlannedDone {
-			return true, session
-		}
-	}
-
-	switch strings.TrimSpace(strings.ToLower(session.LastStage)) {
-	case "complete", "completed", "done", "ready", "final_smoke":
-		return true, session
-	}
-
-	return false, session
-}
-
-func (s *Server) currentInstallAccessState() installAccessState {
-	complete, session := s.installGateState()
-	if session == nil {
-		return installAccessState{Exists: false, Complete: complete}
-	}
-
-	planned := httputil.DecodeStringList(session.PlannedStagesJSON)
-	completed := httputil.DecodeStringList(session.CompletedStagesJSON)
-	finalStage := ""
-	if len(planned) > 0 {
-		finalStage = planned[len(planned)-1]
-	}
-
-	return installAccessState{
-		Exists:     true,
-		Complete:   complete,
-		SessionID:  session.SessionID,
-		Flow:       session.Flow,
-		LastStage:  session.LastStage,
-		FinalStage: finalStage,
-		Planned:    planned,
-		Completed:  completed,
-	}
-}
-
 func (s *Server) requireUnlocked(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.IsLocked() {
@@ -423,23 +345,8 @@ func (s *Server) requireUnlocked(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (s *Server) requireInstallComplete(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		state := s.currentInstallAccessState()
-		if state.Complete {
-			next(w, r)
-			return
-		}
-		message := "install flow is not complete. Use the web-first install flow or install wizard before accessing operational APIs."
-		if state.Exists && state.FinalStage != "" {
-			message = fmt.Sprintf("%s latest session=%s last_stage=%s final_stage=%s", message, state.SessionID, state.LastStage, state.FinalStage)
-		}
-		s.respondError(w, http.StatusServiceUnavailable, message)
-	}
-}
-
 func (s *Server) requireReadyForOps(next http.HandlerFunc) http.HandlerFunc {
-	return s.requireUnlocked(s.requireInstallComplete(next))
+	return s.requireUnlocked(next)
 }
 
 func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
@@ -505,10 +412,6 @@ func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusServiceUnavailable, "server is locked")
 		return
 	}
-	if complete, _ := s.installGateState(); !complete {
-		s.respondError(w, http.StatusServiceUnavailable, "install is not complete")
-		return
-	}
 	if err := s.db.Ping(); err != nil {
 		s.respondError(w, http.StatusServiceUnavailable, "database not ready")
 		return
@@ -517,7 +420,7 @@ func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) SetupRoutes() http.Handler {
-	if s.installHandler == nil || s.approvalHandler == nil {
+	if s.approvalHandler == nil {
 		panic("api: SetSalt must be called before SetupRoutes")
 	}
 	mux := http.NewServeMux()
@@ -533,7 +436,6 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
-	s.installHandler.Register(mux, s.requireTrustedIP, s.requireUnlocked)
 	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)
 	s.adminHandler.Register(mux, s.requireReadyForOps, s.requireTrustedIP)

@@ -48,22 +48,23 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	h.advancePendingRotationsBestEffort()
 
 	var req struct {
-		VaultNodeUUID  string   `json:"vault_node_uuid"`
-		NodeID         string   `json:"node_id"`
-		Label          string   `json:"label"`
-		VaultHash      string   `json:"vault_hash"`
-		VaultName      string   `json:"vault_name"`
-		Role           string   `json:"role"`
-		LocalVaultRole string   `json:"localvault_role"`
-		HostEnabled    *bool    `json:"host_enabled"`
-		LocalEnabled   *bool    `json:"local_enabled"`
-		ManagedPaths   []string `json:"managed_paths"`
-		KeyVersion     int      `json:"key_version"`
-		IP             string   `json:"ip"`
-		Port           int      `json:"port"`
-		SecretsCount   int      `json:"secrets_count"`
-		ConfigsCount   int      `json:"configs_count"`
-		Version        int      `json:"version"`
+		VaultNodeUUID     string   `json:"vault_node_uuid"`
+		NodeID            string   `json:"node_id"`
+		Label             string   `json:"label"`
+		VaultHash         string   `json:"vault_hash"`
+		VaultName         string   `json:"vault_name"`
+		Role              string   `json:"role"`
+		LocalVaultRole    string   `json:"localvault_role"`
+		HostEnabled       *bool    `json:"host_enabled"`
+		LocalEnabled      *bool    `json:"local_enabled"`
+		ManagedPaths      []string `json:"managed_paths"`
+		KeyVersion        int      `json:"key_version"`
+		IP                string   `json:"ip"`
+		Port              int      `json:"port"`
+		SecretsCount      int      `json:"secrets_count"`
+		ConfigsCount      int      `json:"configs_count"`
+		Version           int      `json:"version"`
+		RegistrationToken string   `json:"registration_token"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -166,6 +167,20 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		agent = nil
+	}
+
+	// New agent registration requires a valid registration token — consume atomically to prevent race
+	if agent == nil {
+		if req.RegistrationToken == "" {
+			respondError(w, http.StatusForbidden, "registration_token is required for first-time agent registration")
+			return
+		}
+		// Consume atomically: WHERE status='active' AND expires_at > now
+		// If another agent already consumed it, this returns error
+		if err := h.deps.DB().ConsumeRegistrationToken(req.RegistrationToken, nodeID); err != nil {
+			respondError(w, http.StatusForbidden, "invalid, expired, or already used registration token")
+			return
+		}
 	}
 
 	if err := h.deps.DB().UpsertAgent(nodeID, req.Label, req.VaultHash, req.VaultName, req.IP, req.Port, req.SecretsCount, req.ConfigsCount, req.Version, req.KeyVersion); err != nil {

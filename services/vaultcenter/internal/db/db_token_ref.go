@@ -252,6 +252,13 @@ func (d *DB) PromoteOperationalTempRefs(excludedAgentHashes map[string]bool) err
 	}).Error
 }
 
+func (d *DB) ListActiveTempRefs() ([]TokenRef, error) {
+	var refs []TokenRef
+	err := d.conn.Where("ref_scope = 'TEMP' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)").
+		Order("created_at DESC").Find(&refs).Error
+	return refs, err
+}
+
 func (d *DB) FindActiveTempRefByHash(plaintextHash string) (*TokenRef, error) {
 	var ref TokenRef
 	err := d.conn.Where("plaintext_hash = ? AND ref_scope = 'TEMP' AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)", plaintextHash).First(&ref).Error

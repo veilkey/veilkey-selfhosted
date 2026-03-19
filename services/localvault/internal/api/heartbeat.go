@@ -68,7 +68,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		configsCount = count
 	}
 
-	body, err := json.Marshal(map[string]interface{}{
+	payload := map[string]interface{}{
 		"vault_node_uuid": nodeID,
 		"node_id":         nodeID,
 		"vault_hash":      s.identity.VaultHash,
@@ -81,7 +81,12 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"secrets_count":   secretsCount,
 		"configs_count":   configsCount,
 		"version":         version,
-	})
+	}
+	// Include registration token for first-time registration
+	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {
+		payload["registration_token"] = regToken.Value
+	}
+	body, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
@@ -91,17 +96,19 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return err
 	}
 	defer resp.Body.Close()
+
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		return fmt.Errorf("heartbeat: failed to read response body: %w", readErr)
+	}
+
 	if resp.StatusCode >= 300 {
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return fmt.Errorf("heartbeat rejected: status=%d (failed to read body: %v)", resp.StatusCode, err)
-		}
 		if resp.StatusCode == http.StatusConflict {
 			var payload struct {
 				Status             string `json:"status"`
 				ExpectedKeyVersion int    `json:"expected_key_version"`
 			}
-			if json.Unmarshal(body, &payload) == nil && payload.Status == "rotation_required" && payload.ExpectedKeyVersion > 0 {
+			if json.Unmarshal(respBody, &payload) == nil && payload.Status == "rotation_required" && payload.ExpectedKeyVersion > 0 {
 				if err := s.db.UpdateNodeVersion(payload.ExpectedKeyVersion); err != nil {
 					return fmt.Errorf("heartbeat rotation update failed: %w", err)
 				}
@@ -111,7 +118,19 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 				return ErrRotationRequired
 			}
 		}
-		return fmt.Errorf("heartbeat rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(body)))
+		return fmt.Errorf("heartbeat rejected: status=%d body=%s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+
+	// On successful registration, consume the one-time registration token
+	var hbResp struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal(respBody, &hbResp) == nil && hbResp.Status == "registered" {
+		if err := s.db.DeleteConfig("VEILKEY_REGISTRATION_TOKEN"); err != nil {
+			log.Printf("heartbeat: failed to delete registration token config: %v", err)
+		} else {
+			log.Println("heartbeat: registration token consumed (one-time use)")
+		}
 	}
 	return nil
 }

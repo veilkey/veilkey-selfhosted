@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"veilkey-vaultcenter/internal/api"
+	"veilkey-vaultcenter/internal/commands"
 	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 	"veilkey-vaultcenter/internal/db"
@@ -40,9 +41,14 @@ func runServer() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
+	if _, err := os.Stat(saltFile); os.IsNotExist(err) {
+		commands.RunSetupServer(dbPath, dataDir)
+		return
+	}
+
 	salt, err := os.ReadFile(saltFile)
 	if err != nil {
-		log.Fatal("Salt file not found. Run with 'init --root' first.")
+		log.Fatalf("Failed to read salt file: %v", err)
 	}
 
 	database, err := db.New(dbPath)
@@ -89,6 +95,12 @@ func runServer() {
 			log.Fatalf("Failed to unlock with VEILKEY_PASSWORD_FILE: %v", err)
 		}
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
+	} else if pw := readDataDirPassword(dataDir); pw != "" {
+		kek := crypto.DeriveKEK(pw, salt)
+		if err := server.Unlock(kek); err != nil {
+			log.Fatalf("Failed to unlock with data dir password file: %v", err)
+		}
+		log.Println("Server unlocked via data dir password file")
 	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
 		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
 	} else {
@@ -115,6 +127,15 @@ func runServer() {
 			log.Fatalf("Server failed: %v", err)
 		}
 	}
+}
+
+func readDataDirPassword(dataDir string) string {
+	path := filepath.Join(dataDir, "password")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // runHKMInit handles: veilkey-storage init --root
