@@ -1,234 +1,85 @@
 # Installation
 
-VeilKey supports multiple installation targets. Choose the one that matches your environment.
-
 ## Requirements
 
-- **Go 1.24+** (auto-installed on macOS via Homebrew)
-- **SQLite** (bundled via CGO)
-- **curl**, **openssl** (for fresh installs)
-- **Linux with eBPF** (proxy only, not required for core functionality)
+- **Docker** + **Docker Compose** v2+
+- Ports: `11181` (VaultCenter), `11180` (LocalVault), `26656` (P2P), `26657` (RPC)
 
-## macOS
-
-The Mac installer builds all components from source and runs VaultCenter + LocalVault as launchd services.
+## Quick Start
 
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-./installer/scripts/install-mac.sh install
-./installer/scripts/install-mac.sh start
+docker compose up -d
 ```
 
-This will:
-1. Install Go via Homebrew (if missing)
-2. Build all binaries (vaultcenter, localvault, proxy, session-config, cli)
-3. Create directories, config files, and auto-generated passwords
-4. Initialize VaultCenter as HKM root node
-5. Initialize LocalVault and connect to VaultCenter
-6. Register launchd services
-7. Add shell aliases to `~/.zshrc`
+## Setup Flow
 
-### Mac Commands
+### 1. VaultCenter Setup
+
+Open `https://localhost:11181` in your browser.
+
+- Enter master password (KEK derivation — remember this)
+- Enter admin password (web UI login)
+- Setup complete → auto-unlock on restart
+
+### 2. LocalVault Registration
+
+In the keycenter UI (`https://localhost:11181/keycenter`):
+1. Click "+ 등록 토큰" to issue a registration token
+2. Run inside the localvault container:
 
 ```bash
-./installer/scripts/install-mac.sh status     # service status
-./installer/scripts/install-mac.sh health      # HTTP health check
-./installer/scripts/install-mac.sh verify      # full installation verify
-./installer/scripts/install-mac.sh logs        # view logs
-./installer/scripts/install-mac.sh stop        # stop services
-./installer/scripts/install-mac.sh restart     # restart services
-./installer/scripts/install-mac.sh uninstall   # remove everything
+docker compose exec localvault sh -c \
+  "echo 'your-password' | veilkey-localvault init --root \
+    --token vk_reg_xxx \
+    --center https://vaultcenter:10181"
+docker compose restart localvault
 ```
 
-### Mac File Layout
+3. LocalVault appears in the vault list after heartbeat
 
-| Path | Purpose |
-|------|---------|
-| `/usr/local/bin/veilkey-*` | Binaries |
-| `/usr/local/etc/veilkey/` | Config and password files |
-| `/usr/local/var/veilkey/` | Database and runtime data |
-| `/usr/local/var/log/veilkey/` | Logs |
-| `~/Library/LaunchAgents/net.veilkey.*.plist` | launchd services |
-| `~/.veilkey.sh` | Shell aliases and environment |
+### 3. Store Secrets
 
-### Mac Shell Aliases
+In the keycenter UI:
+1. "+ 임시키" → enter name and value
+2. Select the key → "볼트에 저장 (격상)" → select vault
+3. Secret is now encrypted with agentDEK and stored in LocalVault
 
-After installation, open a new terminal or `source ~/.zshrc`:
-
-| Alias | Command |
-|-------|---------|
-| `vk` | `veilkey-cli` |
-| `vks` | `veilkey-cli scan` |
-| `vkf` | `veilkey-cli filter` |
-| `vkw` | `veilkey-cli wrap` |
-| `vke` | `veilkey-cli exec` |
-| `vkr` | `veilkey-cli resolve` |
-| `vk-start` | Start services |
-| `vk-stop` | Stop services |
-| `vk-status` | Health check |
-| `vk-logs` | View logs |
-
-## Proxmox LXC — All-in-One
-
-Deploys VaultCenter + LocalVault inside a single LXC container.
-
-### Prerequisites
-
-- Proxmox VE host
-- Debian-based LXC container
-- Network access to artifact source (or pre-bundled)
-
-### Install
+### 4. Use veil CLI
 
 ```bash
-cd installer
-export VEILKEY_INSTALLER_GITLAB_API_BASE="https://gitlab.60.internal.kr/api/v4"
-./install.sh init
+# Enter protected session
+docker compose exec -it \
+  -e DB_PASSWORD=VK:LOCAL:xxxx \
+  veil veilkey-cli wrap-pty bash
 
-# Set passwords
-echo -n 'your-vaultcenter-password' > /etc/veilkey/vaultcenter.password
-chmod 600 /etc/veilkey/vaultcenter.password
-echo -n 'your-localvault-password' > /etc/veilkey/localvault.password
-chmod 600 /etc/veilkey/localvault.password
-
-# Install and activate
-./scripts/proxmox-lxc-allinone-install.sh --activate /
-
-# Verify
-./scripts/proxmox-lxc-allinone-health.sh /
-curl http://localhost:10181/health
-curl http://localhost:10180/health
+# Inside: echo $DB_PASSWORD shows VK:LOCAL:xxxx (masked)
+# But actual processes receive the real value
 ```
-
-### Verify Agent Registration
-
-```bash
-# Unlock VaultCenter
-curl -X POST http://127.0.0.1:10181/api/unlock \
-  -H 'Content-Type: application/json' \
-  --data '{"password":"your-vaultcenter-password"}'
-
-# Check agents
-curl http://127.0.0.1:10181/api/agents
-```
-
-### Ports
-
-| Service | Port |
-|---------|------|
-| VaultCenter | 10181 |
-| LocalVault | 10180 |
-
-## Proxmox LXC — Runtime Only
-
-Deploys LocalVault only, connected to an existing VaultCenter.
-
-```bash
-echo -n 'your-localvault-password' > /etc/veilkey/localvault.password
-chmod 600 /etc/veilkey/localvault.password
-
-VEILKEY_KEYCENTER_URL='http://<vaultcenter-ip>:10181' \
-  ./scripts/proxmox-lxc-runtime-install.sh --activate /
-
-./scripts/proxmox-lxc-runtime-health.sh /
-```
-
-## Proxmox Host — LocalVault
-
-Deploys LocalVault directly on the Proxmox host (not in a container).
-
-```bash
-echo -n 'your-password' > /etc/veilkey/localvault.password
-chmod 600 /etc/veilkey/localvault.password
-
-export VEILKEY_KEYCENTER_URL='https://<vaultcenter-host>'
-./scripts/proxmox-host-localvault/install.sh --activate /
-./scripts/proxmox-host-localvault/health.sh /
-```
-
-### Purge
-
-```bash
-./scripts/proxmox-host-localvault/purge.sh /
-```
-
-## Proxmox Host — Boundary (Proxy + CLI)
-
-Deploys the proxy enforcement layer on the Proxmox host. This is the companion to an all-in-one LXC.
-
-```bash
-./scripts/proxmox-host-cli-install.sh /
-```
-
-Or use the combined stack installer:
-
-```bash
-./scripts/proxmox-allinone-stack-install.sh / / \
-  "${VEILKEY_ALLINONE_BUNDLE_ROOT}" \
-  "${VEILKEY_HOST_CLI_BUNDLE_ROOT}"
-```
-
-## Install Profiles
-
-| Profile | Components | Use Case |
-|---------|-----------|----------|
-| `proxmox-lxc-allinone` | VaultCenter + LocalVault | Single-node control plane |
-| `proxmox-lxc-runtime` | LocalVault | Additional node |
-| `proxmox-host-localvault` | LocalVault | Host-side agent |
-| `proxmox-host-cli` | Proxy + CLI | Host boundary enforcement |
-| `proxmox-host` | Proxy | Host proxy assets only |
 
 ## Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `VEILKEY_PASSWORD_FILE` | Path to KEK password file | — |
-| `VEILKEY_DB_PATH` | SQLite database path | `/opt/veilkey/*/data/veilkey.db` |
-| `VEILKEY_ADDR` | Bind address | `:10180` |
-| `VEILKEY_KEYCENTER_URL` | VaultCenter endpoint (for LocalVault) | — |
-| `VEILKEY_TRUSTED_IPS` | Comma-separated CIDRs for write access | — |
-| `VEILKEY_TLS_CERT` | TLS certificate path | — |
-| `VEILKEY_TLS_KEY` | TLS private key path | — |
-| `VEILKEY_LOCALVAULT_URL` | LocalVault endpoint (for CLI) | — |
+See `services/vaultcenter/.env.example` and `services/localvault/.env.example`.
 
-## Troubleshooting
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VEILKEY_ADDR` | `:10181` / `:10180` | Listen address |
+| `VEILKEY_DB_PATH` | `/data/veilkey.db` | Database path |
+| `VEILKEY_TLS_INSECURE` | `0` | Accept self-signed certs |
+| `VEILKEY_CHAIN_HOME` | `/data/chain` | CometBFT data directory |
+| `VEILKEY_TEMP_REF_TTL` | `1h` | Temp ref expiry |
+| `VEILKEY_ADMIN_SESSION_TTL` | `2h` | Admin session duration |
+| `VEILKEY_TRUSTED_IPS` | - | Trusted IP ranges (CIDR) |
 
-### "Salt file not found"
-
-VaultCenter needs initialization:
+## Building from Source
 
 ```bash
-cat /path/to/password | VEILKEY_DB_PATH=/path/to/veilkey.db veilkey-vaultcenter init --root
-```
+# Go services
+cd services/vaultcenter && go build ./...
+cd services/localvault && go build ./...
 
-### LocalVault shows "setup" status
-
-LocalVault hasn't been initialized yet. Visit `http://localhost:10180` for the setup wizard, or call:
-
-```bash
-curl -X POST http://127.0.0.1:10180/api/install/init \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"your-password","vaultcenter_url":"http://127.0.0.1:10181"}'
-```
-
-### Permission denied on password file
-
-Password files must be readable by the service user:
-
-```bash
-sudo chown $(whoami) /usr/local/etc/veilkey/*.password
-chmod 600 /usr/local/etc/veilkey/*.password
-```
-
-### Agent not appearing in VaultCenter
-
-Restart LocalVault to force a heartbeat:
-
-```bash
-# macOS
-./installer/scripts/install-mac.sh restart
-
-# systemd
-systemctl restart veilkey-localvault
+# Rust CLI
+cd services/veilkey-cli && cargo build --release
+cd services/veil-cli && cargo build --release
 ```

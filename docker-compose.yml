@@ -62,11 +62,15 @@ services:
       context: services
       dockerfile: veil-cli/Dockerfile
     image: veilkey-veil:${IMAGE_TAG:-dev}
+    restart: unless-stopped
     stdin_open: true
     tty: true
+    command: ["-c", "while true; do sleep 3600; done"]
+    volumes:
+      - ${VEIL_WORK_DIR:-/Users}:/host:rw
     environment:
       VEILKEY_KEYCENTER_URL: "https://vaultcenter:10181"
-      VEILKEY_LOCALVAULT_URL: "https://localvault:10180"
+      VEILKEY_LOCALVAULT_URL: "https://vaultcenter:10181"
       VEILKEY_TLS_INSECURE: "1"
       VEILKEY_BIN: /usr/local/bin/veilkey
       VEILKEY_CLI_BIN: /usr/local/bin/veilkey-cli

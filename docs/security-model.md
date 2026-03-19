@@ -2,15 +2,15 @@
 
 ## Design Principles
 
-1. **No plaintext at rest.** Secrets are encrypted the moment they enter the system. Config files, databases, and logs contain only `VK:` references or ciphertext.
+1. **No plaintext at rest.** Secrets are encrypted the moment they enter the system. Databases and logs contain only `VK:` references or ciphertext.
 
-2. **Password never in process environment.** KEK passwords are read from files (`VEILKEY_PASSWORD_FILE`), not env vars. The `VEILKEY_PASSWORD` env var is explicitly rejected to prevent exposure via `ps`, `/proc`, or crash dumps.
+2. **Split custody.** VaultCenter holds agentDEK (encryption keys). LocalVault holds ciphertext. Neither alone can access secrets.
 
-3. **Least privilege by default.** LocalVault cannot decrypt secrets on its own — it delegates plaintext operations to VaultCenter. Write operations require trusted IP verification.
+3. **AI-safe by design.** PTY bidirectional masking ensures AI coding tools (Claude Code, Cursor, etc.) never see plaintext — only VK refs.
 
-4. **Key hierarchy with rotation.** KEK → DEK → ciphertext. DEK rotation is managed by VaultCenter and executed by each LocalVault node independently.
+4. **Immutable audit.** All key operations are recorded on CometBFT blockchain. Tampering breaks the hash chain.
 
-5. **Defense in depth.** The optional Proxy layer intercepts egress traffic and blocks leaked secrets even if application code mishandles them.
+5. **LocalVault is storage-only.** No decrypt, no promote, no resolve endpoints. LV cannot access plaintext even if compromised.
 
 ## Threat Model
 
@@ -18,100 +18,90 @@
 
 | Threat | Mitigation |
 |--------|-----------|
-| Secrets in config files / repos | `scan` detects, `filter` replaces with VK tokens |
-| Secrets in CI/CD logs | `wrap` masks output in real-time |
-| Secrets in process environment | `exec` resolves at launch, never writes to disk |
-| Compromised node stealing secrets | LocalVault has only ciphertext; DEK is encrypted with KEK |
-| Lateral movement after node compromise | Each node has its own DEK; compromising one doesn't expose others |
-| Brute-force KEK guessing | scrypt-based key derivation with random salt |
-| Stale keys after rotation | VaultCenter tracks `key_version` per node, enforces rotation |
-| Egress of secrets via HTTP | Proxy detects and blocks plaintext in outbound traffic |
+| AI reading secrets | PTY masking: output filtered, only VK refs visible |
+| Secrets in config files | `scan` detects, `filter` replaces with VK tokens |
+| Secrets in terminal output | `wrap-pty` masks plaintext in real-time |
+| LocalVault compromised | Ciphertext only — no agentDEK, cannot decrypt |
+| VaultCenter DB stolen | agentDEK encrypted with KEK — needs master password |
+| Audit log tampering | CometBFT blockchain — hash chain breaks on modification |
+| Lateral movement | Per-vault agentDEK — one vault compromised, others safe |
+| Stale keys | VaultCenter tracks key_version, enforces rotation |
+| Unauthorized agent | Registration token required for first heartbeat |
 
 ### What VeilKey does NOT protect against
 
 | Threat | Reason |
 |--------|--------|
-| Compromised VaultCenter | VaultCenter holds the master key hierarchy — protect it |
-| Memory dump of running process | Decrypted DEK exists in memory while server is unlocked |
-| Operator with KEK password | By design — the operator is trusted |
-| Physical access to the machine | Standard physical security applies |
+| Both VC + LV compromised + KEK extracted | By design — requires master password |
+| Memory dump of running VaultCenter | DEK exists in memory while unlocked |
+| Operator with master password | Trusted by design |
+| Physical access | Standard physical security applies |
 
 ## Encryption Details
 
-### Key Derivation
+### Key Hierarchy
 
 ```
-password (operator-provided, min 8 chars)
-    + salt (32 bytes, crypto/rand)
-    → scrypt(N=32768, r=8, p=1)
-    → KEK (32 bytes)
+Master Password (operator memory)
+  + salt (32 bytes, crypto/rand)
+  → scrypt(N=32768, r=8, p=1)
+  → KEK (32 bytes) — never stored, derived on unlock
+
+KEK → agentDEK (per-vault, 32 bytes)
+      stored encrypted in VC DB
+
+agentDEK → ciphertext (per-secret)
+           stored in LV DB
+           AES-256-GCM, 12-byte nonce
 ```
 
-### Data Encryption
+### Security Properties
 
-- **Algorithm:** AES-256-GCM (via Go `crypto/aes` + `cipher.NewGCM`)
-- **DEK:** 32 bytes from `crypto/rand`
-- **Nonce:** 12 bytes, unique per encryption operation
-- **Storage:** `{encrypted_dek, dek_nonce}` in node_info table; `{ciphertext, nonce}` per secret
+| Component | Holds | Cannot Access |
+|-----------|-------|---------------|
+| VaultCenter | KEK (memory), agentDEK (encrypted) | ciphertext (in LV) |
+| LocalVault | ciphertext | agentDEK, KEK, plaintext |
+| veil CLI | VK refs | plaintext (PTY-filtered) |
+| Blockchain | TX metadata | key material (never on chain) |
 
-### Salt Storage
+## PTY Masking
 
-The salt file is stored alongside the database:
-- `{data_dir}/salt` — 32 bytes, mode `0600`
-- Required for KEK derivation on every unlock
-- If lost, all data is unrecoverable
+```
+Environment: DB_PASSWORD=VK:LOCAL:ea2bfd16
+                     ↓ resolve
+Child process sees:  DB_PASSWORD=actual-password
+                     ↓ echo $DB_PASSWORD
+PTY output:          actual-password
+                     ↓ mask_map filter
+Screen/AI sees:      VK:LOCAL:ea2bfd16
+```
+
+- Bidirectional: env → resolve (inbound), output → mask (outbound)
+- `cat .env` also masked if file contains resolved values
+- mask_map sorted by length (longest match first)
 
 ## Network Security
 
-### Default (no TLS)
-
-Services bind to `127.0.0.1` or a specified address. Without TLS, traffic is plaintext on the wire.
-
-**Recommendation:** Enable TLS for any deployment where VaultCenter and LocalVault communicate over a network.
-
-### TLS Configuration
-
-```bash
-export VEILKEY_TLS_CERT=/path/to/cert.pem
-export VEILKEY_TLS_KEY=/path/to/key.pem
-```
+### TLS
+- Self-signed certificates auto-generated on first run
+- `VEILKEY_TLS_INSECURE=1` for inter-service communication (docker internal)
+- Production: use proper CA certificates
 
 ### Trusted IPs
-
-Write operations (store config, delete, etc.) are restricted to trusted IPs:
-
 ```bash
-export VEILKEY_TRUSTED_IPS="127.0.0.1/32,10.0.0.0/8"
+VEILKEY_TRUSTED_IPS="10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
 ```
+Write operations (store secret, delete, etc.) restricted to trusted IPs.
 
-If `VEILKEY_TRUSTED_IPS` is not set, all IPs are allowed (with a warning).
+### Admin Authentication
+- bcrypt password hash + HttpOnly session cookie
+- Rate limiting: 10 failed attempts → 15-minute lockout
+- Configurable TTL: `VEILKEY_ADMIN_SESSION_TTL` (default: 2h)
 
-## Proxy Enforcement
+## Blockchain Audit
 
-The Proxy component provides an additional security boundary:
-
-1. **Shell guard hook** — blocks `curl`, `wget`, direct `.env` access, and `git credential` commands in veilroot shells
-2. **Egress proxy** — inspects outbound HTTP traffic for plaintext secrets
-3. **Access logging** — JSONL audit trail of all proxied requests
-
-## Password File Security
-
-```bash
-# Correct: password in file with restricted permissions
-echo -n 'my-password' > /etc/veilkey/vaultcenter.password
-chmod 600 /etc/veilkey/vaultcenter.password
-
-# WRONG: password in environment (rejected by VeilKey)
-export VEILKEY_PASSWORD='my-password'  # will cause fatal error
-```
-
-## Audit
-
-VaultCenter logs:
-- All unlock/lock events
-- Agent registration and heartbeat
-- Config changes
-- Admin session activity
-- Rotation and rebind operations
-
-Access the audit log via the admin UI at `http://<vaultcenter>:10181` or the admin API (`/api/admin/audit/recent`).
+- **Chain:** CometBFT (single validator + full nodes)
+- **TX types:** SaveTokenRef, UpsertAgent, RegisterChild, SaveBinding, SetConfig, RecordAuditEvent
+- **Auto-audit:** Every TX automatically generates audit row in executor
+- **Key material exclusion:** DEK/nonce never on chain (PR #132)
+- **Determinism:** No `time.Now()` in executor — uses TX timestamp for replay safety

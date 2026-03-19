@@ -2,27 +2,34 @@
 
 `veilkey-cli` is the operator-facing tool for detecting, encrypting, and managing secrets.
 
-## Installation
+## Usage via Docker
 
-The CLI is included in all install targets. After installation:
+The veil container is included in docker-compose:
 
 ```bash
-veilkey-cli version
-# or via alias
-vk version
+# Enter protected session
+docker compose exec -it \
+  -e DB_PASSWORD=VK:LOCAL:xxxx \
+  veil veilkey-cli wrap-pty bash
+
+# Single command
+docker compose exec veil veilkey-cli status
+docker compose exec veil veilkey-cli resolve VK:LOCAL:xxxx
 ```
 
 ## Configuration
 
-The CLI needs a VeilKey API endpoint to encrypt/resolve secrets:
+The CLI needs a VeilKey API endpoint:
 
 ```bash
-export VEILKEY_LOCALVAULT_URL=http://127.0.0.1:10180
-# or
-export VEILKEY_API=http://127.0.0.1:10180
+export VEILKEY_LOCALVAULT_URL=https://vaultcenter:10181
+# Set in docker-compose.yml by default
 ```
 
-On macOS, the `install-mac.sh` installer adds these to `~/.veilkey.sh` automatically.
+For self-signed certs:
+```bash
+export VEILKEY_TLS_INSECURE=1
+```
 
 ## Commands
 
@@ -76,11 +83,22 @@ veilkey-cli wrap env | grep SECRET
 
 ### wrap-pty
 
-Like `wrap`, but allocates a PTY for interactive commands:
+Allocates a PTY with **bidirectional masking**:
 
 ```bash
 veilkey-cli wrap-pty bash
-veilkey-cli wrap-pty ssh user@host
+```
+
+**Bidirectional masking:**
+- Environment variables with `VK:` refs are resolved → child process sees real values
+- PTY output is filtered → any plaintext matching a resolved value is replaced with its VK ref
+- AI tools seeing this output only see `VK:LOCAL:xxxx`, never the actual secret
+
+```bash
+# Inside wrap-pty:
+$ echo $DB_PASSWORD        # shows VK:LOCAL:ea2bfd16 (masked)
+$ cat .env                 # secrets in file also masked
+$ node app.js              # app receives real DB_PASSWORD value
 ```
 
 ### exec
