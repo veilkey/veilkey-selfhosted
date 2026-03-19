@@ -4,6 +4,8 @@
 # per-service build dirs
 services/*/bin/
 services/*/dist/
+# frontend build outputs
+services/*/frontend/*/dist/
 .tmp/
 *.log
 
