@@ -14,6 +14,7 @@ import (
 
 	"veilkey-localvault/internal/db"
 
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -87,11 +88,11 @@ func RunInit() {
 		log.Fatal("Already initialized. Salt file exists: " + saltFile)
 	}
 
-	password := readPassword("Enter KEK password: ")
+	password := cmdutil.ReadPassword("Enter KEK password: ")
 	stat, _ := os.Stdin.Stat()
 	isPiped := (stat.Mode() & os.ModeCharDevice) == 0
 	if !isPiped {
-		password2 := readPassword("Confirm KEK password: ")
+		password2 := cmdutil.ReadPassword("Confirm KEK password: ")
 		if password != password2 {
 			log.Fatal("Passwords do not match.")
 		}

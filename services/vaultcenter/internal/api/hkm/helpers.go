@@ -1,8 +1,6 @@
 package hkm
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"net/http"
 
@@ -22,19 +20,6 @@ func respondError(w http.ResponseWriter, status int, msg string) {
 	httputil.RespondError(w, status, msg)
 }
 
-// GenerateSecretRef generates a random hex ref of given length (exported for use by api package).
-func GenerateSecretRef(length int) (string, error) {
-	return generateSecretRef(length)
-}
-
-// generateSecretRef generates a random hex ref of given length.
-func generateSecretRef(length int) (string, error) {
-	b := make([]byte, (length+1)/2)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b)[:length], nil
-}
 
 // federatedSecretEntry represents a secret found on a child node.
 type federatedSecretEntry struct {

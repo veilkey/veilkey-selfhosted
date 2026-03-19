@@ -18,6 +18,7 @@ import (
 	"veilkey-localvault/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -284,14 +285,14 @@ func mustLoadServer() (*api.Server, string, int) {
 	})
 	log.Printf("VeilKey agent: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
 
-	if pw := readPasswordFromFileEnv(); pw != "" {
+	if pw := cmdutil.ReadPasswordFromFileEnv(); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
 			log.Fatalf("Failed to unlock: invalid password")
 		}
 		server.Unlock(kek)
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := readDataDirPassword(dataDir); pw != "" {
+	} else if pw := cmdutil.ReadPasswordFromDataDir(dataDir); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
 			log.Fatalf("Failed to unlock with data dir password file: invalid password")

@@ -58,7 +58,7 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if ref == "" {
-		ref, err = generateSecretRef(8)
+		ref, err = crypto.GenerateHexRef(8)
 		if err != nil {
 			respondError(w, http.StatusInternalServerError, "failed to generate ref")
 			return

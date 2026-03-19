@@ -9,6 +9,7 @@ import (
 
 	"veilkey-vaultcenter/internal/db"
 
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -44,11 +45,11 @@ func RunInit() {
 		log.Fatal("Already initialized. Salt file exists: " + saltFile)
 	}
 
-	password := readPassword("Enter KEK password: ")
+	password := cmdutil.ReadPassword("Enter KEK password: ")
 	stat, _ := os.Stdin.Stat()
 	isPiped := (stat.Mode() & os.ModeCharDevice) == 0
 	if !isPiped {
-		password2 := readPassword("Confirm KEK password: ")
+		password2 := cmdutil.ReadPassword("Confirm KEK password: ")
 		if password != password2 {
 			log.Fatal("Passwords do not match.")
 		}
@@ -97,7 +98,7 @@ func RunInit() {
 	pwCiphertext, pwNonce, pwErr := crypto.Encrypt(dek, []byte(password))
 	tempRef := ""
 	if pwErr == nil {
-		pwRefID, refErr := generateInitRef(16)
+		pwRefID, refErr := cmdutil.GenerateHexRef(16)
 		if refErr == nil {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: pwRefID}
 			encoded := crypto.EncodeCiphertext(pwCiphertext, pwNonce)

@@ -1,8 +1,6 @@
 package secrets
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"net/http"
 
 	"veilkey-localvault/internal/db"
@@ -27,10 +25,3 @@ func isValidResourceName(name string) bool {
 // vkRef constructs a VK ref string.
 func vkRef(scope db.RefScope, id string) string { return makeRef(refFamilyVK, scope, id) }
 
-func generateSecretRef(length int) (string, error) {
-	b := make([]byte, (length+1)/2)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b)[:length], nil
-}

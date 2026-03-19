@@ -15,6 +15,7 @@ import (
 	"veilkey-vaultcenter/internal/api/admin"
 	"veilkey-vaultcenter/internal/db"
 
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -156,7 +157,7 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	tempRef := ""
 	expiresAt := time.Now().UTC().Add(1 * time.Hour)
 	if pwCipher, pwNonce, pwErr := crypto.Encrypt(dek, []byte(req.Password)); pwErr == nil {
-		if refID, refErr := generateInitRef(16); refErr == nil {
+		if refID, refErr := cmdutil.GenerateHexRef(16); refErr == nil {
 			parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}
 			encoded := crypto.EncodeCiphertext(pwCipher, pwNonce)
 			if saveErr := database.SaveRefWithExpiry(parts, encoded, 1, db.RefStatusTemp, expiresAt, db.ConfigKeyVaultcenterPassword); saveErr == nil {
@@ -191,7 +192,7 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 	adminTempRef := ""
 	if pwCipher, pwNonce, pwErr := crypto.Encrypt(dek, []byte(req.AdminPassword)); pwErr != nil {
 		log.Printf("setup: failed to encrypt admin password for temp ref: %v", pwErr)
-	} else if refID, refErr := generateInitRef(16); refErr != nil {
+	} else if refID, refErr := cmdutil.GenerateHexRef(16); refErr != nil {
 		log.Printf("setup: failed to generate admin temp ref ID: %v", refErr)
 	} else {
 		parts := db.RefParts{Family: db.RefFamilyVK, Scope: db.RefScopeTemp, ID: refID}

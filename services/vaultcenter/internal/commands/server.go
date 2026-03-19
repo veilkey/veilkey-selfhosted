@@ -12,6 +12,7 @@ import (
 	"veilkey-vaultcenter/internal/db"
 
 	chain "github.com/veilkey/veilkey-chain"
+	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -74,13 +75,13 @@ func RunServer() {
 		log.Fatal("node info not found. Legacy centralized mode is no longer supported; initialize HKM root with 'init --root'.")
 	}
 
-	if pw := readPasswordFromFileEnv(); pw != "" {
+	if pw := cmdutil.ReadPasswordFromFileEnv(); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if err := server.Unlock(kek); err != nil {
 			log.Fatalf("Failed to unlock with VEILKEY_PASSWORD_FILE: %v", err)
 		}
 		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if pw := readDataDirPassword(dataDir); pw != "" {
+	} else if pw := cmdutil.ReadPasswordFromDataDir(dataDir); pw != "" {
 		kek := crypto.DeriveKEK(pw, salt)
 		if err := server.Unlock(kek); err != nil {
 			log.Fatalf("Failed to unlock with data dir password file: %v", err)
@@ -110,7 +111,7 @@ func RunServer() {
 
 	gcStop := make(chan struct{})
 	defer close(gcStop)
-	go api.StartTempRefGC(database, parseDurationEnv("VEILKEY_GC_INTERVAL", 5*time.Minute), gcStop)
+	go api.StartTempRefGC(database, cmdutil.ParseDurationEnv("VEILKEY_GC_INTERVAL", 5*time.Minute), gcStop)
 	log.Println("Temp ref GC started")
 
 	handler := server.SetupRoutes()
