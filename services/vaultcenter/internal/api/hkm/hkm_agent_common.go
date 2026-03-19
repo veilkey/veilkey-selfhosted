@@ -220,7 +220,7 @@ func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*ci
 }
 
 func (h *Handler) fetchAgentResolvedValue(agentURL, ref string) (*resolvedAgentSecret, error) {
-	resp, err := http.Get(joinPath(agentURL, agentPathResolve, ref))
+	resp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathResolve, ref))
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}

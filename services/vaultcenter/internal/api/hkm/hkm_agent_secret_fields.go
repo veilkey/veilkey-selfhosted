@@ -90,7 +90,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		"name":   name,
 		"fields": payloadFields,
 	})
-	resp, err := http.Post(agent.URL()+agentPathSecretFields, "application/json", bytes.NewReader(reqBody))
+	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathSecretFields, "application/json", bytes.NewReader(reqBody))
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable: "+err.Error())
 		return
