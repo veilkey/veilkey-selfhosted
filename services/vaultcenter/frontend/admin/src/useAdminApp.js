@@ -3026,13 +3026,8 @@ async function unlock(password) {
     try {
         await request('/api/unlock', { method: 'POST', body: JSON.stringify({ password }) });
         state.ui.locked = false;
-        await loadUIConfig();
-        await loadVaults();
-        await loadConfigsSummary();
-        await loadFunctions();
-        await loadTrackedRefAudit();
-        await loadKeycenterTempRefs();
-        await syncPageData();
+        // After unlock, require admin login before accessing shell
+        state.ui.adminRequired = true;
         render();
     } catch (err) {
         state.ui.unlockError = err.message || '비밀번호가 올바르지 않습니다.';
