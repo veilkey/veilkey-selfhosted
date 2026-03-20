@@ -130,21 +130,82 @@ If your client is on the same network as vmbr1, access `https://<CT_IP>:11181` d
 
 ## 6. Initial Setup (headless)
 
-Proxmox LXC environments typically don't have browser access. Set up via CLI:
+Proxmox LXC environments typically don't have browser access. Set up entirely via CLI.
+
+### VaultCenter unlock
 
 ```bash
-# Initial setup (first run — sets master + admin password)
+# If auto-setup completed (status: "locked"), unlock:
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/unlock \
+  -H 'Content-Type: application/json' \
+  -d '{\"password\":\"<master_password>\"}'"
+
+# If first run (status: "setup"), initialize:
 pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/setup/init \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<master_password>\",\"admin_password\":\"<admin_password>\"}'"
+```
 
-# If already initialized, unlock instead
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/unlock \
+### LocalVault registration
+
+Docker internal network is trusted — no registration token needed:
+
+```bash
+# Init LocalVault
+pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
+  docker compose exec localvault sh -c \
+    'echo \"<master_password>\" | veilkey-localvault init --root --center https://vaultcenter:10181'"
+
+# Restart + unlock
+pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && docker compose restart localvault"
+sleep 3
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11180/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<master_password>\"}'"
 ```
 
-For full setup (LocalVault registration, secret storage), see [Post-Install Setup](../../docs/setup.md).
+### Verify both services
+
+```bash
+pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/health && echo '' && curl -sk https://localhost:11180/health"
+# Expected: {"status":"ok"} for both
+```
+
+### Quick secret test
+
+```bash
+# Admin login
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/admin/login \
+  -H 'Content-Type: application/json' \
+  -d '{\"password\":\"<admin_password>\"}' -c /tmp/vk.txt"
+
+# Create temp secret
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/keycenter/temp-refs \
+  -H 'Content-Type: application/json' -b /tmp/vk.txt \
+  -d '{\"name\":\"TEST\",\"value\":\"hello-veilkey\"}'"
+# Note the ref: VK:TEMP:xxxxxxxx
+
+# Get agent hash
+pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/api/agents | grep -o '\"agent_hash\":\"[^\"]*\"'"
+
+# Promote to vault (replace ref and agent_hash)
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/keycenter/promote \
+  -H 'Content-Type: application/json' -b /tmp/vk.txt \
+  -d '{\"ref\":\"VK:TEMP:xxxxxxxx\",\"name\":\"TEST\",\"vault_hash\":\"<agent_hash>\"}'"
+# Note the token: VK:LOCAL:yyyyyyyy
+
+# Resolve
+pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
+  docker compose exec veil veilkey-cli resolve VK:LOCAL:yyyyyyyy"
+# Expected: hello-veilkey
+
+# PTY masking test
+pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
+  docker compose exec veil veilkey-cli wrap-pty sh -c 'echo hello-veilkey'"
+# Expected: VK:LOCAL:yyyyyyyy (masked!)
+```
+
+For full setup details, see [Post-Install Setup](../../docs/setup.md).
 
 To add a standalone LocalVault, see [install-localvault.md](../common/install-localvault.md).
 
