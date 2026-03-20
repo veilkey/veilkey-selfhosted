@@ -74,7 +74,7 @@ Platform-specific guides are in [`install/`](./install/):
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-bash install/macos/install-veil-all.sh
+bash install/macos/bootstrap/install-all.sh
 ```
 
 ### Quick start (Proxmox LXC)

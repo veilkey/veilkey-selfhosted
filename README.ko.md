@@ -42,7 +42,7 @@ veil CLI (PTY 마스킹)
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-bash install/macos/install-veil-all.sh
+bash install/macos/bootstrap/install-all.sh
 ```
 
 설치 후: [초기 설정 가이드](./docs/setup.md) 참조

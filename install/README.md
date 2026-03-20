@@ -1,24 +1,30 @@
 # Installation Guides
 
-Platform-specific installation guides for VeilKey Self-Hosted.
-
 ## Platforms
 
-| Platform | Scripts | Guide |
-|----------|---------|-------|
-| [macOS](./macos/) | `install-veil-all.sh` / `install-veil-server.sh` / `install-veil-cli.sh` | [install-veil-all.md](./macos/install-veil-all.md) |
-| [Proxmox LXC Debian](./proxmox-lxc-debian/) | `install-veilkey.sh` | [install-veilkey.md](./proxmox-lxc-debian/install-veilkey.md) |
+### macOS
 
-## Common
+| Service | Install | Uninstall | Guide |
+|---------|---------|-----------|-------|
+| VaultCenter | `vaultcenter/install.sh` | `vaultcenter/uninstall.sh` | [install.md](./macos/vaultcenter/install.md) |
+| LocalVault | `localvault/install.sh` | `localvault/uninstall.sh` | [install.md](./macos/localvault/install.md) |
+| veil-cli | `veil-cli/install.sh` | `veil-cli/uninstall.sh` | [install.md](./macos/veil-cli/install.md) |
+| **All** | `bootstrap/install-all.sh` | `bootstrap/uninstall-all.sh` | [install-all.md](./macos/bootstrap/install-all.md) |
 
-| Script | Guide | Description |
-|--------|-------|-------------|
-| `install-localvault.sh` | [install-localvault.md](./common/install-localvault.md) | Add a standalone LocalVault (any platform) |
+Troubleshooting: [vaultcenter/troubleshoot.md](./macos/vaultcenter/troubleshoot.md)
 
-After installation, follow the [Post-Install Setup](../docs/setup.md) to initialize VaultCenter and register LocalVault.
+### Proxmox LXC (Debian)
 
-## Which guide should I follow?
+| Script | Guide |
+|--------|-------|
+| `install-veilkey.sh` | [install-veilkey.md](./proxmox-lxc-debian/install-veilkey.md) |
 
-- **macOS (local development)** — You want to run VeilKey on your Mac with `veil` CLI in your terminal.
-- **Proxmox LXC Debian (self-hosted server)** — You want to run VeilKey as a service on a Proxmox hypervisor.
-- **Other Linux** — Not yet tested. Contributions welcome.
+### Common
+
+| Script | Guide |
+|--------|-------|
+| `install-localvault.sh` | [install-localvault.md](./common/install-localvault.md) |
+
+## After installation
+
+See [Post-Install Setup](../docs/setup.md).
