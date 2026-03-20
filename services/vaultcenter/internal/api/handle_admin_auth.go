@@ -15,6 +15,7 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 
 	"github.com/veilkey/veilkey-go-package/cmdutil"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 const adminSessionCookie = "vk_session"
@@ -222,6 +223,43 @@ func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 		MaxAge:   -1,
 	})
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{"ok": true})
+}
+
+func (s *Server) handleAdminSetup(w http.ResponseWriter, r *http.Request) {
+	if s.db.HasAdminPassword() {
+		s.respondError(w, http.StatusConflict, "admin password already configured")
+		return
+	}
+	var req struct {
+		OwnerPassword string `json:"owner_password"`
+		AdminPassword string `json:"admin_password"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		s.respondError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.AdminPassword) < 8 {
+		s.respondError(w, http.StatusBadRequest, "admin_password must be at least 8 characters")
+		return
+	}
+	// Verify owner password (KEK)
+	kek := crypto.DeriveKEK(req.OwnerPassword, s.salt)
+	info, err := s.db.GetNodeInfo()
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "node info not available")
+		return
+	}
+	if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
+		s.respondError(w, http.StatusUnauthorized, "invalid owner password")
+		return
+	}
+	// Set admin password
+	if err := s.db.SetAdminPassword(req.AdminPassword); err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to set admin password")
+		return
+	}
+	log.Printf("admin password configured by %s", r.RemoteAddr)
+	s.respondJSON(w, http.StatusOK, map[string]interface{}{"status": "configured"})
 }
 
 func (s *Server) handleAdminCheck(w http.ResponseWriter, r *http.Request) {
