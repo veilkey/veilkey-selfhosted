@@ -66,9 +66,9 @@ In the keycenter UI (`https://<HOST>:<VC_PORT>/keycenter`):
 2. Run inside the localvault container:
 
 ```bash
-docker compose exec localvault sh -c \
+docker compose exec -T localvault sh -c \
   "echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-    --token vk_reg_xxx \
+    --token <REG_TOKEN> \
     --center https://vaultcenter:10181"
 docker compose restart localvault
 ```
@@ -81,7 +81,7 @@ If the LocalVault container is on the same Docker network as VaultCenter (defaul
 
 ```bash
 # Init LocalVault (uses master password from stdin)
-docker compose exec localvault sh -c \
+docker compose exec -T localvault sh -c \
   "echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
     --center https://vaultcenter:10181"
 
@@ -145,14 +145,14 @@ curl -sk -X POST <VC_URL>/api/keycenter/promote \
 ### Resolve a secret
 
 ```bash
-docker compose exec veil veilkey-cli resolve VK:LOCAL:yyyyyyyy
+docker compose exec -T veil veilkey-cli resolve VK:LOCAL:yyyyyyyy
 # Output: actual-secret-value
 ```
 
 ### Execute with ref replacement
 
 ```bash
-docker compose exec veil veilkey-cli exec echo VK:LOCAL:yyyyyyyy
+docker compose exec -T veil veilkey-cli exec echo VK:LOCAL:yyyyyyyy
 # Output: actual-secret-value (ref replaced with real value in args)
 ```
 
@@ -180,6 +180,22 @@ docker compose exec veil veilkey-cli wrap-pty sh -c "echo actual-secret-value"
 
 ## Environment Variables
 
+### Docker Compose (`.env`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `IMAGE_TAG` | `dev` | Docker image tag |
+| `VAULTCENTER_HOST_PORT` | `11181` | VaultCenter host port |
+| `LOCALVAULT_HOST_PORT` | `11180` | LocalVault host port |
+| `VAULTCENTER_P2P_PORT` | `26656` | CometBFT P2P port |
+| `VAULTCENTER_RPC_PORT` | `26657` | CometBFT RPC port |
+| `VEILKEY_TRUSTED_IPS` | `10.0.0.0/8,...` | Trusted IP ranges (CIDR) |
+| `VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW` | `0` | Auto-complete initial setup |
+| `LOCALVAULT_LABEL` | `localvault-01` | LocalVault display name |
+| `LOCALVAULT_CHAIN_PEERS` | - | CometBFT persistent peers |
+
+### Service (internal)
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `VEILKEY_ADDR` | `:10181` / `:10180` | Listen address |
@@ -188,5 +204,4 @@ docker compose exec veil veilkey-cli wrap-pty sh -c "echo actual-secret-value"
 | `VEILKEY_CHAIN_HOME` | `/data/chain` | CometBFT data directory |
 | `VEILKEY_TEMP_REF_TTL` | `1h` | Temp ref expiry |
 | `VEILKEY_ADMIN_SESSION_TTL` | `2h` | Admin session duration |
-| `VEILKEY_TRUSTED_IPS` | - | Trusted IP ranges (CIDR) |
 | `VEILKEY_PASSWORD_FILE` | - | Auto-unlock password file path |

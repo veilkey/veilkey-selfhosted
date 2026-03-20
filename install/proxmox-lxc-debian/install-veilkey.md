@@ -167,7 +167,7 @@ Docker internal network is trusted — no registration token needed:
 ```bash
 # Init LocalVault
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
-  docker compose exec localvault sh -c \
+  docker compose exec -T localvault sh -c \
     'echo \"<MASTER_PASSWORD>\" | veilkey-localvault init --root --center https://vaultcenter:10181'"
 
 # Restart + unlock
@@ -210,7 +210,7 @@ pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<VC_PORT>/api/key
 
 # Resolve
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
-  docker compose exec veil veilkey-cli resolve VK:LOCAL:yyyyyyyy"
+  docker compose exec -T veil veilkey-cli resolve VK:LOCAL:yyyyyyyy"
 # Expected: hello-veilkey
 
 # PTY masking test
