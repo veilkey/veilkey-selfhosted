@@ -1,0 +1,12 @@
+1..11
+ok 1 install: script fails without VEILKEY_URL
+ok 2 install: script succeeds with VEILKEY_URL
+ok 3 install: binaries exist in /usr/local/bin
+ok 4 install: config exists
+ok 5 install: env contains VEILKEY_URL
+ok 6 connect: veilkey-cli status shows connected
+ok 7 resolve: returns expected secret value
+ok 8 masking: real value is replaced with VK ref in output
+ok 9 uninstall: script succeeds
+ok 10 uninstall: binaries removed
+ok 11 uninstall: config removed

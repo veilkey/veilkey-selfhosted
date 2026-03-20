@@ -2,7 +2,7 @@
   "name": "veilkey-cli",
   "version": "0.2.0",
   "description": "VeilKey CLI — secret masking for AI-safe development",
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "bin": {
     "veil": "bin/veil.js",
     "veilkey-cli": "bin/veilkey-cli.js"

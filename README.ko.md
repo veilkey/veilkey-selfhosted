@@ -59,7 +59,7 @@ bash install/macos/bootstrap/install-all.sh
 
 ## 라이선스
 
-MIT License. [`LICENSE`](./LICENSE) 참조.
+AGPL-3.0 License. [`LICENSE`](./LICENSE) 참조.
 
 ## 보안 고지
 

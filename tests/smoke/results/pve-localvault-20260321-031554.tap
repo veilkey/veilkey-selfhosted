@@ -1,0 +1,10 @@
+1..9
+ok 1 pre: VaultCenter is reachable and ok
+ok 2 install: script succeeds
+ok 3 install: binary exists
+ok 4 install: process is running
+ok 5 install: health check returns ok
+ok 6 register: vault appears in VaultCenter agents
+ok 7 uninstall: script succeeds
+ok 8 uninstall: process stopped
+ok 9 uninstall: data directory removed
