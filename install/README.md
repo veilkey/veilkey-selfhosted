@@ -2,18 +2,20 @@
 
 Platform-specific installation guides for VeilKey Self-Hosted.
 
-| Platform | Status | Guide |
-|----------|--------|-------|
-| [macOS](./macos/) | Tested | npm or source build + Docker |
-| [Proxmox LXC Debian](./proxmox-lxc-debian/) | Tested | Privileged LXC + Docker Compose |
+## Platforms
 
-After installation, follow the [Post-Install Setup](../docs/setup.md) to initialize VaultCenter and register LocalVault.
+| Platform | Script | Guide |
+|----------|--------|-------|
+| [macOS](./macos/) | `install-all.sh` / `install-server.sh` / `install-cli.sh` | [install-all.md](./macos/install-all.md) |
+| [Proxmox LXC Debian](./proxmox-lxc-debian/) | `install-veilkey.sh` | [install-veilkey.md](./proxmox-lxc-debian/install-veilkey.md) |
 
 ## Common
 
-| Guide | Description |
-|-------|-------------|
-| [Add a LocalVault](./common/localvault.md) | Add a standalone LocalVault to an existing VaultCenter (any platform) |
+| Script | Guide | Description |
+|--------|-------|-------------|
+| `install-localvault.sh` | [install-localvault.md](./common/install-localvault.md) | Add a standalone LocalVault (any platform) |
+
+After installation, follow the [Post-Install Setup](../docs/setup.md) to initialize VaultCenter and register LocalVault.
 
 ## Which guide should I follow?
 

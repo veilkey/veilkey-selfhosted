@@ -74,7 +74,7 @@ Platform-specific guides are in [`install/`](./install/):
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-bash install/macos/install.sh
+bash install/macos/install-all.sh
 ```
 
 ### Quick start (Proxmox LXC)
@@ -82,7 +82,7 @@ bash install/macos/install.sh
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-CT_IP=10.50.0.110/16 CT_GW=10.50.0.1 bash install/proxmox-lxc-debian/install.sh
+CT_IP=10.50.0.110/16 CT_GW=10.50.0.1 bash install/proxmox-lxc-debian/install-veilkey.sh
 ```
 
 ### After install
