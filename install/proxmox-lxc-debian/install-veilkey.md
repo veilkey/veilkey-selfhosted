@@ -128,11 +128,25 @@ iptables -t nat -A PREROUTING -i vmbr0 -p tcp --dport 11181 \
 
 If your client is on the same network as vmbr1, access `https://<CT_IP>:11181` directly.
 
-## Next Steps
+## 6. Initial Setup (headless)
 
-Proceed to [Post-Install Setup](../../docs/setup.md) to set master password and register LocalVault.
+Proxmox LXC environments typically don't have browser access. Set up via CLI:
 
-To add a standalone LocalVault, see [common/localvault.md](../common/localvault.md).
+```bash
+# Initial setup (first run — sets master + admin password)
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/setup/init \
+  -H 'Content-Type: application/json' \
+  -d '{\"password\":\"<master_password>\",\"admin_password\":\"<admin_password>\"}'"
+
+# If already initialized, unlock instead
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/unlock \
+  -H 'Content-Type: application/json' \
+  -d '{\"password\":\"<master_password>\"}'"
+```
+
+For full setup (LocalVault registration, secret storage), see [Post-Install Setup](../../docs/setup.md).
+
+To add a standalone LocalVault, see [install-localvault.md](../common/install-localvault.md).
 
 ## Troubleshooting
 

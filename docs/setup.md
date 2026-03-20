@@ -6,14 +6,40 @@ This guide is common to all platforms. For platform-specific installation, see [
 
 ## 1. VaultCenter Setup
 
+### Web UI
+
 Open `https://<your-host>:11181` in your browser.
 
 - Enter **master password** (KEK derivation — remember this)
 - Enter **admin password** (web UI login)
 - Setup complete — server starts in LOCKED mode on restart
 
-> On restart, you must re-enter the master password.
-> Optional: set `VEILKEY_PASSWORD_FILE` for auto-unlock (securing this file is your responsibility).
+### CLI (headless)
+
+If you don't have browser access (e.g. SSH-only server):
+
+```bash
+# Initial setup (first run only)
+curl -sk -X POST https://localhost:11181/api/setup/init \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"<master_password>","admin_password":"<admin_password>"}'
+
+# Unlock after restart
+curl -sk -X POST https://localhost:11181/api/unlock \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"<master_password>"}'
+```
+
+### Auto-setup
+
+The docker-entrypoint may auto-complete the initial setup if `VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW=1` is set in `.env`. In this case, the server transitions directly to LOCKED state — unlock with the master password.
+
+### After restart
+
+On restart, VaultCenter enters LOCKED mode. You must unlock it:
+- Web UI: enter master password on the lock screen
+- CLI: `POST /api/unlock` (see above)
+- Auto-unlock: set `VEILKEY_PASSWORD_FILE` in `.env` (securing this file is your responsibility)
 
 ## 2. LocalVault Registration
 
