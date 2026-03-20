@@ -271,3 +271,7 @@ See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 ## License
 
 MIT License. See [`LICENSE`](./LICENSE).
+
+---
+
+<sub>Images in this README are AI-generated. 본 README의 이미지는 AI로 생성되었습니다.</sub>

@@ -60,3 +60,7 @@ MIT License. [`LICENSE`](./LICENSE) 참조.
 VeilKey는 시크릿과 암호화 자료를 다루는 보안 민감 도구입니다.
 프로덕션 사용 전 자체 보안 감사를 수행하세요.
 보안 이슈 발견 시 GitHub Security Advisories로 비공개 보고해주세요.
+
+---
+
+<sub>본 README의 이미지는 AI로 생성되었습니다. Images in this README are AI-generated.</sub>
