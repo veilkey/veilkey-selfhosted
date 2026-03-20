@@ -11,7 +11,7 @@ set -euo pipefail
 
 BIN_DIR="${VEILKEY_BIN_DIR:-$HOME/.local/bin}"
 VEILKEY_URL="${VEILKEY_URL:-https://localhost:11181}"
-INSTALL_DIR="${VEILKEY_INSTALL_DIR:-$HOME/.veilkey}"
+INSTALL_DIR="${VEILKEY_INSTALL_DIR:-$HOME/veilkey}"
 REPO_URL="https://github.com/veilkey/veilkey-selfhosted.git"
 
 echo "=== VeilKey installer (macOS) ==="
