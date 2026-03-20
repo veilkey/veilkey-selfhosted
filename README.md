@@ -1,7 +1,7 @@
 <div align="center">
   <img src=".github/banner.png" alt="VeilKey" width="720">
   <h1>VeilKey Self-Hosted</h1>
-  <p><strong>AI가 절대 볼 수 없는 시크릿 관리. PTY 레벨 양방향 마스킹 + 블록체인 감사.</strong></p>
+  <p><strong>Secret management where AI never sees your passwords.<br>PTY-level bidirectional masking + blockchain audit.</strong></p>
   <p>
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
@@ -15,250 +15,234 @@
 VeilKey is a self-hosted secret manager where **AI coding tools never see your passwords**.
 
 ```bash
-# veil 셸 안에서
+# Inside a veil shell
 $ cat .env
-DB_PASSWORD=VK:LOCAL:ea2bfd16    ← AI가 보는 값
+DB_PASSWORD=VK:LOCAL:ea2bfd16    # What AI sees
 
-# 실제 앱은 진짜 비밀번호를 받음
-$ npm start                       ← DB_PASSWORD=actual-secret
+# The actual app receives the real password
+$ npm start                       # DB_PASSWORD=actual-secret
 ```
 
-PTY 출력에서 비밀번호가 나오면 자동으로 VK ref로 치환. Claude Code, Cursor, Copilot 등 어떤 AI 도구를 써도 평문을 볼 수 없습니다.
+When secrets appear in PTY output, they are automatically replaced with VK refs. Claude Code, Cursor, Copilot — no AI tool can see the plaintext.
 
 ## Architecture
 
 ```
-VaultCenter (열쇠 관리자)          LocalVault (금고)
+VaultCenter (key manager)          LocalVault (vault)
 ┌──────────────────────┐          ┌──────────────────┐
-│ agentDEK (암호화 키)  │          │ ciphertext (암호문) │
-│ KEK → DEK 보호       │          │ 저장만, 복호화 불가  │
-│ 블록체인 감사 로그     │          │                    │
+│ agentDEK (encryption │          │ ciphertext only   │
+│ key, KEK-protected)  │          │ cannot decrypt    │
+│ blockchain audit log │          │                   │
 └──────────────────────┘          └──────────────────┘
          │                                  │
-         └──── 둘 다 있어야 복호화 가능 ────────┘
+         └──── both required to decrypt ────┘
 
-veil CLI (PTY 마스킹)
+veil CLI (PTY masking)
 ┌──────────────────────────────────────────┐
-│ 환경변수: VK:LOCAL:xxx → 실제 값 (프로세스) │
-│ 출력: 실제 값 → VK:LOCAL:xxx (화면/AI)     │
+│ env vars: VK:LOCAL:xxx → real value (app)│
+│ output: real value → VK:LOCAL:xxx (AI)   │
 └──────────────────────────────────────────┘
 ```
 
-**둘 다 탈취해야 시크릿 접근 가능:**
-- VaultCenter만 탈취 → agentDEK 있지만 ciphertext 없음
-- LocalVault만 탈취 → ciphertext 있지만 agentDEK 없음
+**Both must be compromised to access secrets:**
+- VaultCenter only → has agentDEK but no ciphertext
+- LocalVault only → has ciphertext but no agentDEK
 
 ## Installation
 
 ### macOS
 
 ```bash
-# 방법 1: npm (권장)
+# Option 1: npm (recommended)
 npm install -g veilkey-cli
 sudo codesign --force --sign - $(npm prefix -g)/lib/node_modules/veilkey-cli/native/*
 
-# 방법 2: 소스 빌드 + Docker
+# Option 2: source build + Docker
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 bash scripts/install-veil-mac.sh
 ```
 
-설치 후:
-1. `https://localhost:11181` → 마스터 + 관리자 비밀번호 설정
-2. `cd veilkey-selfhosted && veil` → 보호 셸 진입
+After install:
+1. Open `https://localhost:11181` → set master + admin password
+2. `cd veilkey-selfhosted && veil` → enter protected shell
 
 ### Linux
 
 ```bash
-# 1. 의존성
+# 1. Dependencies
 sudo apt install -y git docker.io docker-compose-plugin nodejs npm
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source $HOME/.cargo/env
 
-# 2. 클론 + 서비스 시작
+# 2. Clone + start services
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 cp .env.example .env
 docker compose up -d
 
-# 3. CLI 설치
+# 3. Install CLI
 npm install -g veilkey-cli
-# 또는 소스 빌드:
-# cargo build --release
-# sudo cp target/release/{veil,veilkey,veilkey-cli,veilkey-session-config} /usr/local/bin/
 
-# 4. 셋업 + 진입
-# https://localhost:11181 → 비밀번호 설정
+# 4. Setup + enter
+# https://localhost:11181 → set passwords
 veil
 ```
 
-### 업데이트
+### Update
 
 ```bash
-npm update -g veilkey-cli          # CLI 업데이트
-cd veilkey-selfhosted && git pull  # 서버 업데이트
-docker compose up --build -d       # Docker 재빌드
+npm update -g veilkey-cli          # CLI update
+cd veilkey-selfhosted && git pull  # Server update
+docker compose up --build -d       # Docker rebuild
 ```
 
-### LocalVault 별도 설치
+### Add a LocalVault
 
-이미 VaultCenter가 돌고 있는 환경에서 LocalVault만 추가:
+Add a LocalVault to an existing VaultCenter:
 
 ```bash
 curl -sL "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh?$(date +%s)" | \
   VEILKEY_CENTER_URL=https://your-vaultcenter:11181 bash
 ```
 
-현재 디렉토리에 `.localvault/`를 만들고 Docker로 실행합니다. heartbeat로 VaultCenter에 자동 등록됩니다.
-
+Or via `veil` CLI:
 ```bash
-# 커스텀 이름/포트
-VEILKEY_CENTER_URL=https://10.0.0.1:11181 VEILKEY_HOST_PORT=11182 VEILKEY_NAME=dev-vault \
-  curl -sL "...?$(date +%s)" | bash
-
-# 업데이트 (같은 명령 재실행)
-curl -sL "...?$(date +%s)" | VEILKEY_CENTER_URL=... bash
+veil localvault init      # Install + start
+veil localvault stop      # Stop
+veil localvault log       # Tail logs
+veil localvault status    # Health check
 ```
 
-`veil` CLI에서도 가능:
-```bash
-veil localvault init      # 설치 + 시작
-veil localvault stop      # 중지
-veil localvault log       # 로그
-veil localvault status    # health check
-```
+### Setup (after install)
 
-### Setup (공통)
-
-설치 후 VaultCenter 셋업:
-
-1. **`https://localhost:11181`** 접속 → 마스터 + 관리자 비밀번호 설정
-2. **LocalVault 등록** — keycenter에서 등록 토큰 발급:
+1. **`https://localhost:11181`** → set master + admin password
+2. **Register LocalVault** — issue a registration token from keycenter:
 ```bash
 docker compose exec localvault sh -c \
   "echo 'password' | veilkey-localvault init --root \
     --token vk_reg_xxx --center https://vaultcenter:10181"
 docker compose restart localvault
 ```
-3. **시크릿 저장** — keycenter에서 임시키 생성 → 볼트에 격상
-4. **`veil`** 입력 → 보호 셸. 모든 등록된 시크릿이 자동 마스킹. AI가 출력을 봐도 `VK:LOCAL:xxx`만 보임.
+3. **Store secrets** — create temp keys in keycenter → promote to vault
+4. **`veil`** → enter protected shell. All registered secrets are auto-masked.
 
 ## Key Features
 
-### PTY 양방향 마스킹
+### PTY Bidirectional Masking
 ```bash
-# veil 셸 안에서 — AI가 이 출력을 봐도 안전
+# Inside veil shell — safe even if AI reads this output
 $ echo $DB_PASSWORD
-VK:LOCAL:ea2bfd16              ← 마스킹됨 (실제 값: actual-password)
+VK:LOCAL:ea2bfd16              # masked (real value: actual-password)
 
 $ cat config.env
-DB_PASSWORD=VK:LOCAL:ea2bfd16  ← 파일 읽기도 마스킹
-API_KEY=VK:LOCAL:ea2bfd16      ← 등록된 값만 치환
+DB_PASSWORD=VK:LOCAL:ea2bfd16  # file reads masked too
 
-# 실제 프로세스는 진짜 값을 받음
-$ node app.js                  ← process.env.DB_PASSWORD = "actual-password"
+# Real processes receive the actual value
+$ node app.js                  # process.env.DB_PASSWORD = "actual-password"
 ```
 
-### CometBFT 블록체인 감사
-- 모든 키 생성/회전/삭제가 불변 체인에 기록
-- LocalVault가 full node로 블록 검증 → VaultCenter 단독 조작 불가
-- DB 해킹해도 블록 해시 체인이 깨져서 위변조 탐지
+### Real-time Pattern Detection
+- 222 built-in patterns (npm tokens, AWS keys, GitHub PATs, etc.)
+- Secrets detected in output are auto-registered as VK:TEMP
+- No manual registration needed — just use `veil`
 
-### 분리 보관
-- VaultCenter: agentDEK (암호화 키) 보관
-- LocalVault: ciphertext (암호문) 저장만, 복호화 불가
-- 한쪽만 탈취해도 시크릿 접근 불가
+### CometBFT Blockchain Audit
+- All key create/rotate/delete operations recorded on immutable chain
+- LocalVault validates blocks as full node → prevents VaultCenter tampering
+- DB hack detectable via broken block hash chain
 
-### 관리자 웹 UI
-- keycenter: 임시키 CRUD, 볼트 격상, 등록 토큰 발급
-- 볼트 관리: 시크릿 조회, 함수 바인딩, 설정
-- 감사 로그: 전체 키 운영 이력
+### Split Storage
+- VaultCenter: holds agentDEK (encryption key)
+- LocalVault: holds ciphertext only (cannot decrypt)
+- Single compromise = no access to secrets
+
+### Admin Web UI
+- Keycenter: temp key CRUD, vault promotion, registration tokens
+- Vault management: secret browsing, function bindings, config
+- Audit log: full key operation history
 
 ## Repository Structure
 
 ```
 services/
-  vaultcenter/     ← 중앙 관리 서버 (Go)
-  localvault/      ← 로컬 금고 (Go)
-  veil-cli/        ← veil, veilkey, veilkey-cli, veilkey-session-config (Rust)
-docker-compose.yml ← 전체 스택 (VC + LV + veil)
+  vaultcenter/     # Central management server (Go)
+  localvault/      # Local vault (Go)
+  veil-cli/        # veil, veilkey, veilkey-cli (Rust)
+packages/
+  veil-cli/        # npm package wrapper
+docker-compose.yml # Full stack (VC + LV + veil)
 ```
 
-## CLI Tools
+## CLI Commands
 
-| 명령 | 용도 |
-|------|------|
-| `veilkey-cli resolve VK:LOCAL:xxx` | ref → 실제 값 |
-| `veilkey-cli exec echo VK:LOCAL:xxx` | 인자 치환 후 실행 |
-| `veilkey-cli wrap-pty bash` | PTY 마스킹 셸 진입 |
-| `veilkey-cli scan file.env` | 시크릿 감지 (222 패턴) |
-| `veilkey-cli filter file.env` | 시크릿 → VK ref 치환 |
-| `veilkey-cli status` | 연결 상태 확인 |
+| Command | Description |
+|---------|-------------|
+| `veil` | Enter protected PTY session |
+| `veil status` | Show connection status |
+| `veil resolve VK:LOCAL:xxx` | Resolve ref to actual value |
+| `veil exec echo VK:LOCAL:xxx` | Replace refs in args and execute |
+| `veil scan file.env` | Detect secrets (222 patterns) |
+| `veil localvault init` | Install LocalVault in current directory |
 
 ## Comparison
 
-| 기능 | 1Password CLI | Doppler | HashiCorp Vault | **VeilKey** |
-|------|---------------|---------|-----------------|-------------|
-| 시크릿 저장 | ✅ | ✅ | ✅ | ✅ |
-| 참조 시스템 | ✅ `op://` | ❌ | ❌ | ✅ `VK:LOCAL:` |
-| 환경변수 주입 | ✅ | ✅ | ✅ | ✅ |
-| **PTY 출력 마스킹** | ❌ | ❌ | ❌ | **✅** |
-| **양방향 치환** | ❌ | ❌ | ❌ | **✅** |
-| **파일 읽기 마스킹** | ❌ | ❌ | ❌ | **✅** |
-| 블록체인 감사 | ❌ | ❌ | ❌ | **✅** |
-| 분리 보관 (VC/LV) | ❌ | ❌ | ❌ | **✅** |
-| 셀프호스팅 | ❌ | ❌ | ✅ | **✅** |
+| Feature | 1Password CLI | Doppler | HashiCorp Vault | **VeilKey** |
+|---------|---------------|---------|-----------------|-------------|
+| Secret storage | Yes | Yes | Yes | Yes |
+| Reference system | `op://` | No | No | `VK:LOCAL:` |
+| Env var injection | Yes | Yes | Yes | Yes |
+| **PTY output masking** | No | No | No | **Yes** |
+| **Bidirectional replacement** | No | No | No | **Yes** |
+| **File read masking** | No | No | No | **Yes** |
+| **Pattern auto-detection** | No | No | No | **Yes (222)** |
+| Blockchain audit | No | No | No | **Yes** |
+| Split storage (VC/LV) | No | No | No | **Yes** |
+| Self-hosted | No | No | Yes | **Yes** |
 
 ## Environment Variables
 
-설정 가능한 값들은 `.env.example` 참조:
+See `.env.example` files for all configurable values:
 - `services/vaultcenter/.env.example`
 - `services/localvault/.env.example`
 
-주요 설정:
-| 변수 | 기본값 | 설명 |
-|------|--------|------|
-| `VEILKEY_TEMP_REF_TTL` | `1h` | 임시키 만료 시간 |
-| `VEILKEY_ADMIN_SESSION_TTL` | `2h` | 관리자 세션 유지 |
-| `VEILKEY_CHAIN_HOME` | `/data/chain` | CometBFT 데이터 경로 |
-| `VEILKEY_TLS_INSECURE` | `0` | 자체서명 인증서 허용 |
+Key settings:
 
-## Contributing
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VEILKEY_TEMP_REF_TTL` | `1h` | Temp key expiry |
+| `VEILKEY_ADMIN_SESSION_TTL` | `2h` | Admin session duration |
+| `VEILKEY_CHAIN_HOME` | `/data/chain` | CometBFT data path |
+| `VEILKEY_TLS_INSECURE` | `0` | Allow self-signed certs |
 
-See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+## How It Works (server restart)
 
-## License
-
-MIT License. See [`LICENSE`](./LICENSE).
-
-## How It Works (서버 재시작 시)
-
-VeilKey 서버가 재시작되면 **마스터 비밀번호를 다시 입력해야** 합니다.
+When VeilKey server restarts, you must **re-enter the master password**.
 
 ```
-서버 시작 → LOCKED 상태 (DEK 메모리에 없음)
-  → 웹 UI에서 마스터 비밀번호 입력
-  → KEK 유도 → DEK 복호화 → 메모리에 로드
-  → UNLOCKED (정상 동작)
+Server start → LOCKED (DEK not in memory)
+  → Enter master password in web UI
+  → KEK derived → DEK decrypted → loaded into memory
+  → UNLOCKED (normal operation)
 ```
 
-**비밀번호는 어디에도 저장되지 않습니다.** KEK는 비밀번호 + salt로 매번 유도되고, DEK는 KEK로 암호화된 상태로만 DB에 존재. 서버가 꺼지면 KEK와 DEK 모두 메모리에서 사라집니다.
+**The password is never stored on disk.** KEK is derived from password + salt each time. DEK exists only in encrypted form in DB. When the server shuts down, both KEK and DEK are wiped from memory.
 
-`VEILKEY_PASSWORD_FILE` 환경변수로 자동 unlock을 설정할 수 있지만, 이 파일의 보안은 운영자 책임입니다.
+You can set `VEILKEY_PASSWORD_FILE` for auto-unlock, but securing that file is your responsibility.
 
 ## Security
 
-**AI를 root 권한으로 절대 실행하지 마세요.**
+**Never run AI tools with root privileges.**
 
-VeilKey는 AI가 시크릿에 접근하지 못하게 설계되었지만, root 권한이 있으면:
-- 프로세스 메모리 덤프 → DEK 추출 가능
-- `/data/` 디렉토리 직접 접근 → DB 파일 조작 가능
-- PTY 마스킹 우회 → `/proc/{pid}/fd/` 등으로 raw 출력 접근 가능
+VeilKey prevents AI from accessing secrets, but with root access:
+- Process memory dump → DEK extraction possible
+- Direct `/data/` access → DB file manipulation possible
+- PTY masking bypass → raw output via `/proc/{pid}/fd/`
 
-**권장:**
-- AI 코딩 도구는 일반 사용자 권한으로 실행
-- `veil` 셸 안에서만 작업 → PTY 마스킹 보장
-- `sudo`가 필요한 작업은 veil 밖에서 직접 수행
+**Recommendations:**
+- Run AI coding tools as a regular user
+- Work inside `veil` shell only → PTY masking guaranteed
+- Perform `sudo` operations outside veil
 
 ## Security Disclaimer
 
@@ -267,3 +251,11 @@ This software is provided WITHOUT WARRANTY. Before using VeilKey in production,
 conduct your own security audit and review.
 
 If you discover a security issue, please report it privately via GitHub Security Advisories.
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
+## License
+
+MIT License. See [`LICENSE`](./LICENSE).
