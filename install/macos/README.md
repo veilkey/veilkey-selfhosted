@@ -60,4 +60,4 @@ bash install/macos/uninstall.sh
 
 ## Add a standalone LocalVault
 
-See [localvault.md](./localvault.md).
+See [localvault.md](../common/localvault.md).

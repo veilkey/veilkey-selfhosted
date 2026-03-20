@@ -132,6 +132,8 @@ If your client is on the same network as vmbr1, access `https://<CT_IP>:11181` d
 
 Proceed to [Post-Install Setup](../../docs/setup.md) to set master password and register LocalVault.
 
+To add a standalone LocalVault, see [common/localvault.md](../common/localvault.md).
+
 ## Troubleshooting
 
 ### `sysctl: permission denied` during build/startup

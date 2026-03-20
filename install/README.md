@@ -9,6 +9,12 @@ Platform-specific installation guides for VeilKey Self-Hosted.
 
 After installation, follow the [Post-Install Setup](../docs/setup.md) to initialize VaultCenter and register LocalVault.
 
+## Common
+
+| Guide | Description |
+|-------|-------------|
+| [Add a LocalVault](./common/localvault.md) | Add a standalone LocalVault to an existing VaultCenter (any platform) |
+
 ## Which guide should I follow?
 
 - **macOS (local development)** — You want to run VeilKey on your Mac with `veil` CLI in your terminal.
