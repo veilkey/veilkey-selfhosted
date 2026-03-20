@@ -42,7 +42,7 @@ if [[ -z "${CT_IP:-}" ]] || [[ -z "${CT_GW:-}" ]]; then
     echo "ERROR: CT_IP and CT_GW are required."
     echo ""
     echo "Usage:"
-    echo "  CT_IP=10.50.0.110/16 CT_GW=10.50.0.1 bash install/proxmox-lxc-debian/install.sh"
+    echo "  CT_IP=<ip>/<mask> CT_GW=<gateway> bash install/proxmox-lxc-debian/install-veilkey.sh"
     exit 1
 fi
 

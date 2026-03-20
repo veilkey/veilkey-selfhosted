@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # VeilKey macOS: Move KEK password file to RAM disk (tmpfs equivalent)
-# Usage: bash scripts/setup-tmpfs-password-mac.sh
+# Usage: bash install/macos/vaultcenter/setup-tmpfs-password.sh
 #
 # Creates a 1MB RAM disk, copies password file there, updates launchd plist.
 # Password exists only in RAM — gone on reboot.
@@ -94,7 +94,7 @@ echo "  비밀번호는 메모리에만 존재합니다."
 echo ""
 echo "  ⚠️  재부팅 시 RAM disk가 사라집니다."
 echo "  재부팅 후 수동 unlock 또는 이 스크립트를 다시 실행하세요:"
-echo "    bash scripts/setup-tmpfs-password-mac.sh"
+echo "    bash install/macos/vaultcenter/setup-tmpfs-password.sh"
 echo ""
 echo "  원복하려면:"
 echo "    diskutil eject '$RAMDISK_MOUNT'"
