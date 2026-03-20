@@ -106,6 +106,34 @@ source ~/.bashrc
 veil
 ```
 
+### LocalVault 별도 설치
+
+이미 VaultCenter가 돌고 있는 환경에서 LocalVault만 추가:
+
+```bash
+curl -sL "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh?$(date +%s)" | \
+  VEILKEY_CENTER_URL=https://your-vaultcenter:11181 bash
+```
+
+현재 디렉토리에 `.localvault/`를 만들고 Docker로 실행합니다. heartbeat로 VaultCenter에 자동 등록됩니다.
+
+```bash
+# 커스텀 이름/포트
+VEILKEY_CENTER_URL=https://10.0.0.1:11181 VEILKEY_HOST_PORT=11182 VEILKEY_NAME=dev-vault \
+  curl -sL "...?$(date +%s)" | bash
+
+# 업데이트 (같은 명령 재실행)
+curl -sL "...?$(date +%s)" | VEILKEY_CENTER_URL=... bash
+```
+
+`veil` CLI에서도 가능:
+```bash
+veil localvault init      # 설치 + 시작
+veil localvault stop      # 중지
+veil localvault log       # 로그
+veil localvault status    # health check
+```
+
 ### Setup (공통)
 
 설치 후 VaultCenter 셋업:

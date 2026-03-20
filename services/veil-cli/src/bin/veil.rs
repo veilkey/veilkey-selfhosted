@@ -98,7 +98,7 @@ export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
                         process::exit(1);
                     }
 
-                    let gist_url = "https://gist.githubusercontent.com/dalsoop/LOCALVAULT_GIST_ID/raw/install-localvault.sh";
+                    let gist_url = "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh";
                     let script = format!(
                         "VEILKEY_CENTER_URL='{}' VEILKEY_PORT='{}' curl -sL '{}?{}' | bash",
                         center_url,
