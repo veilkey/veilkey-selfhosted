@@ -1,4 +1,4 @@
-# macOS — Add a Standalone LocalVault
+# Add a Standalone LocalVault
 
 Add a LocalVault to an existing VaultCenter without Docker.
 
@@ -11,7 +11,7 @@ Add a LocalVault to an existing VaultCenter without Docker.
 
 ```bash
 curl -sL "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh?$(date +%s)" | \
-  VEILKEY_CENTER_URL=https://your-vaultcenter:11181 bash
+  VEILKEY_CENTER_URL=https://<vaultcenter-host>:<port> bash
 ```
 
 Or via `veil` CLI:
@@ -33,7 +33,7 @@ veil localvault status    # Health check
 
 ## How it works
 
-The installer (`scripts/install-localvault.sh`):
+The installer (`install/common/install-localvault.sh`):
 
 1. Checks Go installation
 2. Clones/updates source repo

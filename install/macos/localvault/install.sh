@@ -40,7 +40,8 @@ docker compose up --build -d localvault 2>&1 | tail -5
 
 echo ""
 echo "=== LocalVault installation complete ==="
-echo "  URL: https://localhost:11180"
+LV_PORT="${LOCALVAULT_HOST_PORT:-11180}"
+echo "  URL: https://localhost:${LV_PORT}"
 echo ""
 echo "다음 단계:"
 echo "  VaultCenter 키센터에서 등록 토큰 발급 → LocalVault init"

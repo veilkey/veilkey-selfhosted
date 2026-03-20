@@ -30,7 +30,7 @@ The `veil` CLI and `curl` will reject self-signed certs by default.
 export VEILKEY_TLS_INSECURE=1
 ```
 
-This is already set in `.veilkey/env` by the installer script (`install-veil-mac.sh`).
+This is already set in `.veilkey/env` by the installer script (`install/macos/veil-cli/install.sh`).
 
 ### Option 2: Trust the certificate system-wide
 
