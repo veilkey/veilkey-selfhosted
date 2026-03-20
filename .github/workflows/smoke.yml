@@ -1,6 +1,7 @@
 name: Smoke Tests
 
 on:
+  workflow_dispatch:
   pull_request:
     branches: [main]
     paths:
@@ -8,6 +9,7 @@ on:
       - 'tests/smoke/**'
       - 'docker-compose.yml'
       - '.env.example'
+      - '.github/workflows/smoke.yml'
   push:
     branches: [main]
     paths:
@@ -15,6 +17,7 @@ on:
       - 'tests/smoke/**'
       - 'docker-compose.yml'
       - '.env.example'
+      - '.github/workflows/smoke.yml'
 
 permissions:
   contents: read
