@@ -31,6 +31,8 @@ CT_CORES="${CT_CORES:-2}"
 CT_DISK="${CT_DISK:-16}"
 CT_STORAGE="${CT_STORAGE:-local-lvm}"
 CT_TEMPLATE="${CT_TEMPLATE:-debian-13-standard_13.1-2_amd64.tar.zst}"
+VC_PORT="${VAULTCENTER_HOST_PORT:-11181}"
+LV_PORT="${LOCALVAULT_HOST_PORT:-11180}"
 
 # --- Validation ---
 if ! command -v pct &>/dev/null; then
@@ -142,7 +144,7 @@ echo "  Services starting (first build may take a few minutes)..."
 echo "[6/6] Waiting for VaultCenter health check..."
 HEALTH=""
 for i in $(seq 1 30); do
-    HEALTH=$(pct exec "$CTID" -- curl -sk https://localhost:11181/health 2>/dev/null || true)
+    HEALTH=$(pct exec "$CTID" -- curl -sk https://localhost:${VC_PORT}/health 2>/dev/null || true)
     if echo "$HEALTH" | grep -q '"status"'; then
         break
     fi
@@ -155,18 +157,18 @@ if echo "$HEALTH" | grep -q '"status"'; then
     echo ""
     echo "=== Installation complete ==="
     echo ""
-    echo "  VaultCenter: https://$CT_ADDR:11181"
-    echo "  LocalVault:  https://$CT_ADDR:11180"
+    echo "  VaultCenter: https://$CT_ADDR:${VC_PORT}"
+    echo "  LocalVault:  https://$CT_ADDR:${LV_PORT}"
     echo "  Status:      $HEALTH"
     echo ""
     echo "Next steps:"
     echo "  1. Initial setup (headless):"
-    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:11181/api/setup/init \\"
+    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:${VC_PORT}/api/setup/init \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\\\"password\\\":\\\"<master_password>\\\",\\\"admin_password\\\":\\\"<admin_password>\\\"}'\""
     echo ""
     echo "  2. Or unlock (if already initialized):"
-    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:11181/api/unlock \\"
+    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:${VC_PORT}/api/unlock \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\\\"password\\\":\\\"<master_password>\\\"}'\""
     echo ""

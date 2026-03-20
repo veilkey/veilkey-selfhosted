@@ -18,7 +18,8 @@ The script creates a privileged LXC container, installs all dependencies, and st
 
 For manual step-by-step installation, continue below.
 
-> **Note:** Commands below use `localhost:11181` and `localhost:11180` as default ports. If you changed `VAULTCENTER_HOST_PORT` or `LOCALVAULT_HOST_PORT` in `.env`, adjust accordingly.
+> **Note:** Commands below use `<vc_port>` and `<lv_port>` as port placeholders.
+> Defaults: VaultCenter `11181`, LocalVault `11180`. Change in `.env` (`VAULTCENTER_HOST_PORT`, `LOCALVAULT_HOST_PORT`).
 
 ---
 
@@ -110,25 +111,25 @@ First run builds all images (VaultCenter, LocalVault, veil CLI). This takes a fe
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && docker compose ps"
 
 # Health check
-pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/health"
+pct exec <CTID> -- bash -c "curl -sk https://localhost:<vc_port>/health"
 # Expected: {"status":"setup"}
 ```
 
 ## 5. Network Access
 
-VeilKey listens on `https://<CT_IP>:11181` inside the internal network. To access from outside:
+VeilKey listens on `https://<CT_IP>:<vc_port>` inside the internal network. To access from outside:
 
 ### Option A: Port forwarding on Proxmox host
 
 ```bash
 # Forward host port to container
 iptables -t nat -A PREROUTING -i vmbr0 -p tcp --dport 11181 \
-  -j DNAT --to-destination <CT_IP>:11181
+  -j DNAT --to-destination <CT_IP>:<vc_port>
 ```
 
 ### Option B: Access from host network directly
 
-If your client is on the same network as vmbr1, access `https://<CT_IP>:11181` directly.
+If your client is on the same network as vmbr1, access `https://<CT_IP>:<vc_port>` directly.
 
 ## 6. Initial Setup (headless)
 
@@ -138,12 +139,12 @@ Proxmox LXC environments typically don't have browser access. Set up entirely vi
 
 ```bash
 # If auto-setup completed (status: "locked"), unlock:
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/unlock \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<vc_port>/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<master_password>\"}'"
 
 # If first run (status: "setup"), initialize:
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/setup/init \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<vc_port>/api/setup/init \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<master_password>\",\"admin_password\":\"<admin_password>\"}'"
 ```
@@ -161,7 +162,7 @@ pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
 # Restart + unlock
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && docker compose restart localvault"
 sleep 3
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11180/api/unlock \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<lv_port>/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<master_password>\"}'"
 ```
@@ -169,7 +170,7 @@ pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11180/api/unlock 
 ### Verify both services
 
 ```bash
-pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/health && echo '' && curl -sk https://localhost:11180/health"
+pct exec <CTID> -- bash -c "curl -sk https://localhost:<vc_port>/health && echo '' && curl -sk https://localhost:<lv_port>/health"
 # Expected: {"status":"ok"} for both
 ```
 
@@ -177,21 +178,21 @@ pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/health && echo '' &
 
 ```bash
 # Admin login
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/admin/login \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<vc_port>/api/admin/login \
   -H 'Content-Type: application/json' \
   -d '{\"password\":\"<admin_password>\"}' -c /tmp/vk.txt"
 
 # Create temp secret
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/keycenter/temp-refs \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<vc_port>/api/keycenter/temp-refs \
   -H 'Content-Type: application/json' -b /tmp/vk.txt \
   -d '{\"name\":\"TEST\",\"value\":\"hello-veilkey\"}'"
 # Note the ref: VK:TEMP:xxxxxxxx
 
 # Get agent hash
-pct exec <CTID> -- bash -c "curl -sk https://localhost:11181/api/agents | grep -o '\"agent_hash\":\"[^\"]*\"'"
+pct exec <CTID> -- bash -c "curl -sk https://localhost:<vc_port>/api/agents | grep -o '\"agent_hash\":\"[^\"]*\"'"
 
 # Promote to vault (replace ref and agent_hash)
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:11181/api/keycenter/promote \
+pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<vc_port>/api/keycenter/promote \
   -H 'Content-Type: application/json' -b /tmp/vk.txt \
   -d '{\"ref\":\"VK:TEMP:xxxxxxxx\",\"name\":\"TEST\",\"vault_hash\":\"<agent_hash>\"}'"
 # Note the token: VK:LOCAL:yyyyyyyy

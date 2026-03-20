@@ -65,7 +65,7 @@ If port 11181 is already in use:
 
 ```bash
 # Check what's using the port
-lsof -i :11181
+lsof -i :${VAULTCENTER_HOST_PORT:-11181}
 
 # Use a different port
 VAULTCENTER_HOST_PORT=11182 docker compose up -d

@@ -17,7 +17,8 @@ if [ ! -f "Cargo.toml" ] || [ ! -d "services/veil-cli" ]; then
 fi
 
 REPO_ROOT="$(pwd)"
-VEILKEY_URL="${VEILKEY_URL:-https://localhost:11181}"
+VC_PORT="${VAULTCENTER_HOST_PORT:-11181}"
+VEILKEY_URL="${VEILKEY_URL:-https://localhost:${VC_PORT}}"
 
 echo "=== VeilKey CLI installer (macOS) ==="
 echo ""

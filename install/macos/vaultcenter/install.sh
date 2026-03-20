@@ -16,7 +16,8 @@ if [ ! -f "docker-compose.yml" ] || [ ! -d "services" ]; then
 fi
 
 REPO_ROOT="$(pwd)"
-VEILKEY_URL="${VEILKEY_URL:-https://localhost:11181}"
+VC_PORT="${VAULTCENTER_HOST_PORT:-11181}"
+VEILKEY_URL="${VEILKEY_URL:-https://localhost:${VC_PORT}}"
 PORT="${VEILKEY_URL##*:}"
 PORT="${PORT%%/*}"
 

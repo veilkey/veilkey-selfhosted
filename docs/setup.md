@@ -22,7 +22,7 @@ Ports depend on your `.env` settings (`VAULTCENTER_HOST_PORT`, `LOCALVAULT_HOST_
 
 ### Web UI
 
-Open `https://<your-host>:11181` in your browser.
+Open `https://<your-host>:<vc_port>` in your browser.
 
 - Enter **master password** (KEK derivation — remember this)
 - Enter **admin password** (web UI login)
@@ -59,7 +59,7 @@ On restart, VaultCenter enters LOCKED mode. You must unlock it:
 
 ### Web UI
 
-In the keycenter UI (`https://<your-host>:11181/keycenter`):
+In the keycenter UI (`https://<your-host>:<vc_port>/keycenter`):
 
 1. Click "+ 등록 토큰" to issue a registration token
 2. Run inside the localvault container:
