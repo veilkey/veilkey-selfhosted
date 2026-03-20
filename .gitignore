@@ -52,3 +52,4 @@ node_modules/
 # Go build output inside service directories
 services/*/main
 .claude/
+packages/veil-cli/native/

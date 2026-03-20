@@ -32,11 +32,69 @@ fn exec_replace(bin: &str, args: &[String]) -> ! {
     process::exit(1);
 }
 
+/// Find and load .veilkey/env
+/// Priority: VEILKEY_ENV > walk up from cwd > ~/.veilkey/env > ~/veilkey-selfhosted/.veilkey/env
+fn auto_load_env() {
+    // 1. Explicit path
+    if let Ok(p) = env::var("VEILKEY_ENV") {
+        if !p.is_empty() && std::path::Path::new(&p).exists() {
+            load_env_file(&p);
+            return;
+        }
+    }
+
+    // 2. Walk up from current dir
+    let mut dir = env::current_dir().ok();
+    while let Some(d) = &dir {
+        let env_file = d.join(".veilkey").join("env");
+        if env_file.exists() {
+            load_env_file(&env_file.to_string_lossy());
+            return;
+        }
+        dir = d.parent().map(|p| p.to_path_buf());
+    }
+
+    // 3. Home fallback paths
+    if let Ok(home) = env::var("HOME") {
+        for sub in &[".veilkey/env", "veilkey-selfhosted/.veilkey/env"] {
+            let p = format!("{}/{}", home, sub);
+            if std::path::Path::new(&p).exists() {
+                load_env_file(&p);
+                return;
+            }
+        }
+    }
+}
+
+fn load_env_file(path: &str) {
+    if let Ok(content) = std::fs::read_to_string(path) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.starts_with('#') || line.is_empty() || line.starts_with("#!/") {
+                continue;
+            }
+            let line = line.strip_prefix("export ").unwrap_or(line);
+            if let Some((k, v)) = line.split_once('=') {
+                let k = k.trim();
+                let v = v.trim().trim_matches('"').trim_matches('\'');
+                env::set_var(k, v);
+            }
+        }
+    }
+}
+
 fn main() {
+    // Auto-load .veilkey/env from current or parent dirs
+    // Clear legacy env vars first so .veilkey/env takes precedence
+    auto_load_env();
+    // If VEILKEY_LOCALVAULT_URL is set, ensure VEILKEY_API matches
+    if let Ok(url) = env::var("VEILKEY_LOCALVAULT_URL") {
+        env::set_var("VEILKEY_API", &url);
+    }
+
     let cli_bin = find_bin("VEILKEY_CLI_BIN", "veilkey-cli");
 
     env::set_var("VEILKEY_VEIL", "1");
-    // Set custom prompt so user knows they're in veil
     env::set_var("VEIL_PS1", "(veil) ");
 
     let args: Vec<String> = env::args().skip(1).collect();

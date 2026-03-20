@@ -1,0 +1,15 @@
+{
+  "name": "veilkey-cli",
+  "version": "0.1.0",
+  "description": "VeilKey CLI — secret masking for AI-safe development",
+  "license": "MIT",
+  "bin": {
+    "veil": "bin/veil.js",
+    "veilkey-cli": "bin/veilkey-cli.js"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  },
+  "os": ["darwin", "linux"],
+  "cpu": ["arm64", "x64"]
+}
