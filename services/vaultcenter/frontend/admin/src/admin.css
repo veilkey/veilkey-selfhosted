@@ -140,9 +140,9 @@
             margin: 2px 0;
         }
         .topbar-logout {
-            background: none;
-            border: 1px solid rgba(255,255,255,0.2);
-            color: rgba(255,255,255,0.7);
+            background: rgba(255,255,255,0.08);
+            border: 1px solid rgba(255,255,255,0.15);
+            color: #e05050;
             padding: 4px 12px;
             border-radius: 4px;
             cursor: pointer;
@@ -150,8 +150,8 @@
             margin-left: 8px;
         }
         .topbar-logout:hover {
-            background: rgba(255,255,255,0.1);
-            color: #fff;
+            background: rgba(224,80,80,0.15);
+            color: #ff6b6b;
         }
 
         .shell {
