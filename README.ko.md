@@ -28,18 +28,24 @@ veil CLI (PTY 마스킹)
 └──────────────────────────────────────────┘
 ```
 
-## 빠른 시작
+## 설치
+
+플랫폼별 설치 가이드: [`install/`](./install/)
+
+| 플랫폼 | 가이드 |
+|--------|--------|
+| **macOS** | [`install/macos/`](./install/macos/) |
+| **Proxmox LXC (Debian)** | [`install/proxmox-lxc-debian/`](./install/proxmox-lxc-debian/) |
+
+### 빠른 시작 (macOS)
 
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-docker compose up -d
+bash install/macos/bootstrap/install-all.sh
 ```
 
-1. `https://localhost:11181` → 마스터 + 관리자 비밀번호 설정
-2. 키센터에서 등록 토큰 발급 → LocalVault init
-3. 키센터에서 임시키 생성 → 볼트에 격상
-4. veil 셸 진입: `docker compose exec -it veil veilkey-cli wrap-pty bash`
+설치 후: [초기 설정 가이드](./docs/setup.md) 참조
 
 ## CLI 도구
 

@@ -1,0 +1,132 @@
+name: Smoke Tests
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'install/**'
+      - 'tests/smoke/**'
+      - 'docker-compose.yml'
+      - '.env.example'
+  push:
+    branches: [main]
+    paths:
+      - 'install/**'
+      - 'tests/smoke/**'
+      - 'docker-compose.yml'
+      - '.env.example'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: sudo apt-get install -y -qq bats
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: services/veil-cli
+
+      - name: Build images
+        run: |
+          cp .env.example .env
+          echo "VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW=1" >> .env
+          docker compose build
+
+      - name: Start VeilKey services
+        run: |
+          # Start vaultcenter only, wait for health
+          docker compose up -d --no-deps vaultcenter
+          echo "Waiting for VaultCenter..."
+          for i in $(seq 1 90); do
+            STATUS=$(curl -sk https://localhost:11181/health 2>/dev/null | grep -o '"status":"[^"]*"' || true)
+            echo "  [$i] $STATUS"
+            if echo "$STATUS" | grep -qE '"locked"|"ok"|"setup"'; then
+              break
+            fi
+            sleep 3
+          done
+          # Start dependents (images already built, healthcheck should pass now)
+          docker compose up -d
+
+      - name: Unlock VaultCenter
+        run: |
+          # Auto-complete flow sets password from VEILKEY_PASSWORD_FILE or needs manual unlock
+          # Try unlocking with a default test password
+          curl -sk -X POST https://localhost:11181/api/setup/init \
+            -H 'Content-Type: application/json' \
+            -d '{"password":"smoke-test-password","admin_password":"smoke-test-password"}' || true
+          curl -sk -X POST https://localhost:11181/api/unlock \
+            -H 'Content-Type: application/json' \
+            -d '{"password":"smoke-test-password"}'
+          # Verify
+          curl -sk https://localhost:11181/health
+
+      - name: Init and unlock LocalVault
+        run: |
+          docker compose exec -T localvault sh -c \
+            'echo "smoke-test-password" | veilkey-localvault init --root --center https://vaultcenter:10181'
+          docker compose restart localvault
+          sleep 5
+          curl -sk -X POST https://localhost:11180/api/unlock \
+            -H 'Content-Type: application/json' \
+            -d '{"password":"smoke-test-password"}'
+          curl -sk https://localhost:11180/health
+
+      - name: Create test secret
+        run: |
+          # Admin login
+          curl -sk -X POST https://localhost:11181/api/admin/login \
+            -H 'Content-Type: application/json' \
+            -d '{"password":"smoke-test-password"}' \
+            -c /tmp/vk-cookies.txt
+
+          # Create temp ref
+          REF_RESPONSE=$(curl -sk -X POST https://localhost:11181/api/keycenter/temp-refs \
+            -H 'Content-Type: application/json' \
+            -b /tmp/vk-cookies.txt \
+            -d '{"name":"SMOKE_TEST","value":"smoke-test-secret-value"}')
+          echo "Temp ref: $REF_RESPONSE"
+          TEMP_REF=$(echo "$REF_RESPONSE" | grep -oP '"ref":"VK:TEMP:[^"]+' | cut -d'"' -f4)
+
+          # Get agent hash
+          AGENT_HASH=$(curl -sk https://localhost:11181/api/agents | grep -oP '"agent_hash":"[^"]+' | head -1 | cut -d'"' -f4)
+          echo "Agent hash: $AGENT_HASH"
+
+          # Promote
+          PROMOTE_RESPONSE=$(curl -sk -X POST https://localhost:11181/api/keycenter/promote \
+            -H 'Content-Type: application/json' \
+            -b /tmp/vk-cookies.txt \
+            -d "{\"ref\":\"$TEMP_REF\",\"name\":\"SMOKE_TEST\",\"vault_hash\":\"$AGENT_HASH\"}")
+          echo "Promote: $PROMOTE_RESPONSE"
+          LOCAL_REF=$(echo "$PROMOTE_RESPONSE" | grep -oP '"token":"VK:LOCAL:[^"]+' | cut -d'"' -f4)
+
+          # Save for tests
+          echo "VEILKEY_TEST_REF=$LOCAL_REF" >> "$GITHUB_ENV"
+          echo "VEILKEY_TEST_VALUE=smoke-test-secret-value" >> "$GITHUB_ENV"
+
+      - name: Run veil-cli smoke tests
+        env:
+          VEILKEY_URL: https://localhost:11181
+        run: |
+          bash tests/smoke/run.sh veil-cli
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-test-results
+          path: tests/smoke/results/*.tap
+
+      - name: Cleanup
+        if: always()
+        run: docker compose down -v

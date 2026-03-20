@@ -1,8 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# VeilKey one-liner installer for macOS
-# Usage: curl -sL .../install-veil-mac.sh | bash
+# VeilKey bootstrap installer for macOS
+# Clones the repo (or updates) then runs install-all.sh
+# Usage: curl -sL .../install-all-bootstrap.sh | bash
 #
 # ⚠️  이 스크립트의 실행으로 발생하는 모든 결과에 대한
 #     귀책사유는 실행자 본인에게 있습니다.
@@ -21,4 +22,4 @@ else
     cd "$TARGET_DIR"
 fi
 
-exec bash scripts/install-veil-mac.sh
+exec bash install/macos/bootstrap/install-all.sh

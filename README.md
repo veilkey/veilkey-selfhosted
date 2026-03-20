@@ -62,82 +62,32 @@ veil CLI (PTY masking)
 
 ## Installation
 
-### macOS
+Platform-specific guides are in [`install/`](./install/):
+
+| Platform | Guide |
+|----------|-------|
+| **macOS** | [`install/macos/`](./install/macos/) — npm or source build + Docker |
+| **Proxmox LXC (Debian)** | [`install/proxmox-lxc-debian/`](./install/proxmox-lxc-debian/) — Privileged LXC + Docker Compose |
+
+### Quick start (macOS)
 
 ```bash
-# Option 1: npm (recommended)
-npm install -g veilkey-cli
-sudo codesign --force --sign - $(npm prefix -g)/lib/node_modules/veilkey-cli/native/*
-
-# Option 2: source build + Docker
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-bash scripts/install-veil-mac.sh
+bash install/macos/bootstrap/install-all.sh
 ```
 
-After install:
-1. Open `https://localhost:11181` → set master + admin password
-2. `cd veilkey-selfhosted && veil` → enter protected shell
-
-### Linux
+### Quick start (Proxmox LXC)
 
 ```bash
-# 1. Dependencies
-sudo apt install -y git docker.io docker-compose-plugin nodejs npm
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source $HOME/.cargo/env
-
-# 2. Clone + start services
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-cp .env.example .env
-docker compose up -d
-
-# 3. Install CLI
-npm install -g veilkey-cli
-
-# 4. Setup + enter
-# https://localhost:11181 → set passwords
-veil
+CT_IP=<IP>/<MASK> CT_GW=<GATEWAY> bash install/proxmox-lxc-debian/install-veilkey.sh
 ```
 
-### Update
+### After install
 
-```bash
-npm update -g veilkey-cli          # CLI update
-cd veilkey-selfhosted && git pull  # Server update
-docker compose up --build -d       # Docker rebuild
-```
-
-### Add a LocalVault
-
-Add a LocalVault to an existing VaultCenter:
-
-```bash
-curl -sL "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh?$(date +%s)" | \
-  VEILKEY_CENTER_URL=https://your-vaultcenter:11181 bash
-```
-
-Or via `veil` CLI:
-```bash
-veil localvault init      # Install + start
-veil localvault stop      # Stop
-veil localvault log       # Tail logs
-veil localvault status    # Health check
-```
-
-### Setup (after install)
-
-1. **`https://localhost:11181`** → set master + admin password
-2. **Register LocalVault** — issue a registration token from keycenter:
-```bash
-docker compose exec localvault sh -c \
-  "echo 'password' | veilkey-localvault init --root \
-    --token vk_reg_xxx --center https://vaultcenter:10181"
-docker compose restart localvault
-```
-3. **Store secrets** — create temp keys in keycenter → promote to vault
-4. **`veil`** → enter protected shell. All registered secrets are auto-masked.
+See [Post-Install Setup](./docs/setup.md) for VaultCenter initialization, LocalVault registration, and secret storage.
 
 ## Key Features
 

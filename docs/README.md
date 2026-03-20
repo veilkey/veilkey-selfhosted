@@ -13,7 +13,9 @@
 | Document | Description |
 |----------|-------------|
 | [architecture.md](./architecture.md) | System architecture, VC/LV split, agentDEK, blockchain |
-| [installation.md](./installation.md) | Docker Compose quick start, setup flow |
+| [install/](../install/) | Platform-specific installation guides (macOS, Proxmox LXC) |
+| [setup.md](./setup.md) | Post-install setup (common to all platforms) |
+| [installation.md](./installation.md) | Legacy quick start (see install/ for platform guides) |
 | [cli.md](./cli.md) | CLI reference (veil, veilkey, veilkey-cli) |
 | [security-model.md](./security-model.md) | Security model, PTY masking, threat boundaries |
 | [OPERATING-MODEL.md](./OPERATING-MODEL.md) | Operational model, heartbeat, key rotation |
