@@ -19,13 +19,13 @@ Troubleshooting: [vaultcenter/troubleshoot.md](./macos/vaultcenter/troubleshoot.
 |-----------|---------|-----------|-------|
 | VeilKey (LXC) | `install-veilkey.sh` | - | [install-veilkey.md](./proxmox-lxc-debian/install-veilkey.md) |
 | LocalVault (host) | `install-localvault.sh` | `uninstall-localvault.sh` | [install-localvault.md](./proxmox-lxc-debian/install-localvault.md) |
-| veil-cli (host) | `install-veil-cli.sh` | `uninstall-veil-cli.sh` | [install-veil-cli.md](./proxmox-lxc-debian/install-veil-cli.md) |
 
 ### Common
 
 | Script | Guide |
 |--------|-------|
 | `common/install-localvault.sh` | [install-localvault.md](./common/install-localvault.md) |
+| `common/install-veil-cli.sh` | [install-veil-cli.md](./common/install-veil-cli.md) |
 
 ## After installation
 

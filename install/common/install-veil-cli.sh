@@ -1,14 +1,15 @@
 #!/bin/bash
 set -euo pipefail
 
-# veil-cli installer for Proxmox host
-# Builds and installs veil CLI to /usr/local/bin, configures connection to VeilKey LXC.
+# veil-cli installer for Linux
+# Builds and installs veil CLI to /usr/local/bin, configures connection to VeilKey.
+# Works on: Proxmox host, LXC containers, any Linux with Rust toolchain.
 #
 # Usage:
-#   bash install/proxmox-lxc-debian/install-veil-cli.sh
+#   VEILKEY_URL=https://<HOST>:<VC_PORT> bash install/common/install-veil-cli.sh
 #
 # Options (env vars):
-#   VEILKEY_URL=https://10.50.0.110:11181   VeilKey server URL (required)
+#   VEILKEY_URL=   VeilKey server URL (required)
 #
 # ⚠️  이 스크립트의 실행으로 발생하는 모든 결과에 대한
 #     귀책사유는 실행자 본인에게 있습니다.
@@ -22,7 +23,7 @@ if [[ -z "${VEILKEY_URL:-}" ]]; then
     echo "ERROR: VEILKEY_URL is required."
     echo ""
     echo "Usage:"
-    echo "  VEILKEY_URL=https://<CT_IP>:<VC_PORT> bash install/proxmox-lxc-debian/install-veil-cli.sh"
+    echo "  VEILKEY_URL=https://<HOST>:<VC_PORT> bash install/common/install-veil-cli.sh"
     exit 1
 fi
 
@@ -30,7 +31,7 @@ REPO_ROOT="$(pwd)"
 BIN_DIR="/usr/local/bin"
 CONFIG_DIR="$HOME/.veilkey"
 
-echo "=== veil-cli installer (Proxmox host) ==="
+echo "=== veil-cli installer (Linux) ==="
 echo ""
 echo "  URL: $VEILKEY_URL"
 echo ""

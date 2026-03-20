@@ -1,10 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# veil-cli uninstaller for Proxmox host
+# veil-cli uninstaller for Linux
 #
 # Usage:
-#   bash install/proxmox-lxc-debian/uninstall-veil-cli.sh
+#   bash install/common/uninstall-veil-cli.sh
 #
 # ⚠️  이 스크립트의 실행으로 발생하는 모든 결과에 대한
 #     귀책사유는 실행자 본인에게 있습니다.
@@ -12,7 +12,7 @@ set -euo pipefail
 BIN_DIR="/usr/local/bin"
 CONFIG_DIR="$HOME/.veilkey"
 
-echo "=== veil-cli uninstaller (Proxmox host) ==="
+echo "=== veil-cli uninstaller (Linux) ==="
 echo ""
 
 # [1/2] Remove binaries
