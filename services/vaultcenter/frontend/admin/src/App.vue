@@ -2,44 +2,44 @@
 <div v-if="state.ui.adminSetupRequired" class="unlock-shell">
     <div class="unlock-card">
         <div class="unlock-brand"><span class="brand-mark">VK</span><span class="brand-name">VeilKey</span></div>
-        <h1 class="unlock-heading">관리자 초기 설정</h1>
-        <p class="unlock-desc">관리자 비밀번호를 처음 설정합니다.<br>본인 확인을 위해 소유자(마스터) 비밀번호를 먼저 입력하세요.</p>
+        <h1 class="unlock-heading">{{ t('auth_setup_title') }}</h1>
+        <p class="unlock-desc" v-html="t('auth_setup_desc')"></p>
         <div v-if="state.ui.adminSetupError" class="unlock-error">{{ state.ui.adminSetupError }}</div>
         <form class="unlock-form" @submit.prevent="(e) => adminSetup(e.target.owner_password.value, e.target.admin_password.value)">
-            <label class="unlock-label">소유자(마스터) 비밀번호</label>
-            <input class="unlock-input" type="password" name="owner_password" placeholder="서버 잠금 해제에 사용하는 비밀번호" autocomplete="off" autofocus required />
-            <label class="unlock-label" style="margin-top:12px">새 관리자 비밀번호 (8자 이상)</label>
-            <input class="unlock-input" type="password" name="admin_password" placeholder="관리자 로그인에 사용할 비밀번호" autocomplete="new-password" required minlength="8" />
-            <button class="unlock-btn" type="submit" style="margin-top:16px">관리자 비밀번호 설정</button>
+            <label class="unlock-label">{{ t('auth_owner_password') }}</label>
+            <input class="unlock-input" type="password" name="owner_password" :placeholder="t('auth_owner_password_hint')" autocomplete="off" autofocus required />
+            <label class="unlock-label" style="margin-top:12px">{{ t('auth_new_admin_password') }}</label>
+            <input class="unlock-input" type="password" name="admin_password" :placeholder="t('auth_new_admin_password_hint')" autocomplete="new-password" required minlength="8" />
+            <button class="unlock-btn" type="submit" style="margin-top:16px">{{ t('auth_setup_submit') }}</button>
         </form>
     </div>
 </div>
 <div v-else-if="state.ui.adminRequired" class="unlock-shell">
     <div class="unlock-card">
         <div class="unlock-brand"><span class="brand-mark">VK</span><span class="brand-name">VeilKey</span></div>
-        <h1 class="unlock-heading">관리자 로그인</h1>
-        <p class="unlock-desc">관리자 비밀번호를 입력하세요.</p>
+        <h1 class="unlock-heading">{{ t('auth_login_title') }}</h1>
+        <p class="unlock-desc">{{ t('auth_login_desc') }}</p>
         <div v-if="state.ui.adminLoginError" class="unlock-error">{{ state.ui.adminLoginError }}</div>
         <form class="unlock-form" @submit.prevent="(e) => adminLogin(e.target.password.value)">
-            <input class="unlock-input" type="password" name="password" placeholder="관리자 비밀번호" autocomplete="current-password" autofocus required />
-            <button class="unlock-btn" type="submit">로그인</button>
+            <input class="unlock-input" type="password" name="password" :placeholder="t('auth_admin_password')" autocomplete="current-password" autofocus required />
+            <button class="unlock-btn" type="submit">{{ t('auth_login_submit') }}</button>
         </form>
     </div>
 </div>
 <div v-else-if="state.ui.locked" class="unlock-shell">
     <div class="unlock-card">
         <div class="unlock-brand"><span class="brand-mark">VK</span><span class="brand-name">VeilKey</span></div>
-        <h1 class="unlock-heading">잠금 해제</h1>
-        <p class="unlock-desc">마스터 비밀번호를 입력하세요.</p>
+        <h1 class="unlock-heading">{{ t('auth_unlock_title') }}</h1>
+        <p class="unlock-desc">{{ t('auth_unlock_desc') }}</p>
         <form @submit.prevent="unlock(state.ui.unlockPassword)">
-            <input class="unlock-input" type="password" v-model="state.ui.unlockPassword" placeholder="마스터 비밀번호" autofocus>
+            <input class="unlock-input" type="password" v-model="state.ui.unlockPassword" :placeholder="t('auth_master_password')" autofocus>
             <p v-if="state.ui.unlockError" class="unlock-error">{{ state.ui.unlockError }}</p>
-            <button class="unlock-btn" type="submit">잠금 해제</button>
+            <button class="unlock-btn" type="submit">{{ t('auth_unlock_submit') }}</button>
         </form>
         <div class="unlock-info">
-            <p>비밀번호는 어디에도 저장되지 않습니다.</p>
-            <p>메모리에서만 사용되며, 서버 재시작 시 다시 입력해야 합니다.</p>
-            <p style="margin-top:8px;color:#e05050">⚠ AI를 root 권한으로 실행하지 마세요.</p>
+            <p>{{ t('auth_unlock_info1') }}</p>
+            <p>{{ t('auth_unlock_info2') }}</p>
+            <p style="margin-top:8px;color:#e05050">{{ t('auth_unlock_warning') }}</p>
         </div>
     </div>
 </div>
