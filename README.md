@@ -82,7 +82,7 @@ bash install/macos/bootstrap/install-all.sh
 ```bash
 git clone https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-CT_IP=<ip>/<mask> CT_GW=<gateway> bash install/proxmox-lxc-debian/install-veilkey.sh
+CT_IP=<IP>/<MASK> CT_GW=<GATEWAY> bash install/proxmox-lxc-debian/install-veilkey.sh
 ```
 
 ### After install

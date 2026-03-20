@@ -14,7 +14,7 @@ Builds and starts VaultCenter via Docker Compose.
 
 ## After install
 
-Open `https://localhost:<VAULTCENTER_HOST_PORT>` (default: `11181`) — set master + admin password.
+Open `https://localhost:<VC_PORT>` (default: `11181`) — set master + admin password.
 
 > **HTTPS 인증서 경고?** See [troubleshoot.md](./troubleshoot.md)
 

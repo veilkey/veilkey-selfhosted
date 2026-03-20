@@ -39,7 +39,7 @@ Clones the repo automatically, then runs `install-all.sh`.
 
 ## After install
 
-1. Open `https://localhost:<VAULTCENTER_HOST_PORT>` (default: `11181`) — set master + admin password
+1. Open `https://localhost:<VC_PORT>` (default: `11181`) — set master + admin password
 2. `cd veilkey-selfhosted && veil` — enter protected shell
 
 > **HTTPS 인증서 경고?** See [vaultcenter/troubleshoot.md](../vaultcenter/troubleshoot.md)

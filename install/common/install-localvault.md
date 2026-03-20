@@ -11,7 +11,7 @@ Add a LocalVault to an existing VaultCenter without Docker.
 
 ```bash
 curl -sL "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh?$(date +%s)" | \
-  VEILKEY_CENTER_URL=https://<vaultcenter-host>:<port> bash
+  VEILKEY_CENTER_URL=https://<VC_HOST>:<VC_PORT> bash
 ```
 
 Or via `veil` CLI:
