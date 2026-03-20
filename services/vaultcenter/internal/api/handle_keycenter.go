@@ -29,6 +29,30 @@ type tempRefItem struct {
 	CreatedAt    time.Time  `json:"created_at"`
 }
 
+// handleListRefs returns all tracked ref canonicals (no values, no auth required).
+// Used by veil CLI to build mask_map by resolving each ref individually.
+func (s *Server) handleListRefs(w http.ResponseWriter, r *http.Request) {
+	allRefs, err := s.db.ListRefs()
+	if err != nil {
+		s.respondError(w, http.StatusInternalServerError, "failed to list refs")
+		return
+	}
+	type refEntry struct {
+		RefCanonical string `json:"ref_canonical"`
+		SecretName   string `json:"secret_name"`
+		Scope        string `json:"scope"`
+	}
+	entries := make([]refEntry, 0, len(allRefs))
+	for _, ref := range allRefs {
+		entries = append(entries, refEntry{
+			RefCanonical: ref.RefCanonical,
+			SecretName:   ref.SecretName,
+			Scope:        string(ref.RefScope),
+		})
+	}
+	s.respondJSON(w, http.StatusOK, map[string]any{"refs": entries})
+}
+
 func (s *Server) handleKeycenterTempRefs(w http.ResponseWriter, r *http.Request) {
 	refs, err := s.db.ListActiveTempRefs()
 	if err != nil {

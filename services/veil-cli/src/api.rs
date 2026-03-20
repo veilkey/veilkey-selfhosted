@@ -176,48 +176,31 @@ impl VeilKeyClient {
     pub fn fetch_all_secrets_mask_map(&self) -> Vec<(String, String)> {
         let mut mask_map: Vec<(String, String)> = Vec::new();
 
-        // 1. Get vault inventory
-        let vaults_resp = self.agent.get(&format!("{}/api/vault-inventory", self.base_url))
+        // 1. Get all tracked refs (no auth required, no values)
+        let refs_resp = self.agent.get(&format!("{}/api/refs", self.base_url))
             .call();
-        let vaults: Vec<serde_json::Value> = match vaults_resp {
+        let ref_entries: Vec<serde_json::Value> = match refs_resp {
             Ok(resp) => {
                 let data: serde_json::Value = resp.into_json().unwrap_or_default();
-                data["vaults"].as_array().cloned().unwrap_or_default()
+                data["refs"].as_array().cloned().unwrap_or_default()
             }
             Err(_) => return mask_map,
         };
 
-        // 2. For each vault, get keys and resolve each
-        for vault in &vaults {
-            let hash = match vault["vault_runtime_hash"].as_str() {
-                Some(h) => h,
+        // 2. Resolve each ref to get plaintext → canonical mapping
+        for entry in &ref_entries {
+            let canonical = match entry["ref_canonical"].as_str() {
+                Some(c) => c,
                 None => continue,
             };
-            let keys_resp = self.agent.get(&format!("{}/api/vaults/{}/keys", self.base_url, hash))
-                .call();
-            let secrets: Vec<serde_json::Value> = match keys_resp {
-                Ok(resp) => {
-                    let data: serde_json::Value = resp.into_json().unwrap_or_default();
-                    data["secrets"].as_array().cloned().unwrap_or_default()
-                }
-                Err(_) => continue,
-            };
-
-            for secret in &secrets {
-                let name = match secret["name"].as_str() {
-                    Some(n) => n,
-                    None => continue,
-                };
-                // Resolve via vault key endpoint (uses agentDEK)
-                let resolve_resp = self.agent.get(
-                    &format!("{}/api/vaults/{}/keys/{}", self.base_url, hash, urlencoding::encode(name))
-                ).call();
-                if let Ok(resp) = resolve_resp {
-                    let data: serde_json::Value = resp.into_json().unwrap_or_default();
-                    if let (Some(value), Some(token)) = (data["value"].as_str(), data["token"].as_str()) {
-                        if !value.is_empty() {
-                            mask_map.push((value.to_string(), token.to_string()));
-                        }
+            let resolve_resp = self.agent.get(
+                &format!("{}/api/resolve/{}", self.base_url, urlencoding::encode(canonical))
+            ).call();
+            if let Ok(resp) = resolve_resp {
+                let data: serde_json::Value = resp.into_json().unwrap_or_default();
+                if let Some(value) = data["value"].as_str() {
+                    if !value.is_empty() {
+                        mask_map.push((value.to_string(), canonical.to_string()));
                     }
                 }
             }
