@@ -184,6 +184,20 @@ if [[ -n "$composite_key" || -n "$composite_key2" ]]; then
   found=1
 fi
 
+# 11. 프론트엔드 소스와 ui_dist 빌드 동기화 체크
+UI_SRC="services/vaultcenter/frontend/admin/src"
+UI_DIST="services/vaultcenter/internal/api/admin/ui_dist"
+if [[ -d "$UI_SRC" && -d "$UI_DIST" ]]; then
+  src_newest=$(find "$UI_SRC" -name "*.js" -o -name "*.vue" -o -name "*.css" 2>/dev/null | xargs stat -f %m 2>/dev/null | sort -rn | head -1)
+  dist_newest=$(find "$UI_DIST" -name "*.js" -o -name "*.css" -o -name "*.html" 2>/dev/null | xargs stat -f %m 2>/dev/null | sort -rn | head -1)
+  if [[ -n "$src_newest" && -n "$dist_newest" && "$src_newest" -gt "$dist_newest" ]]; then
+    echo "❌ UI 빌드 오래됨: frontend/admin/src가 ui_dist보다 최신입니다"
+    echo "   cd services/vaultcenter/frontend/admin && npm run build"
+    echo "   cp -r dist/* ../internal/api/admin/ui_dist/"
+    found=1
+  fi
+fi
+
 if [[ $found -eq 1 ]]; then
   echo ""
   echo "기본값은 .env.example에 추가하세요."
