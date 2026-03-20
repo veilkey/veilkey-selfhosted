@@ -1,5 +1,8 @@
 #!/bin/bash
 set -euo pipefail
+#
+# ⚠️  이 스크립트의 실행으로 발생하는 모든 결과에 대한
+#     귀책사유는 실행자 본인에게 있습니다.
 
 # veil-cli uninstaller for macOS
 #

@@ -1,4 +1,4 @@
-# macOS — localvault Uninstall
+# macOS — LocalVault Uninstall
 
 ```bash
 bash install/macos/localvault/uninstall.sh

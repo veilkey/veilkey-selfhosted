@@ -1,4 +1,4 @@
-# macOS — vaultcenter Uninstall
+# macOS — VaultCenter Uninstall
 
 ```bash
 bash install/macos/vaultcenter/uninstall.sh
