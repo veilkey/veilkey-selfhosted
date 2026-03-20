@@ -23,7 +23,7 @@ if [ ! -f "docker-compose.yml" ] || [ ! -d "services" ]; then
 fi
 
 REPO_ROOT="$(pwd)"
-BIN_DIR="${VEILKEY_BIN_DIR:-$HOME/.local/bin}"
+BIN_DIR="${VEILKEY_BIN_DIR:-/usr/local/bin}"
 VEILKEY_URL="${VEILKEY_URL:-https://localhost:11181}"
 
 echo "=== VeilKey installer (macOS) ==="
@@ -33,8 +33,9 @@ echo "  Binaries: $BIN_DIR"
 echo "  URL:      $VEILKEY_URL"
 echo ""
 
-# Ensure bin dir exists
-mkdir -p "$BIN_DIR"
+# Pre-authenticate sudo (/usr/local/bin requires it)
+echo "바이너리 설치를 위해 sudo 권한이 필요합니다."
+sudo true || { echo "ERROR: sudo 인증 실패."; exit 1; }
 
 # Check prerequisites
 for cmd in cargo docker; do
@@ -59,8 +60,8 @@ echo "[3/5] Installing to $BIN_DIR..."
 RELEASE="$REPO_ROOT/target/release"
 for bin in veil veilkey veilkey-cli veilkey-session-config; do
     if [ -f "$RELEASE/$bin" ]; then
-        cp "$RELEASE/$bin" "$BIN_DIR/$bin"
-        xattr -cr "$BIN_DIR/$bin" 2>/dev/null || true
+        sudo cp "$RELEASE/$bin" "$BIN_DIR/$bin"
+        sudo codesign --force --sign - "$BIN_DIR/$bin" 2>/dev/null || true
         echo "  $bin ✓"
     fi
 done
@@ -82,16 +83,33 @@ fi
 
 # Docker
 echo "[5/5] Starting services..."
-docker compose up --build -d 2>&1 | tail -5
-
-echo ""
-# Check PATH
-if ! echo "$PATH" | tr ':' '\n' | grep -q "^$BIN_DIR$"; then
-    echo "⚠️  $BIN_DIR 가 PATH에 없습니다:"
-    echo "   echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.zshrc && source ~/.zshrc"
-    echo ""
+# Check if our own docker is already running (safe to recreate)
+OWN_DOCKER=false
+if docker compose ps --quiet 2>/dev/null | grep -q .; then
+    OWN_DOCKER=true
 fi
 
+PORT="${VEILKEY_URL##*:}"
+PORT="${PORT%%/*}"
+if [ "$OWN_DOCKER" = false ] && lsof -i ":$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo ""
+    echo "⚠️  포트 $PORT 가 이미 사용 중입니다 (다른 인스턴스)."
+    echo ""
+    echo "   기존 인스턴스를 중지하려면:"
+    echo "     cd <기존 경로> && docker compose down"
+    echo ""
+    echo "   ⚠️  중지 전 data/ 폴더를 백업하세요:"
+    echo "     cp -r data/ data-backup-\$(date +%Y%m%d)/"
+    echo ""
+    echo "   또는 다른 포트로 설치:"
+    echo "     VEILKEY_URL=https://localhost:$((PORT+1)) bash scripts/install-veil-mac.sh"
+    echo ""
+    echo "   Docker 시작을 건너뜁니다."
+else
+    docker compose up --build -d 2>&1 | tail -5
+fi
+
+echo ""
 echo "=== Installation complete ==="
 echo ""
 echo "1. 초기 설정:"
@@ -105,6 +123,9 @@ echo "3. 여러 인스턴스:"
 echo "   다른 폴더에 clone → 다른 포트로 설치:"
 echo "   VEILKEY_URL=https://localhost:11182 bash scripts/install-veil-mac.sh"
 echo ""
-echo "4. 서버 재시작 후:"
+echo "4. 처음 설치 후 (복사해서 실행):"
+echo "   sudo codesign --force --sign - /usr/local/bin/veil /usr/local/bin/veilkey-cli /usr/local/bin/veilkey /usr/local/bin/veilkey-session-config"
+echo ""
+echo "5. 서버 재시작 후:"
 echo "   마스터 비밀번호 입력 필요 (비밀번호는 메모리에만 존재)"
 echo ""
