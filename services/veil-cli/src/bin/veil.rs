@@ -36,14 +36,25 @@ fn main() {
     let cli_bin = find_bin("VEILKEY_CLI_BIN", "veilkey-cli");
 
     env::set_var("VEILKEY_VEIL", "1");
+    // Set custom prompt so user knows they're in veil
+    env::set_var("VEIL_PS1", "(veil) ");
 
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
-        // veil → enter protected shell
+        // Create temp rcfile for custom prompt
+        let rc_path = format!("{}/veil-bashrc", env::temp_dir().display());
+        let rc_content = r#"
+[ -f ~/.bashrc ] && source ~/.bashrc
+[ -f ~/.bash_profile ] && source ~/.bash_profile
+export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
+"#;
+        let _ = std::fs::write(&rc_path, rc_content);
+
+        // veil → enter protected shell with custom prompt
         exec_replace(
             &cli_bin,
-            &["wrap-pty".to_string(), "bash".to_string(), "-li".to_string()],
+            &["wrap-pty".to_string(), "bash".to_string(), "--rcfile".to_string(), rc_path],
         );
     }
 
