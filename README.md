@@ -27,6 +27,11 @@ When secrets appear in PTY output, they are automatically replaced with VK refs.
 
 ## Architecture
 
+<div align="center">
+  <img src=".github/architecture.jpeg" alt="VaultCenter and LocalVaults" width="720">
+  <p><em>VaultCenter manages encryption keys. LocalVaults store ciphertext only.</em></p>
+</div>
+
 ```
 VaultCenter (key manager)          LocalVault (vault)
 ┌──────────────────────┐          ┌──────────────────┐
