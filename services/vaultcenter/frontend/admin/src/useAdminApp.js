@@ -3039,6 +3039,15 @@ async function unlock(password) {
     }
 }
 
+async function adminLogout() {
+    try {
+        await request('/api/admin/logout', { method: 'POST' });
+    } catch (_) {}
+    state.ui.adminRequired = true;
+    state.ui.locked = false;
+    render();
+}
+
 async function boot() {
     applyRoute(window.location.pathname, window.location.search);
     // 1. Check admin auth
@@ -3090,6 +3099,7 @@ async function boot() {
 return {
                 state,
                 adminLogin,
+                adminLogout,
                 unlock,
                 onGlobalSearchInput,
                 routePath,

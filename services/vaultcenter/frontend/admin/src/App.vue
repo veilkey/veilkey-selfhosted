@@ -35,6 +35,7 @@
             </div>
         </div>
         <div class="topbar-status" id="topbar-status" v-html="state.ui.topbarStatusHTML"></div>
+        <button class="topbar-logout" @click="adminLogout" title="로그아웃">로그아웃</button>
     </header>
     <div class="shell">
         <aside class="sidebar" id="sidebar" v-html="state.ui.sidebarHTML"></aside>
