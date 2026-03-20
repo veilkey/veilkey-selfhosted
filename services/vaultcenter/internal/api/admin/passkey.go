@@ -428,9 +428,11 @@ func (h *Handler) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Verify signature: signature is over (authData + SHA256(clientDataJSON))
+	// Verify signature: signature is over SHA256(authData + SHA256(clientDataJSON))
 	clientDataHash := sha256.Sum256(clientDataJSONBytes)
-	signedData := append(authDataBytes, clientDataHash[:]...)
+	signedData := make([]byte, 0, len(authDataBytes)+len(clientDataHash))
+	signedData = append(signedData, authDataBytes...)
+	signedData = append(signedData, clientDataHash[:]...)
 
 	sigBytes, err := base64RawURLDecode(req.Response.Signature)
 	if err != nil {
