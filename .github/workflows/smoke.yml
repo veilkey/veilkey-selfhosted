@@ -61,29 +61,54 @@ jobs:
           # Start localvault and veil independently (skip depends_on healthcheck)
           docker compose up -d --no-deps localvault veil
 
-      - name: Unlock VaultCenter
+      - name: Setup and unlock VaultCenter
         run: |
-          # Auto-complete flow sets password from VEILKEY_PASSWORD_FILE or needs manual unlock
-          # Try unlocking with a default test password
-          curl -sk -X POST https://localhost:11181/api/setup/init \
-            -H 'Content-Type: application/json' \
-            -d '{"password":"smoke-test-password","admin_password":"smoke-test-password"}' || true
-          curl -sk -X POST https://localhost:11181/api/unlock \
-            -H 'Content-Type: application/json' \
-            -d '{"password":"smoke-test-password"}'
-          # Verify
-          curl -sk https://localhost:11181/health
+          # Retry setup/init + unlock with backoff
+          for i in $(seq 1 30); do
+            echo "  Attempt $i..."
+            # Try init first (first run)
+            curl -sk --max-time 5 -X POST https://localhost:11181/api/setup/init \
+              -H 'Content-Type: application/json' \
+              -d '{"password":"smoke-test-password","admin_password":"smoke-test-password"}' 2>/dev/null || true
+            # Try unlock (after init or restart)
+            curl -sk --max-time 5 -X POST https://localhost:11181/api/unlock \
+              -H 'Content-Type: application/json' \
+              -d '{"password":"smoke-test-password"}' 2>/dev/null || true
+            # Check health
+            HEALTH=$(curl -sk --max-time 5 https://localhost:11181/health 2>/dev/null || true)
+            echo "  Health: $HEALTH"
+            if echo "$HEALTH" | grep -q '"status":"ok"'; then
+              echo "VaultCenter ready!"
+              break
+            fi
+            sleep 3
+          done
+          # Final check must pass
+          curl -sk https://localhost:11181/health | grep -q '"status":"ok"'
 
       - name: Init and unlock LocalVault
         run: |
+          # Wait for localvault to be reachable
+          for i in $(seq 1 30); do
+            LV_STATUS=$(curl -sk --max-time 5 https://localhost:11180/health 2>/dev/null || true)
+            echo "  [$i] LocalVault: $LV_STATUS"
+            if echo "$LV_STATUS" | grep -q '"status"'; then break; fi
+            sleep 3
+          done
           docker compose exec -T localvault sh -c \
             'echo "smoke-test-password" | veilkey-localvault init --root --center https://vaultcenter:10181'
           docker compose restart localvault
           sleep 5
-          curl -sk -X POST https://localhost:11180/api/unlock \
-            -H 'Content-Type: application/json' \
-            -d '{"password":"smoke-test-password"}'
-          curl -sk https://localhost:11180/health
+          for i in $(seq 1 20); do
+            curl -sk --max-time 5 -X POST https://localhost:11180/api/unlock \
+              -H 'Content-Type: application/json' \
+              -d '{"password":"smoke-test-password"}' 2>/dev/null || true
+            HEALTH=$(curl -sk --max-time 5 https://localhost:11180/health 2>/dev/null || true)
+            echo "  [$i] Health: $HEALTH"
+            if echo "$HEALTH" | grep -q '"status":"ok"'; then break; fi
+            sleep 3
+          done
+          curl -sk https://localhost:11180/health | grep -q '"status":"ok"'
 
       - name: Create test secret
         run: |
