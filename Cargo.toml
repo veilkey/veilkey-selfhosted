@@ -1,5 +1,6 @@
 [workspace]
 members = [
     "services/veil-cli",
+    "services/installer",
 ]
 resolver = "2"

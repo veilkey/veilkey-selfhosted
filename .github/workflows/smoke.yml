@@ -112,6 +112,16 @@ jobs:
 
       - name: Create test secret
         run: |
+          # Wait for VaultCenter to be ready
+          for i in $(seq 1 10); do
+            if curl -sk --max-time 3 https://localhost:11181/health 2>/dev/null | grep -q '"ok"'; then
+              break
+            fi
+            echo "  Waiting for VaultCenter... [$i]"
+            sleep 3
+          done
+          echo "VaultCenter: $(curl -sk https://localhost:11181/health 2>/dev/null)"
+
           # Admin login — extract session cookie from Set-Cookie header
           LOGIN_HEADERS=$(curl -sk -X POST https://localhost:11181/api/admin/login \
             -H 'Content-Type: application/json' \

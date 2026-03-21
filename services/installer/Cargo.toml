@@ -1,0 +1,14 @@
+[package]
+name = "veilkey-installer"
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Cross-platform installer for VeilKey Self-Hosted"
+
+[[bin]]
+name = "veilkey-installer"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+colored = "2"
