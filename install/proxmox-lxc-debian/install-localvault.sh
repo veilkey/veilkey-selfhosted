@@ -105,7 +105,10 @@ else
         -keyout "$TLS_DIR/key.pem" -out "$TLS_DIR/cert.pem" \
         -days 3650 -nodes \
         -subj "/CN=$(hostname)" \
-        -addext "subjectAltName=$SAN" 2>/dev/null
+        -addext "subjectAltName=$SAN" \
+        -addext "basicConstraints=critical,CA:FALSE" \
+        -addext "keyUsage=digitalSignature,keyEncipherment" \
+        -addext "extendedKeyUsage=serverAuth" 2>/dev/null
     echo "  Certificate generated (SAN: $SAN)"
 fi
 
