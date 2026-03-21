@@ -13,6 +13,12 @@
 
 Troubleshooting: [vaultcenter/troubleshoot.md](./macos/vaultcenter/troubleshoot.md)
 
+### Ubuntu / Debian
+
+| Component | Install | Guide |
+|-----------|---------|-------|
+| VeilKey (full) | `ubuntu-debian/install-veilkey.sh` | [install-veilkey.md](./ubuntu-debian/install-veilkey.md) |
+
 ### Proxmox LXC (Debian)
 
 | Component | Install | Uninstall | Guide |
