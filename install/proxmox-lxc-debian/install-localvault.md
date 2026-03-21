@@ -1,21 +1,22 @@
-# Proxmox Host — Standalone LocalVault Installation
+# Standalone LocalVault Installation
 
-Install a standalone LocalVault on the Proxmox host, connecting to an existing VaultCenter (e.g. running in LXC).
+Install a standalone LocalVault on the Proxmox host or any LXC, connecting to an existing VaultCenter.
 
 ## Prerequisites
 
 - Go: `apt install golang`
+- openssl (for TLS certificate generation)
 - VaultCenter running and unlocked
 
 ## Install
 
 ```bash
 cd veilkey-selfhosted
-VEILKEY_CENTER_URL=https://<CT_IP>:<VC_PORT> \
+VEILKEY_CENTER_URL=https://<HOST>:<VC_PORT> \
   bash install/proxmox-lxc-debian/install-localvault.sh
 ```
 
-The script handles everything: build, init, start, and unlock.
+The script handles: source update, build, TLS cert generation, init, start, and unlock.
 
 ## Options
 
@@ -25,10 +26,22 @@ The script handles everything: build, init, start, and unlock.
 | `VEILKEY_PORT` | `10180` | LocalVault listen port |
 | `VEILKEY_NAME` | `$(hostname)` | Vault display name |
 | `VEILKEY_PASSWORD` | - | Master password (prompted if not set) |
+| `VEILKEY_BULK_APPLY_ALLOWED_PATHS` | - | Comma-separated absolute paths for bulk-apply targets |
+
+## What it does
+
+| Step | First run | Re-run (update) |
+|------|-----------|-----------------|
+| Source update | - | `git pull` |
+| Build | Go build | Rebuild with latest |
+| TLS certificate | Auto-generate (self-signed, 10yr) | Preserved |
+| .env config | Created | Preserved (bulk paths updated) |
+| Init | Password → KEK → salt | Skipped (salt exists) |
+| Start + unlock | HTTPS start → unlock | Restart → unlock |
 
 ## After install
 
-The vault auto-registers with VaultCenter via heartbeat. Check the keycenter UI or API:
+The vault auto-registers with VaultCenter via heartbeat:
 
 ```bash
 curl -sk <VC_URL>/api/agents
@@ -43,8 +56,8 @@ tail -f .localvault/localvault.log
 # Stop
 kill $(cat .localvault/localvault.pid)
 
-# Restart (re-run installer — it skips init if already initialized)
-VEILKEY_CENTER_URL=https://<CT_IP>:<VC_PORT> \
+# Update (re-run — pulls latest, rebuilds, restarts)
+VEILKEY_CENTER_URL=https://<HOST>:<VC_PORT> \
   bash install/proxmox-lxc-debian/install-localvault.sh
 ```
 
@@ -53,5 +66,3 @@ VEILKEY_CENTER_URL=https://<CT_IP>:<VC_PORT> \
 ```bash
 bash install/proxmox-lxc-debian/uninstall-localvault.sh
 ```
-
-See [uninstall-localvault.sh](./uninstall-localvault.sh) for details.
