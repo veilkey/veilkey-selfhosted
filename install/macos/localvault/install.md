@@ -15,7 +15,7 @@ Builds and starts LocalVault via Docker Compose. Requires VaultCenter to be heal
 
 ## After install
 
-Register LocalVault with VaultCenter. See [Post-Install Setup](../../../docs/setup.md).
+Register LocalVault with VaultCenter. See [Post-Install Setup](../../../docs/setup/README.md).
 
 ## Standalone LocalVault (without Docker)
 

@@ -45,7 +45,7 @@ cd veilkey-selfhosted
 bash install/macos/bootstrap/install-all.sh
 ```
 
-설치 후: [초기 설정 가이드](./docs/setup.md) 참조
+설치 후: [초기 설정 가이드](./docs/setup/README.md) 참조
 
 ## CLI 도구
 

@@ -44,7 +44,7 @@ Clones the repo automatically, then runs `install-all.sh`.
 
 > **HTTPS 인증서 경고?** See [vaultcenter/troubleshoot.md](../vaultcenter/troubleshoot.md)
 
-See [Post-Install Setup](../../../docs/setup.md) for full initialization steps.
+See [Post-Install Setup](../../../docs/setup/README.md) for full initialization steps.
 
 ## Update
 

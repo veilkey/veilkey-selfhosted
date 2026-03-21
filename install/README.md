@@ -29,4 +29,4 @@ Troubleshooting: [vaultcenter/troubleshoot.md](./macos/vaultcenter/troubleshoot.
 
 ## After installation
 
-See [Post-Install Setup](../docs/setup.md).
+See [Post-Install Setup](../docs/setup/README.md).

@@ -87,7 +87,7 @@ CT_IP=<IP>/<MASK> CT_GW=<GATEWAY> bash install/proxmox-lxc-debian/install-veilke
 
 ### After install
 
-See [Post-Install Setup](./docs/setup.md) for VaultCenter initialization, LocalVault registration, and secret storage.
+See [Post-Install Setup](./docs/setup/README.md) for VaultCenter initialization, LocalVault registration, and secret storage.
 
 ## Key Features
 

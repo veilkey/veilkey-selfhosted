@@ -27,4 +27,4 @@ VEILKEY_BULK_APPLY_ALLOWED_PATHS=<PATHS> \
   bash install/proxmox-lxc-debian/install-localvault.sh
 ```
 
-See [install-localvault.md](../../install/proxmox-lxc-debian/install-localvault.md) for details.
+See [install-localvault.md](../../../install/proxmox-lxc-debian/install-localvault.md) for details.

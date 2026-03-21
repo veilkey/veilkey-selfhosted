@@ -5,7 +5,7 @@ Deploy secrets to files on LocalVault hosts. VaultCenter renders templates with 
 ## Prerequisites
 
 - Secrets promoted to the target vault (see [manage.md](./manage.md))
-- `VEILKEY_BULK_APPLY_ALLOWED_PATHS` set on LocalVault (see [install-localvault.md](../../install/proxmox-lxc-debian/install-localvault.md))
+- `VEILKEY_BULK_APPLY_ALLOWED_PATHS` set on LocalVault (see [install-localvault.md](../../../install/proxmox-lxc-debian/install-localvault.md))
 - Target directory exists on LocalVault host
 
 ## 1. Create template

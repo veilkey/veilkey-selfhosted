@@ -219,7 +219,7 @@ pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
 # Expected: VK:LOCAL:yyyyyyyy (masked!)
 ```
 
-For full setup details, see [Post-Install Setup](../../docs/setup.md).
+For full setup details, see [Post-Install Setup](../../docs/setup/README.md).
 
 To add a standalone LocalVault, see [install-localvault.md](../common/install-localvault.md).
 
