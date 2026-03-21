@@ -277,8 +277,22 @@ func (s *Server) ResolveTemplateValue(vaultHash, kind, name string) (string, boo
 }
 
 func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce []byte, name string) (string, bool) {
-	// Try to fetch the ciphertext directly and decrypt with the agent DEK.
-	_, ciphertext, nonce, err := s.FetchAgentCiphertext(agentURL, name)
+	// Resolve name → ref via agent's secret meta endpoint, then fetch ciphertext by ref.
+	ref := name
+	if metaResp, metaErr := s.httpClient.Get(httputil.JoinPath(agentURL, "/api/secrets/meta", name)); metaErr == nil {
+		defer metaResp.Body.Close()
+		if metaResp.StatusCode == 200 {
+			var meta struct {
+				Ref string `json:"ref"`
+			}
+			if json.NewDecoder(metaResp.Body).Decode(&meta) == nil && strings.TrimSpace(meta.Ref) != "" {
+				ref = strings.TrimSpace(meta.Ref)
+			}
+		}
+	}
+
+	// Fetch ciphertext by ref and decrypt with the agent DEK.
+	_, ciphertext, nonce, err := s.FetchAgentCiphertext(agentURL, ref)
 	if err == nil {
 		agentDEK, dekErr := s.DecryptAgentDEK(encDEK, encNonce)
 		if dekErr == nil {
@@ -288,7 +302,20 @@ func (s *Server) resolveBulkApplySecretValue(agentURL string, encDEK, encNonce [
 			}
 		}
 	}
-	// Fall back to the agent's own resolve endpoint.
+	// Fall back: try with original name as ref (backward compatibility).
+	if ref != name {
+		_, ciphertext2, nonce2, err2 := s.FetchAgentCiphertext(agentURL, name)
+		if err2 == nil {
+			agentDEK, dekErr := s.DecryptAgentDEK(encDEK, encNonce)
+			if dekErr == nil {
+				plaintext, decErr := crypto.Decrypt(agentDEK, ciphertext2, nonce2)
+				if decErr == nil {
+					return string(plaintext), true
+				}
+			}
+		}
+	}
+	// Last resort: agent's own resolve endpoint.
 	resp, resolveErr := s.httpClient.Get(httputil.JoinPath(agentURL, httputil.AgentPathResolve, name))
 	if resolveErr != nil {
 		return "", false

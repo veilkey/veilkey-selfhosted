@@ -262,7 +262,7 @@ func (h *Handler) proxyAndRecordWorkflow(w http.ResponseWriter, r *http.Request,
 	}
 	statusCode, body, err := h.proxyBulkApplyWorkflow(r, vaultHash, workflowName, endpoint)
 	if err != nil {
-		httputil.RespondError(w, statusCode, "workflow execution failed")
+		httputil.RespondError(w, statusCode, fmt.Sprintf("workflow execution failed: %v", err))
 		return
 	}
 	var payload map[string]any
