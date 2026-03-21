@@ -26,17 +26,77 @@ type bulkApplyWorkflowRequest struct {
 	Steps []bulkApplyStep `json:"steps"`
 }
 
-var allowedBulkApplyTargets = map[string]struct{}{
+// defaultBulkApplyTargets are always allowed.
+var defaultBulkApplyTargets = map[string]struct{}{
 	"/opt/mattermost/config/config.json":                     {},
 	"/opt/mattermost/.env":                                   {},
 	"/etc/systemd/system/mattermost.service.d/override.conf": {},
 	"/etc/gitlab/gitlab.rb":                                  {},
 }
 
-var allowedBulkApplyHooks = map[string][]string{
+// extraBulkApplyTargets is populated from VEILKEY_BULK_APPLY_ALLOWED_PATHS env var
+// (comma-separated absolute paths) at init time.
+var extraBulkApplyTargets = map[string]struct{}{}
+
+// defaultBulkApplyHooks are always allowed.
+var defaultBulkApplyHooks = map[string][]string{
 	"reload_systemd":     {"systemctl", "daemon-reload"},
 	"restart_mattermost": {"systemctl", "restart", "mattermost"},
 	"reconfigure_gitlab": {"gitlab-ctl", "reconfigure"},
+}
+
+// extraBulkApplyHooks is populated from VEILKEY_BULK_APPLY_ALLOWED_HOOKS env var
+// (comma-separated name:cmd pairs, e.g. "restart_nginx:systemctl restart nginx")
+var extraBulkApplyHooks = map[string][]string{}
+
+func init() {
+	// Load extra allowed paths from env
+	if paths := os.Getenv("VEILKEY_BULK_APPLY_ALLOWED_PATHS"); paths != "" {
+		for _, p := range strings.Split(paths, ",") {
+			p = strings.TrimSpace(p)
+			if p == "" || !filepath.IsAbs(p) || strings.Contains(p, "..") {
+				continue
+			}
+			extraBulkApplyTargets[p] = struct{}{}
+		}
+	}
+	// Load extra allowed hooks from env
+	if hooks := os.Getenv("VEILKEY_BULK_APPLY_ALLOWED_HOOKS"); hooks != "" {
+		for _, entry := range strings.Split(hooks, ",") {
+			entry = strings.TrimSpace(entry)
+			parts := strings.SplitN(entry, ":", 2)
+			if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
+				continue
+			}
+			name := strings.TrimSpace(parts[0])
+			cmdParts := strings.Fields(strings.TrimSpace(parts[1]))
+			if len(cmdParts) > 0 {
+				extraBulkApplyHooks[name] = cmdParts
+			}
+		}
+	}
+}
+
+func isAllowedBulkApplyTarget(path string) bool {
+	p := strings.TrimSpace(path)
+	if _, ok := defaultBulkApplyTargets[p]; ok {
+		return true
+	}
+	if _, ok := extraBulkApplyTargets[p]; ok {
+		return true
+	}
+	return false
+}
+
+func getAllowedBulkApplyHook(name string) ([]string, bool) {
+	n := strings.TrimSpace(name)
+	if cmd, ok := defaultBulkApplyHooks[n]; ok {
+		return cmd, true
+	}
+	if cmd, ok := extraBulkApplyHooks[n]; ok {
+		return cmd, true
+	}
+	return nil, false
 }
 
 func recursiveJSONMerge(dst map[string]any, src map[string]any) map[string]any {
@@ -98,7 +158,7 @@ func validateBulkApplyStep(step bulkApplyStep) error {
 	if strings.TrimSpace(step.Name) == "" {
 		return fmt.Errorf("step name is required")
 	}
-	if _, ok := allowedBulkApplyTargets[strings.TrimSpace(step.TargetPath)]; !ok {
+	if !isAllowedBulkApplyTarget(step.TargetPath) {
 		return fmt.Errorf("target path is not allowed: %s", step.TargetPath)
 	}
 	switch strings.TrimSpace(step.Format) {
@@ -121,7 +181,7 @@ func validateBulkApplyStep(step bulkApplyStep) error {
 		}
 	}
 	if hook := strings.TrimSpace(step.Hook); hook != "" {
-		if _, ok := allowedBulkApplyHooks[hook]; !ok {
+		if _, ok := getAllowedBulkApplyHook(hook); !ok {
 			return fmt.Errorf("hook is not allowed: %s", hook)
 		}
 	}
@@ -203,7 +263,7 @@ func applyBulkApplyStep(step bulkApplyStep) error {
 }
 
 func runAllowedHook(name string) (string, error) {
-	cmdv, ok := allowedBulkApplyHooks[strings.TrimSpace(name)]
+	cmdv, ok := getAllowedBulkApplyHook(name)
 	if !ok {
 		return "", fmt.Errorf("hook is not allowed: %s", name)
 	}
