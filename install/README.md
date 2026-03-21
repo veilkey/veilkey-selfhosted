@@ -13,6 +13,12 @@
 
 Troubleshooting: [vaultcenter/troubleshoot.md](./macos/vaultcenter/troubleshoot.md)
 
+### Windows
+
+| Component | Install | Uninstall | Guide |
+|-----------|---------|-----------|-------|
+| VeilKey (full) | `windows\install-veilkey.ps1` | `windows\uninstall-veilkey.ps1` | [install-veilkey.md](./windows/install-veilkey.md) |
+
 ### Ubuntu / Debian
 
 | Component | Install | Guide |
