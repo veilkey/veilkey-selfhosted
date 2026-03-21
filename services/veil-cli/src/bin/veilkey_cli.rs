@@ -257,10 +257,28 @@ fn cmd_filter(file: &str, api_url: &str, log_path: &str, patterns_file: Option<&
     process_stream(&mut detector, reader);
 
     if detector.stats.detections > 0 {
-        eprintln!(
-            "\n[veilkey] {} secret(s) detected and replaced",
-            detector.stats.detections
-        );
+        let entries = logger.read_entries();
+        let temp_count = entries.iter()
+            .filter(|e| e.veilkey.contains(":TEMP:"))
+            .count();
+
+        if temp_count > 0 {
+            eprintln!(
+                "\n\x1b[1;33m[veilkey] WARNING: {} of {} secret(s) replaced with VK:TEMP references.\x1b[0m",
+                temp_count, detector.stats.detections
+            );
+            eprintln!(
+                "\x1b[33m  TEMP refs expire and should NOT be written to config files.\x1b[0m"
+            );
+            eprintln!(
+                "\x1b[33m  Use 'POST /api/activate' to convert TEMP → LOCAL before saving.\x1b[0m"
+            );
+        } else {
+            eprintln!(
+                "\n[veilkey] {} secret(s) detected and replaced",
+                detector.stats.detections
+            );
+        }
     }
 }
 

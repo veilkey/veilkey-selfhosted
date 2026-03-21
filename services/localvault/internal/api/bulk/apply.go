@@ -169,6 +169,9 @@ func validateBulkApplyStep(step bulkApplyStep) error {
 	if strings.TrimSpace(step.Content) == "" {
 		return fmt.Errorf("content is required")
 	}
+	if strings.Contains(step.Content, "VK:TEMP:") {
+		return fmt.Errorf("content contains VK:TEMP references — TEMP refs expire and must be activated to LOCAL before writing to files")
+	}
 	parent := filepath.Dir(step.TargetPath)
 	if _, err := os.Stat(parent); err != nil {
 		return fmt.Errorf("parent path not found: %s", parent)
