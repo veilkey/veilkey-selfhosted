@@ -51,8 +51,8 @@ Identity rules:
 ## Related Components
 
 - [`vaultcenter`](../vaultcenter) -- central control plane
-- [`installer`](../../installer) -- installs and verifies LocalVault targets
-- [`cli`](../../client/cli) -- operator entrypoint, local tooling, and platform integration (Proxmox, Docker, etc.)
+- [`install/`](../../install/README.md) -- platform-specific install guides
+- [`veil-cli`](../veil-cli) -- CLI tools (veil, veilkey-cli)
 
 ## VaultCenter URL Resolution
 
