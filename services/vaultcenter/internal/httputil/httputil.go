@@ -39,6 +39,7 @@ const (
 	AgentPathSecretFields = agentapi.PathSecretFields
 	AgentPathCipher       = agentapi.PathCipher
 	AgentPathResolve      = agentapi.PathResolve
+	AgentPathSecretMeta   = agentapi.PathSecretMeta
 	AgentPathRekey        = agentapi.PathRekey
 )
 
