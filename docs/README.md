@@ -14,7 +14,8 @@
 |----------|-------------|
 | [architecture.md](./architecture.md) | System architecture, VC/LV split, agentDEK, blockchain |
 | [install/](../install/) | Platform-specific installation guides (macOS, Proxmox LXC) |
-| [setup.md](./setup.md) | Post-install setup (common to all platforms) |
+| [setup/](./setup/README.md) | Post-install setup (VaultCenter, LocalVault, Secrets, Bulk Apply, veil CLI) |
+| [setup.md](./setup.md) | Legacy redirect → setup/ |
 | [installation.md](./installation.md) | Legacy quick start (see install/ for platform guides) |
 | [cli.md](./cli.md) | CLI reference (veil, veilkey, veilkey-cli) |
 | [security-model.md](./security-model.md) | Security model, PTY masking, threat boundaries |
