@@ -204,9 +204,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let input_ref = recent_input.clone();
             let stdout_fd = io::stdout().as_raw_fd();
             let mut partial_buf: Vec<u8> = Vec::new();
-            // Accumulate raw-flushed data (echo-back) to detect secrets.
-            // Cleared when newline-path masking runs.
-            let mut raw_flush_accum: Vec<u8> = Vec::new();
 
             let mut buf = [0u8; 32768];
             loop {
@@ -227,35 +224,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     let ri = input_ref.lock().unwrap().clone();
                     let masked =
                         masker::mask_output(&to_mask, &mask.read().unwrap(), &patterns, &client, &ri);
-
-                    // If masking replaced something, check if the echo-back line
-                    // (accumulated raw flushes + pre-newline part of to_mask)
-                    // contained a secret. If so, clear the echo-back line above.
-                    if masked != to_mask {
-                        let mut echo_line = raw_flush_accum.clone();
-                        // The tail of echo-back may be in to_mask before the first \n
-                        if let Some(nl) = to_mask.iter().position(|&b| b == b'\n') {
-                            echo_line.extend_from_slice(&to_mask[..nl]);
-                        }
-                        if !echo_line.is_empty() {
-                            let echo_str = String::from_utf8_lossy(&echo_line);
-                            let map = mask.read().unwrap();
-                            let echo_had_secret = map.iter().any(|(pt, _)| {
-                                !pt.is_empty() && echo_str.contains(pt.as_str())
-                            });
-                            if echo_had_secret {
-                                unsafe {
-                                    let clear_prev = b"\x1b[1A\r\x1b[2K\x1b[1B";
-                                    libc::write(
-                                        stdout_fd,
-                                        clear_prev.as_ptr() as _,
-                                        clear_prev.len(),
-                                    );
-                                }
-                            }
-                        }
-                    }
-                    raw_flush_accum.clear();
 
                     unsafe {
                         libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
@@ -280,7 +248,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                         } else {
                             // No more data — mask and flush (catches history
                             // recall, pasted secrets, prompts pass through unchanged)
-                            raw_flush_accum.extend_from_slice(&partial_buf);
                             let ri = input_ref.lock().unwrap().clone();
                             let flushed = masker::mask_output(
                                 &partial_buf,
@@ -289,9 +256,9 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                                 &client,
                                 &ri,
                             );
-                            // If masking changed the output, also clear the line
-                            // first so the original text is overwritten
                             if flushed != partial_buf {
+                                // Secret was masked — clear line first to
+                                // overwrite any partial text already displayed
                                 let clear = b"\r\x1b[2K";
                                 libc::write(stdout_fd, clear.as_ptr() as _, clear.len());
                             }
