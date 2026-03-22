@@ -1039,46 +1039,20 @@ mod pty_wrap {
                                 libc::fcntl(master_fd, libc::F_SETFL, flags);
                                 if peek_result <= 0 {
                                     let buf_str = String::from_utf8_lossy(&partial_buf);
-
-                                    // Check if partial_buf is echo-back of recent input (typing in progress)
-                                    let ri = input_ref.lock().unwrap().clone();
-                                    let is_typing_echo = !ri.is_empty() && {
-                                        // Check if any known secret starts with what we see
-                                        let m = mask.read().unwrap();
-                                        m.iter().any(|(plaintext, _)| {
-                                            let pl = plaintext.as_str();
-                                            pl.len() >= 4
-                                                && buf_str.len() < pl.len()
-                                                && pl.starts_with(buf_str.as_ref())
-                                        })
-                                    };
-
                                     // Check if partial_buf ends with prefix of any known secret (4+ chars)
                                     let has_partial_secret =
                                         mask.read().unwrap().iter().any(|(plaintext, _)| {
                                             let pl = plaintext.as_str();
                                             (4..pl.len()).any(|i| buf_str.ends_with(&pl[..i]))
                                         });
-
-                                    if is_typing_echo || has_partial_secret {
-                                        // Keep collecting until no more data or newline appears
-                                        for _ in 0..50 {
-                                            std::thread::sleep(Duration::from_millis(30));
-                                            let n2 = libc::read(
-                                                master_fd,
-                                                buf.as_mut_ptr() as _,
-                                                buf.len(),
-                                            );
-                                            if n2 <= 0 {
-                                                break;
-                                            }
+                                    if has_partial_secret {
+                                        std::thread::sleep(Duration::from_millis(lookahead_ms));
+                                        let n2 =
+                                            libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
+                                        if n2 > 0 {
                                             partial_buf.extend_from_slice(&buf[..n2 as usize]);
-                                            // If newline arrived, stop collecting
-                                            if buf[..n2 as usize].contains(&b'\n') {
-                                                break;
-                                            }
+                                            continue;
                                         }
-                                        continue; // Re-enter loop to flush with masking
                                     }
                                     // Flush partial with overlap
                                     let mut combined = std::mem::take(&mut overlap_buf);
