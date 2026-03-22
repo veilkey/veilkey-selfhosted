@@ -17,7 +17,7 @@ func RunKeycenter() {
 		addr = os.Getenv("VEILKEY_ADDR")
 	}
 	if addr == "" {
-		addr = "https://10.50.0.110:11181"
+		addr = "https://localhost:10181"
 	}
 
 	// Normalize to a full URL
