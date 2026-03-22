@@ -638,6 +638,7 @@ mod pty_wrap {
         recent_input: &str,
     ) -> Vec<u8> {
         let mut s = String::from_utf8_lossy(data).to_string();
+        let mut had_replacement = false;
 
         // 1. Known secrets from mask_map — padded to same visible length
         for (plaintext, vk_ref) in mask_map {
@@ -646,7 +647,24 @@ mod pty_wrap {
                     plaintext.as_str(),
                     &padded_colorize_ref(vk_ref, plaintext.len()),
                 );
+                had_replacement = true;
             }
+        }
+
+        // If secrets were replaced, clear each affected line so echo-back is overwritten.
+        // \r = cursor to column 0, \033[2K = clear entire line.
+        if had_replacement {
+            let mut cleared = String::new();
+            for (i, line) in s.split('\n').enumerate() {
+                if i > 0 {
+                    cleared.push('\n');
+                }
+                if line.contains("\x1b[") {
+                    cleared.push_str("\r\x1b[2K");
+                }
+                cleared.push_str(line);
+            }
+            s = cleared;
         }
 
         // 2. Pattern-detected secrets — scan, register, replace with padding
