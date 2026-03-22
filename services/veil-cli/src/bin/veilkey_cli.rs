@@ -884,7 +884,36 @@ mod pty_wrap {
                                                         .push((trimmed.to_string(), r.to_string()));
                                                 }
                                             }
+                                            // Add encoded variants (base64, hex)
+                                            use base64::Engine as _;
+                                            let mut encoded: Vec<(String, String)> = Vec::new();
+                                            for (pt, vr) in &new_map {
+                                                if pt.len() < 8 {
+                                                    continue;
+                                                }
+                                                let b64 = base64::engine::general_purpose::STANDARD
+                                                    .encode(pt.as_bytes());
+                                                if !new_map.iter().any(|(p, _)| p == &b64) {
+                                                    encoded.push((b64, vr.clone()));
+                                                }
+                                                let hex: String = pt
+                                                    .bytes()
+                                                    .map(|b| format!("{:02x}", b))
+                                                    .collect();
+                                                if !new_map.iter().any(|(p, _)| p == &hex) {
+                                                    encoded.push((hex, vr.clone()));
+                                                }
+                                            }
+                                            new_map.extend(encoded);
                                             new_map.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+                                            // Remove entries where plaintext is substring of VK ref
+                                            let all_refs: Vec<String> =
+                                                new_map.iter().map(|(_, r)| r.clone()).collect();
+                                            new_map.retain(|(pt, _)| {
+                                                !all_refs
+                                                    .iter()
+                                                    .any(|r| r.contains(pt.as_str()) && r != pt)
+                                            });
                                             if let Ok(mut map) = sync_map.write() {
                                                 *map = new_map;
                                                 eprintln!(
