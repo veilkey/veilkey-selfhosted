@@ -1038,17 +1038,32 @@ mod pty_wrap {
                                 let peek_result = libc::read(master_fd, peek.as_mut_ptr() as _, 1);
                                 libc::fcntl(master_fd, libc::F_SETFL, flags);
                                 if peek_result <= 0 {
-                                    // Check if partial_buf ends with prefix of any known secret
-                                    // (removed the >8 length gate — all secrets now checked)
                                     let buf_str = String::from_utf8_lossy(&partial_buf);
-                                    // Check if partial_buf ends with a prefix of any known secret (4+ chars)
+
+                                    // Check if partial_buf is echo-back of recent input (typing in progress)
+                                    let ri = input_ref.lock().unwrap().clone();
+                                    let is_typing_echo = !ri.is_empty() && {
+                                        // Check if any known secret starts with what we see
+                                        let m = mask.read().unwrap();
+                                        m.iter().any(|(plaintext, _)| {
+                                            let pl = plaintext.as_str();
+                                            pl.len() >= 4
+                                                && buf_str.len() < pl.len()
+                                                && pl.starts_with(buf_str.as_ref())
+                                        })
+                                    };
+
+                                    // Check if partial_buf ends with prefix of any known secret (4+ chars)
                                     let has_partial_secret =
                                         mask.read().unwrap().iter().any(|(plaintext, _)| {
                                             let pl = plaintext.as_str();
                                             (4..pl.len()).any(|i| buf_str.ends_with(&pl[..i]))
                                         });
-                                    if has_partial_secret {
-                                        std::thread::sleep(Duration::from_millis(lookahead_ms));
+
+                                    if is_typing_echo || has_partial_secret {
+                                        // Wait longer — more data likely coming
+                                        let wait = if is_typing_echo { 200 } else { lookahead_ms };
+                                        std::thread::sleep(Duration::from_millis(wait));
                                         let n2 =
                                             libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
                                         if n2 > 0 {
