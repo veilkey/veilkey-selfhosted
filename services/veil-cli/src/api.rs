@@ -98,6 +98,15 @@ impl VeilKeyClient {
         self.agent.get(url).call()
     }
 
+    #[allow(clippy::result_large_err)]
+    pub fn raw_get_with_timeout(
+        &self,
+        url: &str,
+        timeout: std::time::Duration,
+    ) -> Result<ureq::Response, ureq::Error> {
+        self.agent.get(url).timeout(timeout).call()
+    }
+
     pub fn issue(&self, value: &str) -> Result<String, String> {
         let value = value.trim_end_matches(['\r', '\n']);
         {
@@ -261,37 +270,7 @@ impl VeilKeyClient {
             }
         }
 
-        // Add encoded variants (base64, hex)
-        let mut encoded_variants: Vec<(String, String)> = Vec::new();
-        for (plaintext, vk_ref) in &result {
-            if plaintext.len() < 8 {
-                continue;
-            }
-            let b64_std = base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes());
-            if !result.iter().any(|(p, _)| p == &b64_std) {
-                encoded_variants.push((b64_std, vk_ref.clone()));
-            }
-            let b64_url = base64::engine::general_purpose::URL_SAFE.encode(plaintext.as_bytes());
-            if b64_url != base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes())
-                && !result.iter().any(|(p, _)| p == &b64_url)
-            {
-                encoded_variants.push((b64_url, vk_ref.clone()));
-            }
-            let hex_lower: String = plaintext.bytes().map(|b| format!("{:02x}", b)).collect();
-            if !result.iter().any(|(p, _)| p == &hex_lower) {
-                encoded_variants.push((hex_lower, vk_ref.clone()));
-            }
-        }
-        result.extend(encoded_variants);
-        result.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
-
-        // Remove entries where plaintext is a substring of any VK ref
-        let all_refs: Vec<String> = result.iter().map(|(_, r)| r.clone()).collect();
-        result.retain(|(plaintext, _)| {
-            !all_refs
-                .iter()
-                .any(|r| r.contains(plaintext.as_str()) && r != plaintext)
-        });
+        enrich_mask_map(&mut result);
 
         Some(result)
     }
@@ -326,7 +305,7 @@ impl VeilKeyClient {
                 }
             }
         }
-        result.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        enrich_mask_map(&mut result);
         Some(result)
     }
 
@@ -342,6 +321,41 @@ impl VeilKeyClient {
             .map(|r| r.status() == 200)
             .unwrap_or(false)
     }
+}
+
+/// Add encoded variants (base64, hex) to a mask_map, sort by length descending,
+/// and remove entries where plaintext is a substring of any VK ref.
+pub fn enrich_mask_map(map: &mut Vec<(String, String)>) {
+    let mut encoded: Vec<(String, String)> = Vec::new();
+    for (plaintext, vk_ref) in map.iter() {
+        if plaintext.len() < 8 {
+            continue;
+        }
+        let b64_std =
+            base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes());
+        if !map.iter().any(|(p, _)| p == &b64_std) {
+            encoded.push((b64_std.clone(), vk_ref.clone()));
+        }
+        let b64_url =
+            base64::engine::general_purpose::URL_SAFE.encode(plaintext.as_bytes());
+        if b64_url != b64_std && !map.iter().any(|(p, _)| p == &b64_url) {
+            encoded.push((b64_url, vk_ref.clone()));
+        }
+        let hex: String = plaintext.bytes().map(|b| format!("{:02x}", b)).collect();
+        if !map.iter().any(|(p, _)| p == &hex) {
+            encoded.push((hex, vk_ref.clone()));
+        }
+    }
+    map.extend(encoded);
+    map.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+
+    // Remove entries where plaintext is a substring of any VK ref
+    let all_refs: Vec<String> = map.iter().map(|(_, r)| r.clone()).collect();
+    map.retain(|(pt, _)| {
+        !all_refs
+            .iter()
+            .any(|r| r.contains(pt.as_str()) && r != pt)
+    });
 }
 
 fn resolve_candidates(token: &str) -> Vec<String> {
