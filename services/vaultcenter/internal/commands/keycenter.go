@@ -17,7 +17,7 @@ func RunKeycenter() {
 		addr = os.Getenv("VEILKEY_ADDR")
 	}
 	if addr == "" {
-		addr = "https://localhost:10181"
+		log.Fatal("VEILKEY_KEYCENTER_URL or VEILKEY_ADDR is required")
 	}
 
 	// Normalize to a full URL
