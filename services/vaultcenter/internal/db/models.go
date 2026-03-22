@@ -178,6 +178,7 @@ type Agent struct {
 	BlockedAt        *time.Time `gorm:"column:blocked_at" json:"blocked_at"`
 	BlockReason      string     `gorm:"column:block_reason" json:"block_reason"`
 	ArchivedAt       *time.Time `gorm:"column:archived_at;index" json:"archived_at"`
+	DeletedAt        *time.Time `gorm:"column:deleted_at;index" json:"deleted_at"`
 	IP               string     `gorm:"column:ip" json:"ip"`
 	Port             int        `gorm:"column:port;default:0" json:"port"`
 	DEK              []byte     `gorm:"column:dek" json:"dek"`

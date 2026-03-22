@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/veilkey/veilkey-go-package/agentapi"
-	"gorm.io/gorm"
 )
 
 // AgentRetrySchedule defines backoff intervals for rebind/rotation retries.
@@ -199,13 +198,13 @@ func (d *DB) BackfillAgentCapabilities() error {
 
 func (d *DB) ListAgents() ([]Agent, error) {
 	var agents []Agent
-	err := d.conn.Where("archived_at IS NULL").Order("last_seen DESC").Find(&agents).Error
+	err := d.conn.Where("archived_at IS NULL AND deleted_at IS NULL").Order("last_seen DESC").Find(&agents).Error
 	return agents, err
 }
 
 func (d *DB) ListAgentsIncludeArchived() ([]Agent, error) {
 	var agents []Agent
-	err := d.conn.Order("last_seen DESC").Find(&agents).Error
+	err := d.conn.Where("deleted_at IS NULL").Order("last_seen DESC").Find(&agents).Error
 	return agents, err
 }
 
@@ -239,35 +238,19 @@ func (d *DB) GetAgentByHash(agentHash string) (*Agent, error) {
 	return dbFirst[Agent](d, "agent hash "+agentHash+" not found", "agent_hash = ?", agentHash)
 }
 func (d *DB) DeleteAgentByNodeID(nodeID string) error {
-	agent, err := d.GetAgentByNodeID(nodeID)
-	if err != nil {
-		return err
+	now := time.Now().UTC()
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("deleted_at", &now)
+	if result.Error != nil {
+		return result.Error
 	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("agent %s not found", nodeID)
+	}
+	return nil
+}
 
-	return d.conn.Transaction(func(tx *gorm.DB) error {
-		if agent.AgentHash != "" {
-			if err := tx.Where("vault_runtime_hash = ? OR vault_node_uuid = ?", agent.AgentHash, nodeID).Delete(&SecretCatalog{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("agent_hash = ?", agent.AgentHash).Delete(&TokenRef{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("vault_runtime_hash = ? OR vault_node_uuid = ?", agent.AgentHash, nodeID).Delete(&VaultInventory{}).Error; err != nil {
-				return err
-			}
-		} else {
-			if err := tx.Where("vault_node_uuid = ?", nodeID).Delete(&SecretCatalog{}).Error; err != nil {
-				return err
-			}
-			if err := tx.Where("vault_node_uuid = ?", nodeID).Delete(&VaultInventory{}).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Where("node_id = ?", nodeID).Delete(&Agent{}).Error; err != nil {
-			return err
-		}
-		return nil
-	})
+func (d *DB) RestoreDeletedAgent(nodeID string) error {
+	return d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("deleted_at", nil).Error
 }
 
 func (d *DB) GetAgentRecord(hashOrLabel string) (*Agent, error) {

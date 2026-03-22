@@ -102,6 +102,15 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 
 	agent, err := h.deps.DB().GetAgentByNodeID(nodeID)
 	if err == nil {
+		// Restore soft-deleted agent on reconnection — DEK is preserved
+		if agent.DeletedAt != nil {
+			if err := h.deps.DB().RestoreDeletedAgent(nodeID); err != nil {
+				respondError(w, http.StatusInternalServerError, "failed to restore deleted agent")
+				return
+			}
+			log.Printf("agent: restored deleted agent node=%s (%s)", nodeID, req.Label)
+			agent.DeletedAt = nil
+		}
 		if agent.BlockedAt != nil && agent.BlockReason == "key_version_mismatch" && agent.KeyVersion == req.KeyVersion {
 			if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpdateAgentState, clearRebindPayload(nodeID)); err != nil {
 				respondError(w, http.StatusInternalServerError, "failed to clear blocked rebind state")
