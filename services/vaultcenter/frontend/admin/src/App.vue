@@ -90,8 +90,9 @@
                         >
                             <span class="nav-item-main">
                                 <span>{{ vault.display_name || vault.vault_name || vault.vault_runtime_hash }}</span>
+                                <span v-if="vault.last_seen_ago" class="last-seen-ago">{{ vault.last_seen_ago }}</span>
                             </span>
-                            <span class="status-pill" :class="statusClass(vault.status || 'active')">{{ vault.status || 'active' }}</span>
+                            <span class="health-pill" :class="'health-' + (vault.health || 'healthy')">{{ vault.health || 'healthy' }}</span>
                         </a>
                         <div v-if="!filteredVaults().length" class="empty">{{ t('no_vaults') }}</div>
                     </div>
@@ -239,9 +240,10 @@
                                         <tr>
                                             <th>{{ t('table_vault_name') }}</th>
                                             <th>{{ t('table_identifier') }}</th>
-                                            <th>{{ t('table_path') }}</th>
                                             <th>IP</th>
-                                            <th>{{ t('table_status') }}</th>
+                                            <th>Health</th>
+                                            <th>Last Seen</th>
+                                            <th></th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -249,15 +251,19 @@
                                             v-for="row in allVaultRows()"
                                             :key="row.vault_runtime_hash"
                                             class="is-clickable"
-                                            :class="{ 'is-selected': state.selectedVault && row.vault_runtime_hash === state.selectedVault.vault_runtime_hash }"
+                                            :class="{ 'is-selected': state.selectedVault && row.vault_runtime_hash === state.selectedVault.vault_runtime_hash, 'is-archived': row.archived }"
                                             data-action="select-vault"
                                             :data-key="row.vault_runtime_hash"
                                         >
                                             <td>{{ row.display_name || row.vault_name }}</td>
                                             <td><span class="code">{{ row.vault_id || row.vault_runtime_hash }}</span></td>
-                                            <td>{{ ((row.managed_paths && row.managed_paths[0]) || '-') }}</td>
                                             <td>{{ row.ip || '-' }}</td>
-                                            <td><span class="status-pill" :class="statusClass(row.status || 'active')">{{ row.status || 'active' }}</span></td>
+                                            <td><span class="health-pill" :class="'health-' + (row.health || 'healthy')">{{ row.health || 'healthy' }}</span></td>
+                                            <td>{{ row.last_seen_ago || '-' }}</td>
+                                            <td>
+                                                <button v-if="!row.archived" class="btn-sm btn-outline" data-action="archive-vault" :data-key="row.node_id" title="Archive">🗄</button>
+                                                <button v-else class="btn-sm btn-outline" data-action="unarchive-vault" :data-key="row.node_id" title="Unarchive">↩</button>
+                                            </td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -1063,6 +1069,16 @@
     width: 100%;
 }
 .unlock-btn:hover { background: #2563eb; }
+.health-pill { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: 600; }
+.health-healthy { background: #065f46; color: #6ee7b7; }
+.health-stale { background: #78350f; color: #fbbf24; }
+.health-unreachable { background: #7f1d1d; color: #fca5a5; }
+.health-archived { background: #374151; color: #9ca3af; }
+.last-seen-ago { font-size: 10px; color: #6b7280; margin-left: 4px; }
+.is-archived { opacity: 0.5; }
+.btn-sm { font-size: 11px; padding: 2px 6px; cursor: pointer; border-radius: 4px; }
+.btn-outline { background: transparent; border: 1px solid #4b5563; color: #9ca3af; }
+.btn-outline:hover { border-color: #9ca3af; color: #e5e7eb; }
 </style>
 
 <script setup>

@@ -2890,6 +2890,14 @@ async function handleAction(action, dataset) {
             return syncPageData();
         }
         if (action === 'select-vault') return selectVaultByKey(dataset.key);
+        if (action === 'archive-vault') {
+            await apiFetch(`/api/agents/by-node/${dataset.key}/archive`, { method: 'POST' });
+            return syncPageData();
+        }
+        if (action === 'unarchive-vault') {
+            await apiFetch(`/api/agents/by-node/${dataset.key}/unarchive`, { method: 'POST' });
+            return syncPageData();
+        }
         if (action === 'select-key') return selectKeyByName(dataset.key);
         if (action === 'audit-select-key') {
             state.auditKey = dataset.key;
