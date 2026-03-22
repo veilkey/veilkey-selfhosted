@@ -106,6 +106,10 @@ fn main() {
 [ -f ~/.bashrc ] && source ~/.bashrc
 [ -f ~/.bash_profile ] && source ~/.bash_profile
 export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
+# Disable history to prevent secret leakage via up-arrow
+export HISTFILE=/dev/null
+export HISTSIZE=0
+set +o history
 "#;
         let _ = std::fs::write(&rc_path, rc_content);
 
