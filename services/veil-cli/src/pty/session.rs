@@ -26,7 +26,7 @@ extern "C" fn handle_sigwinch(_: libc::c_int) {
     }
 }
 
-pub fn run(args: &[String], api_url: &str, _log_path: &str, _patterns_file: Option<&str>) {
+pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Option<&str>) {
     let shell_args: Vec<String> = if args.is_empty() {
         let shell = std::env::var("SHELL").unwrap_or_else(|_| "/bin/bash".to_string());
         vec![shell]
@@ -37,7 +37,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, _patterns_file: Opti
     let client = VeilKeyClient::new(api_url);
 
     // Load detection patterns
-    let cfg = load_config(None).ok();
+    let cfg = load_config(patterns_file).ok();
     let patterns: Vec<CompiledPattern> = cfg.map(|c| c.patterns).unwrap_or_default();
 
     // Save PID file
