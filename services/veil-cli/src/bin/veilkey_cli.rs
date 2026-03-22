@@ -1035,17 +1035,31 @@ mod pty_wrap {
                             libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
                         }
 
-                        // Remainder after last newline → pass through raw (echo-back/prompt)
+                        // Remainder after last newline → buffer for next flush
                         if last_nl + 1 < n {
-                            let remainder = &chunk[last_nl + 1..];
-                            unsafe {
-                                libc::write(stdout_fd, remainder.as_ptr() as _, remainder.len());
-                            }
+                            partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
                         }
                     } else {
-                        // No newline — pass through raw immediately (echo-back, prompt, etc.)
+                        // No newline — buffer it, flush after short wait if no more data
+                        partial_buf.extend_from_slice(chunk);
+                        std::thread::sleep(Duration::from_millis(20));
+                        let mut peek = [0u8; 1];
                         unsafe {
-                            libc::write(stdout_fd, chunk.as_ptr() as _, chunk.len());
+                            let flags = libc::fcntl(master_fd, libc::F_GETFL);
+                            libc::fcntl(master_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
+                            let peek_result = libc::read(master_fd, peek.as_mut_ptr() as _, 1);
+                            libc::fcntl(master_fd, libc::F_SETFL, flags);
+                            if peek_result > 0 {
+                                partial_buf.push(peek[0]);
+                            } else {
+                                // No more data — flush partial as-is (prompt, etc.)
+                                libc::write(
+                                    stdout_fd,
+                                    partial_buf.as_ptr() as _,
+                                    partial_buf.len(),
+                                );
+                                partial_buf.clear();
+                            }
                         }
                     }
                 }
