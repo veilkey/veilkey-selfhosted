@@ -1,0 +1,28 @@
+# Example: Node.js app with VeilKey secret resolution
+#
+# .env:
+#   DB_PASSWORD=VK:LOCAL:xxx
+#   API_KEY=VK:LOCAL:yyy
+#
+# docker-compose.yml:
+#   services:
+#     myapp:
+#       build: .
+#       env_file: .env
+#       environment:
+#         VEILKEY_LOCALVAULT_URL: "https://vaultcenter:10181"
+#         VEILKEY_TLS_INSECURE: "1"
+
+FROM node:22-slim AS app
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --production
+COPY . .
+
+# Add VeilKey entrypoint
+COPY --from=veilkey-veil:dev /usr/local/bin/veilkey-cli /usr/local/bin/veilkey-cli
+COPY docker-entrypoint-veilkey.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-entrypoint-veilkey.sh
+
+ENTRYPOINT ["docker-entrypoint-veilkey.sh"]
+CMD ["node", "app.js"]

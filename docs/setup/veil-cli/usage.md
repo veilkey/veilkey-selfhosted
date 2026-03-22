@@ -49,3 +49,35 @@ veilkey-cli status
 veilkey-cli scan file.env
 # Detects secrets using 222 built-in patterns
 ```
+
+## Run services with VK refs
+
+### Direct / systemd / cron
+
+Wrap with `veil` — VK refs in env vars are auto-resolved:
+
+```bash
+# Direct
+veil node app.js
+
+# systemd
+ExecStart=/usr/local/bin/veil /usr/bin/node app.js
+
+# cron
+* * * * * /usr/local/bin/veil /path/to/script.sh
+```
+
+`.env` contains only VK refs, never plaintext.
+
+### Docker
+
+Use the entrypoint wrapper — resolves VK refs at container start:
+
+```dockerfile
+COPY docker-entrypoint-veilkey.sh /usr/local/bin/
+COPY --from=veilkey-veil:dev /usr/local/bin/veilkey-cli /usr/local/bin/
+ENTRYPOINT ["docker-entrypoint-veilkey.sh"]
+CMD ["node", "app.js"]
+```
+
+See [`examples/docker-entrypoint-veilkey.sh`](../../../examples/docker-entrypoint-veilkey.sh) and [`examples/Dockerfile.veilkey-app`](../../../examples/Dockerfile.veilkey-app).

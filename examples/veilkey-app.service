@@ -1,0 +1,23 @@
+# Example systemd service with VeilKey
+#
+# .env:
+#   DB_PASSWORD=VK:LOCAL:xxx
+#
+# Install:
+#   cp veilkey-app.service /etc/systemd/system/
+#   systemctl daemon-reload
+#   systemctl enable --now veilkey-app
+
+[Unit]
+Description=My App (VeilKey protected)
+After=network.target
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/veilkey/app.env
+ExecStart=/usr/local/bin/veil /usr/bin/node /opt/myapp/app.js
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
