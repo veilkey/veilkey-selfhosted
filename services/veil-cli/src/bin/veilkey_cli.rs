@@ -640,47 +640,21 @@ mod pty_wrap {
         let mut s = String::from_utf8_lossy(data).to_string();
         let mut had_replacement = false;
 
-        // Detect echo-back: output without newline that matches recent_input suffix
-        // is the shell echoing back what the user typed — don't mask (user sees their typing).
-        // Output WITH newline is command result — always mask.
-        let has_newline = s.contains('\n') || s.contains('\r');
-        let trimmed_output = s.trim_end_matches(['\r', '\n']);
-        let is_echo_back = !has_newline
-            && !recent_input.is_empty()
-            && !trimmed_output.is_empty()
-            && recent_input.ends_with(trimmed_output);
-
         // 1. Known secrets from mask_map — padded to same visible length
-        //    Skip if this is echo-back of user input (no newline + matches typing)
-        if !is_echo_back {
-            for (plaintext, vk_ref) in mask_map {
-                if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
-                    s = s.replace(
-                        plaintext.as_str(),
-                        &padded_colorize_ref(vk_ref, plaintext.len()),
-                    );
-                    had_replacement = true;
-                }
+        //    Always mask, including echo-back — AI must never see plaintext.
+        for (plaintext, vk_ref) in mask_map {
+            if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
+                s = s.replace(
+                    plaintext.as_str(),
+                    &padded_colorize_ref(vk_ref, plaintext.len()),
+                );
+                had_replacement = true;
             }
         }
 
-        // If secrets were replaced, prepend line-clear escape to each line
-        // so that any previously visible echo-back characters are overwritten
-        if had_replacement {
-            let lines: Vec<&str> = s.split('\n').collect();
-            let mut cleared = String::new();
-            for (i, line) in lines.iter().enumerate() {
-                if i > 0 {
-                    cleared.push('\n');
-                }
-                if line.contains("\x1b[") {
-                    // This line has ANSI color (from VK ref) — clear the line first
-                    cleared.push_str("\r\x1b[2K");
-                }
-                cleared.push_str(line);
-            }
-            s = cleared;
-        }
+        // No line-clear in mask_output — handled at output phase to avoid
+        // interfering with overlap buffer byte calculations.
+        if had_replacement {}
 
         // 2. Pattern-detected secrets — scan, register, replace with padding
         //    Skip matches that are echo-back of recent user input (prevents false positives
@@ -1042,20 +1016,34 @@ mod pty_wrap {
                         let saved_overlap_len = combined.len().min(max_secret_len);
 
                         let ri = input_ref.lock().unwrap().clone();
+                        let combined_len = combined.len();
                         let masked =
                             mask_output(&combined, &mask.read().unwrap(), &patterns, &client, &ri);
 
-                        // Only write the NEW portion (skip the overlap that was already written)
-                        if masked.len() > overlap_len {
-                            let new_output = &masked[overlap_len..];
+                        // If masking changed the output, don't use overlap (ANSI escapes change byte count)
+                        let masking_occurred =
+                            masked.len() != combined_len || masked != combined.as_slice();
+                        if masking_occurred {
+                            // Write full masked output, no overlap
                             unsafe {
-                                libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len());
+                                libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
                             }
+                            overlap_buf.clear();
+                        } else {
+                            // No masking — use overlap for cross-boundary detection
+                            if masked.len() > overlap_len {
+                                let new_output = &masked[overlap_len..];
+                                unsafe {
+                                    libc::write(
+                                        stdout_fd,
+                                        new_output.as_ptr() as _,
+                                        new_output.len(),
+                                    );
+                                }
+                            }
+                            overlap_buf =
+                                combined[combined_len.saturating_sub(saved_overlap_len)..].to_vec();
                         }
-
-                        // Save tail as overlap for next iteration
-                        overlap_buf =
-                            combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
                         partial_buf.clear();
                         if last_nl + 1 < n {
                             partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
