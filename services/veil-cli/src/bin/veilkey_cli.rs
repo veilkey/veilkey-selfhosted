@@ -1041,26 +1041,14 @@ mod pty_wrap {
                                     // Check if partial_buf ends with prefix of any known secret
                                     // (removed the >8 length gate — all secrets now checked)
                                     let buf_str = String::from_utf8_lossy(&partial_buf);
-                                    // Check if partial_buf contains a prefix of any known secret
-                                    // Start from 1 char (not 4) to catch echo-back character by character
+                                    // Check if partial_buf ends with a prefix of any known secret (4+ chars)
                                     let has_partial_secret =
                                         mask.read().unwrap().iter().any(|(plaintext, _)| {
                                             let pl = plaintext.as_str();
-                                            (1..pl.len()).any(|i| buf_str.ends_with(&pl[..i]))
+                                            (4..pl.len()).any(|i| buf_str.ends_with(&pl[..i]))
                                         });
-                                    // Also check if recent input matches partial buf (echo-back in progress)
-                                    let ri = input_ref.lock().unwrap().clone();
-                                    let is_echo_back = !ri.is_empty()
-                                        && buf_str.len() <= ri.len()
-                                        && ri.ends_with(buf_str.as_ref());
-                                    if has_partial_secret || is_echo_back {
-                                        // Wait for the rest of the secret / echo-back to complete
-                                        let wait_ms = if is_echo_back {
-                                            lookahead_ms * 2 // longer wait for echo-back
-                                        } else {
-                                            lookahead_ms
-                                        };
-                                        std::thread::sleep(Duration::from_millis(wait_ms));
+                                    if has_partial_secret {
+                                        std::thread::sleep(Duration::from_millis(lookahead_ms));
                                         let n2 =
                                             libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
                                         if n2 > 0 {
