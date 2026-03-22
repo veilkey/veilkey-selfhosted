@@ -186,6 +186,8 @@ github.com/veilkey/veilkey-chain v0.7.0 h1:FOgWtV1tnhVZGMxyFfk7z+YRb5mCoiCHozxAn
 github.com/veilkey/veilkey-chain v0.7.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-chain v0.8.0 h1:FuP7/DEltn6bMfR8D9pIyerxl80znvEUqz7iY/7zDAw=
 github.com/veilkey/veilkey-chain v0.8.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
+github.com/veilkey/veilkey-chain v0.9.0 h1:CL02G6BC9hY8LTEjAJuJA9/iG1L5wOf/wdCnD/YL/mM=
+github.com/veilkey/veilkey-chain v0.9.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-go-package v0.3.0 h1:BvGydDA3pQsHEEBw/FzmVw2Nhk8OqGZzjA7CgH3Xd2g=
 github.com/veilkey/veilkey-go-package v0.3.0/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/veilkey/veilkey-go-package v0.3.1 h1:TgDHcA1wc/e7JwYZNaSRbzqVex0WZxCAvZ73Jb7uooY=
