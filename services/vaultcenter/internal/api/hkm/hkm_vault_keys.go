@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"slices"
 	"strings"
+	"time"
 	"veilkey-vaultcenter/internal/httputil"
 
 	"veilkey-vaultcenter/internal/db"
@@ -63,6 +64,18 @@ func vaultRespFromAgent(a *db.Agent) map[string]any {
 	} else if a.RebindRequired {
 		status = "rebind_required"
 	}
+
+	now := time.Now().UTC()
+	health := "healthy"
+	sinceLastSeen := now.Sub(a.LastSeen)
+	if a.ArchivedAt != nil {
+		health = "archived"
+	} else if sinceLastSeen > 7*24*time.Hour {
+		health = "unreachable"
+	} else if sinceLastSeen > 10*time.Minute {
+		health = "stale"
+	}
+
 	return map[string]any{
 		"node_id":            a.NodeID,
 		"vault_node_uuid":    a.NodeID,
@@ -81,6 +94,9 @@ func vaultRespFromAgent(a *db.Agent) map[string]any {
 		"managed_paths":      db.DecodeManagedPaths(a.ManagedPaths),
 		"key_version":        a.KeyVersion,
 		"status":             status,
+		"health":             health,
+		"last_seen_ago":      formatDuration(sinceLastSeen),
+		"archived":           a.ArchivedAt != nil,
 		"rotation_required":  a.RotationRequired,
 		"rebind_required":    a.RebindRequired,
 		"blocked":            a.BlockedAt != nil,
