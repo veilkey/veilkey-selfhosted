@@ -270,6 +270,7 @@ func (s *Server) SetupRoutes() http.Handler {
 	s.configsHandler.Register(mux, s.requireTrustedIP)
 	s.bulkHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
 	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
+	s.registerAdminRoutes(mux)
 
 	return securityHeadersMiddleware(logMiddleware(mux))
 }
