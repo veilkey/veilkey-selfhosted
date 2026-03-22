@@ -640,14 +640,27 @@ mod pty_wrap {
         let mut s = String::from_utf8_lossy(data).to_string();
         let mut had_replacement = false;
 
+        // Detect echo-back: output without newline that matches recent_input suffix
+        // is the shell echoing back what the user typed — don't mask (user sees their typing).
+        // Output WITH newline is command result — always mask.
+        let has_newline = s.contains('\n') || s.contains('\r');
+        let trimmed_output = s.trim_end_matches(['\r', '\n']);
+        let is_echo_back = !has_newline
+            && !recent_input.is_empty()
+            && !trimmed_output.is_empty()
+            && recent_input.ends_with(trimmed_output);
+
         // 1. Known secrets from mask_map — padded to same visible length
-        for (plaintext, vk_ref) in mask_map {
-            if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
-                s = s.replace(
-                    plaintext.as_str(),
-                    &padded_colorize_ref(vk_ref, plaintext.len()),
-                );
-                had_replacement = true;
+        //    Skip if this is echo-back of user input (no newline + matches typing)
+        if !is_echo_back {
+            for (plaintext, vk_ref) in mask_map {
+                if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
+                    s = s.replace(
+                        plaintext.as_str(),
+                        &padded_colorize_ref(vk_ref, plaintext.len()),
+                    );
+                    had_replacement = true;
+                }
             }
         }
 
