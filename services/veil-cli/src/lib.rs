@@ -4,6 +4,7 @@ pub mod detector;
 pub mod logger;
 pub mod output;
 pub mod project_config;
+pub mod pty;
 pub mod state;
 
 use std::env;
