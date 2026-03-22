@@ -55,11 +55,12 @@ jobs:
           go-version-file: services/vaultcenter/go.mod
       - name: Check UI build is up to date
         run: |
-          cd services/vaultcenter/frontend/admin
+          cd frontend/admin
           npm ci --silent
           npm run build
           if ! diff -qr dist/ ../../internal/api/admin/ui_dist/ > /dev/null 2>&1; then
             echo "::error::ui_dist is out of date — run 'npm run build' in frontend/admin and copy dist/ to ui_dist/"
+            diff -qr dist/ ../../internal/api/admin/ui_dist/ || true
             exit 1
           fi
       - name: Lint
