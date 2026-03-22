@@ -224,6 +224,20 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     let ri = input_ref.lock().unwrap().clone();
                     let masked =
                         masker::mask_output(&to_mask, &mask.read().unwrap(), &patterns, &client, &ri);
+
+                    // If masking replaced something and data starts with newline
+                    // (i.e. output right after Enter), clear the previous line
+                    // where echo-back showed the plaintext.
+                    if masked != to_mask
+                        && (to_mask.starts_with(b"\r\n") || to_mask.starts_with(b"\n"))
+                    {
+                        unsafe {
+                            // cursor up 1, carriage return, clear line, cursor down 1
+                            let clear_prev = b"\x1b[1A\r\x1b[2K\x1b[1B";
+                            libc::write(stdout_fd, clear_prev.as_ptr() as _, clear_prev.len());
+                        }
+                    }
+
                     unsafe {
                         libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
                     }
