@@ -40,13 +40,17 @@ impl rustls::client::danger::ServerCertVerifier for NoVerifier {
         Ok(rustls::client::danger::ServerCertVerified::assertion())
     }
     fn verify_tls12_signature(
-        &self, _: &[u8], _: &rustls::pki_types::CertificateDer<'_>,
+        &self,
+        _: &[u8],
+        _: &rustls::pki_types::CertificateDer<'_>,
         _: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
     }
     fn verify_tls13_signature(
-        &self, _: &[u8], _: &rustls::pki_types::CertificateDer<'_>,
+        &self,
+        _: &[u8],
+        _: &rustls::pki_types::CertificateDer<'_>,
         _: &rustls::DigitallySignedStruct,
     ) -> Result<rustls::client::danger::HandshakeSignatureValid, rustls::Error> {
         Ok(rustls::client::danger::HandshakeSignatureValid::assertion())
@@ -86,7 +90,7 @@ impl VeilKeyClient {
     }
 
     pub fn issue(&self, value: &str) -> Result<String, String> {
-        let value = value.trim_end_matches(|c: char| c == '\r' || c == '\n');
+        let value = value.trim_end_matches(['\r', '\n']);
         {
             let cache = self.cache.lock().unwrap();
             if let Some(vk) = cache.get(value) {
@@ -95,7 +99,9 @@ impl VeilKeyClient {
         }
 
         let body = serde_json::json!({ "plaintext": value });
-        let resp = self.agent.post(&format!("{}/api/encrypt", self.base_url))
+        let resp = self
+            .agent
+            .post(&format!("{}/api/encrypt", self.base_url))
             .set("Content-Type", "application/json")
             .send_json(&body)
             .map_err(|e| format!("API request failed: {}", e))?;
@@ -134,7 +140,9 @@ impl VeilKeyClient {
             self.base_url,
             urlencoding::encode(r#ref)
         );
-        let resp = self.agent.get(&url)
+        let resp = self
+            .agent
+            .get(&url)
             .call()
             .map_err(|e| format!("resolve request failed: {}", e))?;
 
@@ -151,7 +159,9 @@ impl VeilKeyClient {
     #[allow(dead_code)]
     pub fn exact_lookup(&self, plaintext: &str) -> Result<Vec<ExactLookupMatch>, String> {
         let body = serde_json::json!({ "plaintext": plaintext });
-        let resp = self.agent.post(&format!("{}/api/lookup/exact", self.base_url))
+        let resp = self
+            .agent
+            .post(&format!("{}/api/lookup/exact", self.base_url))
             .set("Content-Type", "application/json")
             .send_json(&body)
             .map_err(|e| format!("lookup request failed: {}", e))?;
@@ -189,24 +199,41 @@ impl VeilKeyClient {
         for attempt in 0..max_retries {
             if attempt > 0 {
                 let delay = std::time::Duration::from_millis(500 * (1 << attempt));
-                eprintln!("[veilkey] retrying refs fetch in {}ms (attempt {}/{})", delay.as_millis(), attempt + 1, max_retries);
+                eprintln!(
+                    "[veilkey] retrying refs fetch in {}ms (attempt {}/{})",
+                    delay.as_millis(),
+                    attempt + 1,
+                    max_retries
+                );
                 std::thread::sleep(delay);
             }
-            match self.agent.get(&format!("{}/api/refs", self.base_url)).call() {
+            match self
+                .agent
+                .get(&format!("{}/api/refs", self.base_url))
+                .call()
+            {
                 Ok(resp) => {
                     let data: serde_json::Value = resp.into_json().unwrap_or_default();
                     ref_entries = Some(data["refs"].as_array().cloned().unwrap_or_default());
                     break;
                 }
                 Err(e) => {
-                    eprintln!("[veilkey] failed to fetch refs (attempt {}/{}): {}", attempt + 1, max_retries, e);
+                    eprintln!(
+                        "[veilkey] failed to fetch refs (attempt {}/{}): {}",
+                        attempt + 1,
+                        max_retries,
+                        e
+                    );
                 }
             }
         }
         let ref_entries = match ref_entries {
             Some(entries) => entries,
             None => {
-                eprintln!("[veilkey] FATAL: could not fetch refs after {} attempts — fail-closed", max_retries);
+                eprintln!(
+                    "[veilkey] FATAL: could not fetch refs after {} attempts — fail-closed",
+                    max_retries
+                );
                 return None;
             }
         };
@@ -217,19 +244,20 @@ impl VeilKeyClient {
                 Some(c) => c,
                 None => continue,
             };
-            let resolve_url = format!("{}/api/resolve/{}", self.base_url, urlencoding::encode(canonical));
+            let resolve_url = format!(
+                "{}/api/resolve/{}",
+                self.base_url,
+                urlencoding::encode(canonical)
+            );
             let resolve_resp = self.agent.get(&resolve_url).call();
-            match &resolve_resp {
-                Err(e) => {
-                    eprintln!("[veilkey] resolve {} failed: {}", canonical, e);
-                    continue;
-                }
-                _ => {}
+            if let Err(e) = &resolve_resp {
+                eprintln!("[veilkey] resolve {} failed: {}", canonical, e);
+                continue;
             }
             if let Ok(resp) = resolve_resp {
                 let data: serde_json::Value = resp.into_json().unwrap_or_default();
                 if let Some(value) = data["value"].as_str() {
-                    let trimmed = value.trim_end_matches(|c| c == '\r' || c == '\n');
+                    let trimmed = value.trim_end_matches(['\r', '\n']);
                     if !trimmed.is_empty() {
                         mask_map.push((trimmed.to_string(), canonical.to_string()));
                     }
@@ -238,7 +266,8 @@ impl VeilKeyClient {
         }
 
         // Deduplicate: same plaintext → prefer VK:LOCAL over VK:TEMP
-        let mut deduped: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+        let mut deduped: std::collections::HashMap<String, String> =
+            std::collections::HashMap::new();
         for (plaintext, vk_ref) in &mask_map {
             let existing = deduped.get(plaintext);
             let prefer_new = match existing {
@@ -286,7 +315,9 @@ impl VeilKeyClient {
         // (prevents double-substitution, e.g. plaintext "ea2bfd16" matching inside "VK:LOCAL:ea2bfd16")
         let all_refs: Vec<String> = result.iter().map(|(_, r)| r.clone()).collect();
         result.retain(|(plaintext, _)| {
-            !all_refs.iter().any(|r| r.contains(plaintext.as_str()) && r != plaintext)
+            !all_refs
+                .iter()
+                .any(|r| r.contains(plaintext.as_str()) && r != plaintext)
         });
 
         Some(result)
@@ -297,7 +328,8 @@ impl VeilKeyClient {
             .ok()
             .and_then(|v| v.parse::<u64>().ok())
             .unwrap_or(2);
-        self.agent.get(&format!("{}/health", self.base_url))
+        self.agent
+            .get(&format!("{}/health", self.base_url))
             .timeout(std::time::Duration::from_secs(secs))
             .call()
             .map(|r| r.status() == 200)

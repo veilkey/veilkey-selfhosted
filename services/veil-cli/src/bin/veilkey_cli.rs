@@ -1,12 +1,12 @@
+use std::io::{self, BufRead, Read};
+use std::process;
 use veil_cli_rs::api::VeilKeyClient;
-use veil_cli_rs::config::{load_config, CompiledPattern};
+use veil_cli_rs::config::load_config;
 use veil_cli_rs::detector::SecretDetector;
 use veil_cli_rs::logger::SessionLogger;
 use veil_cli_rs::output::{Finding, Formatter};
 use veil_cli_rs::project_config::load_project_config;
 use veil_cli_rs::state::{current_paste_mode, set_paste_mode, state_dir};
-use std::io::{self, BufRead, Read};
-use std::process;
 
 static VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -265,7 +265,8 @@ fn cmd_filter(file: &str, api_url: &str, log_path: &str, patterns_file: Option<&
         } else {
             &[]
         };
-        let temp_count = new_entries.iter()
+        let temp_count = new_entries
+            .iter()
             .filter(|e| e.veilkey.contains(":TEMP:"))
             .count();
 
@@ -577,15 +578,19 @@ fn cmd_proxy(args: &[String]) {
 
 #[cfg(unix)]
 mod pty_wrap {
-    use veil_cli_rs::{api::VeilKeyClient, config::{self, load_config, CompiledPattern}, state::state_dir};
     use nix::libc;
     use nix::sys::signal::{self, SigHandler, Signal};
     use nix::unistd::{execvp, fork, ForkResult};
     use std::ffi::CString;
-    use std::io::{self, Write};
-    use std::os::fd::{AsRawFd, BorrowedFd, RawFd};
+    use std::io::{self};
+    use std::os::fd::{AsRawFd, RawFd};
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
+    use veil_cli_rs::{
+        api::VeilKeyClient,
+        config::{load_config, CompiledPattern},
+        state::state_dir,
+    };
 
     static mut MASTER_FD: RawFd = -1;
 
@@ -625,13 +630,22 @@ mod pty_wrap {
         }
     }
 
-    fn mask_output(data: &[u8], mask_map: &[(String, String)], patterns: &[CompiledPattern], client: &VeilKeyClient, recent_input: &str) -> Vec<u8> {
+    fn mask_output(
+        data: &[u8],
+        mask_map: &[(String, String)],
+        patterns: &[CompiledPattern],
+        client: &VeilKeyClient,
+        recent_input: &str,
+    ) -> Vec<u8> {
         let mut s = String::from_utf8_lossy(data).to_string();
 
         // 1. Known secrets from mask_map — padded to same visible length
         for (plaintext, vk_ref) in mask_map {
             if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
-                s = s.replace(plaintext.as_str(), &padded_colorize_ref(vk_ref, plaintext.len()));
+                s = s.replace(
+                    plaintext.as_str(),
+                    &padded_colorize_ref(vk_ref, plaintext.len()),
+                );
             }
         }
 
@@ -641,10 +655,11 @@ mod pty_wrap {
         let scan_copy = s.clone();
         for pat in patterns {
             for caps in pat.regex.captures_iter(&scan_copy) {
-                let m = caps.get(pat.group.max(1))
+                let m = caps
+                    .get(pat.group.max(1))
                     .or_else(|| caps.get(1))
                     .unwrap_or_else(|| caps.get(0).unwrap());
-                let secret = m.as_str().trim_end_matches(|c: char| c == '\r' || c == '\n');
+                let secret = m.as_str().trim_end_matches(['\r', '\n']);
                 if secret.len() < 8 || secret.starts_with("VK:") {
                     continue;
                 }
@@ -661,7 +676,10 @@ mod pty_wrap {
                         s = s.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
                     }
                     Err(e) => {
-                        eprintln!("[veilkey] issue failed for pattern {}: {} — redacting (fail-closed)", pat.name, e);
+                        eprintln!(
+                            "[veilkey] issue failed for pattern {}: {} — redacting (fail-closed)",
+                            pat.name, e
+                        );
                         let redacted = format!("[REDACTED:{}]", pat.name);
                         s = s.replace(secret, &padded_colorize_ref(&redacted, secret.len()));
                     }
@@ -714,17 +732,19 @@ mod pty_wrap {
         let mut child_env: Vec<(String, String)> = Vec::new();
         for (key, value) in std::env::vars() {
             if vk_re.is_match(&value) {
-                let resolved = vk_re.replace_all(&value, |caps: &regex::Captures| {
-                    match client.resolve(&caps[0]) {
-                        Ok(v) => {
-                            if !mask_map.iter().any(|(p, _)| p == &v) {
-                                mask_map.push((v.clone(), caps[0].to_string()));
+                let resolved = vk_re
+                    .replace_all(&value, |caps: &regex::Captures| {
+                        match client.resolve(&caps[0]) {
+                            Ok(v) => {
+                                if !mask_map.iter().any(|(p, _)| p == &v) {
+                                    mask_map.push((v.clone(), caps[0].to_string()));
+                                }
+                                v
                             }
-                            v
+                            Err(_) => caps[0].to_string(),
                         }
-                        Err(_) => caps[0].to_string(),
-                    }
-                }).to_string();
+                    })
+                    .to_string();
                 child_env.push((key, resolved));
             }
         }
@@ -734,7 +754,14 @@ mod pty_wrap {
         let (master_fd, slave_fd): (RawFd, RawFd) = unsafe {
             let mut master: RawFd = 0;
             let mut slave: RawFd = 0;
-            if libc::openpty(&mut master, &mut slave, std::ptr::null_mut(), std::ptr::null_mut(), std::ptr::null_mut()) != 0 {
+            if libc::openpty(
+                &mut master,
+                &mut slave,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            ) != 0
+            {
                 eprintln!("ERROR: failed to open pty");
                 std::process::exit(1);
             }
@@ -754,21 +781,37 @@ mod pty_wrap {
         // Fork
         match unsafe { fork() }.expect("fork failed") {
             ForkResult::Child => {
-                unsafe { libc::close(master_fd); }
-                unsafe { libc::setsid(); }
-                unsafe { libc::ioctl(slave_fd, libc::TIOCSCTTY as _, 0); }
+                unsafe {
+                    libc::close(master_fd);
+                }
+                unsafe {
+                    libc::setsid();
+                }
+                unsafe {
+                    libc::ioctl(slave_fd, libc::TIOCSCTTY as _, 0);
+                }
 
-                unsafe { libc::dup2(slave_fd, 0); }
-                unsafe { libc::dup2(slave_fd, 1); }
-                unsafe { libc::dup2(slave_fd, 2); }
+                unsafe {
+                    libc::dup2(slave_fd, 0);
+                }
+                unsafe {
+                    libc::dup2(slave_fd, 1);
+                }
+                unsafe {
+                    libc::dup2(slave_fd, 2);
+                }
                 if slave_fd > 2 {
-                    unsafe { libc::close(slave_fd); }
+                    unsafe {
+                        libc::close(slave_fd);
+                    }
                 }
 
                 // Block /proc/self/environ reads BEFORE setting resolved env vars.
                 // PR_SET_DUMPABLE=0 prevents even root from reading /proc/{pid}/environ
                 // for env vars set after this point.
-                unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0); }
+                unsafe {
+                    libc::prctl(libc::PR_SET_DUMPABLE, 0);
+                }
 
                 // Set resolved env vars (plaintext — protected by prctl above)
                 for (key, value) in &child_env {
@@ -776,16 +819,22 @@ mod pty_wrap {
                 }
 
                 let prog = CString::new(shell_args[0].as_str()).unwrap();
-                let c_args: Vec<CString> = shell_args.iter()
+                let c_args: Vec<CString> = shell_args
+                    .iter()
                     .map(|a| CString::new(a.as_str()).unwrap())
                     .collect();
-                if let Err(e) = execvp(&prog, &c_args) {
-                    eprintln!("[veilkey] execvp failed: {} ({})", shell_args[0], e);
-                    std::process::exit(1);
-                }
+                let exec_result = execvp(&prog, &c_args);
+                // execvp only returns on error
+                eprintln!(
+                    "[veilkey] execvp failed: {} ({:?})",
+                    shell_args[0], exec_result
+                );
+                std::process::exit(1);
             }
             ForkResult::Parent { child } => {
-                unsafe { libc::close(slave_fd); }
+                unsafe {
+                    libc::close(slave_fd);
+                }
 
                 // Save stdin termios and switch to raw mode
                 let stdin_fd = io::stdin().as_raw_fd();
@@ -793,8 +842,12 @@ mod pty_wrap {
                 let has_termios = unsafe { libc::tcgetattr(stdin_fd, &mut old_termios) } == 0;
                 if has_termios {
                     let mut raw = old_termios;
-                    unsafe { libc::cfmakeraw(&mut raw); }
-                    unsafe { libc::tcsetattr(stdin_fd, libc::TCSANOW, &raw); }
+                    unsafe {
+                        libc::cfmakeraw(&mut raw);
+                    }
+                    unsafe {
+                        libc::tcsetattr(stdin_fd, libc::TCSANOW, &raw);
+                    }
                 }
 
                 let mask_map = Arc::new(mask_map);
@@ -810,7 +863,9 @@ mod pty_wrap {
                     let mut buf = [0u8; 4096];
                     loop {
                         let n = unsafe { libc::read(stdin_fd, buf.as_mut_ptr() as _, buf.len()) };
-                        if n <= 0 { break; }
+                        if n <= 0 {
+                            break;
+                        }
                         // Track what was typed
                         if let Ok(s) = std::str::from_utf8(&buf[..n as usize]) {
                             let mut tracker = input_tracker.lock().unwrap();
@@ -821,7 +876,9 @@ mod pty_wrap {
                                 *tracker = tracker[start..].to_string();
                             }
                         }
-                        unsafe { libc::write(master_wr, buf.as_ptr() as _, n as _); }
+                        unsafe {
+                            libc::write(master_wr, buf.as_ptr() as _, n as _);
+                        }
                     }
                 });
 
@@ -848,7 +905,9 @@ mod pty_wrap {
                 let mut buf = [0u8; 32768];
                 loop {
                     let n = unsafe { libc::read(master_fd, buf.as_mut_ptr() as _, buf.len()) };
-                    if n <= 0 { break; }
+                    if n <= 0 {
+                        break;
+                    }
                     let n = n as usize;
                     let chunk = &buf[..n];
                     if let Some(last_nl) = chunk.iter().rposition(|&b| b == b'\n') {
@@ -865,11 +924,14 @@ mod pty_wrap {
                         // Only write the NEW portion (skip the overlap that was already written)
                         if masked.len() > overlap_len {
                             let new_output = &masked[overlap_len..];
-                            unsafe { libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len()); }
+                            unsafe {
+                                libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len());
+                            }
                         }
 
                         // Save tail as overlap for next iteration
-                        overlap_buf = combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
+                        overlap_buf =
+                            combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
                         partial_buf.clear();
                         if last_nl + 1 < n {
                             partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
@@ -895,7 +957,8 @@ mod pty_wrap {
                                     if has_partial_secret {
                                         // Wait for the rest of the secret
                                         std::thread::sleep(Duration::from_millis(lookahead_ms));
-                                        let n2 = libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
+                                        let n2 =
+                                            libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
                                         if n2 > 0 {
                                             partial_buf.extend_from_slice(&buf[..n2 as usize]);
                                             continue; // Re-enter loop to process combined buffer
@@ -908,12 +971,19 @@ mod pty_wrap {
                                     let saved_overlap_len = combined.len().min(max_secret_len);
 
                                     let ri = input_ref.lock().unwrap().clone();
-                                    let masked = mask_output(&combined, &mask, &patterns, &client, &ri);
+                                    let masked =
+                                        mask_output(&combined, &mask, &patterns, &client, &ri);
                                     if masked.len() > prev_overlap_len {
                                         let new_output = &masked[prev_overlap_len..];
-                                        libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len());
+                                        libc::write(
+                                            stdout_fd,
+                                            new_output.as_ptr() as _,
+                                            new_output.len(),
+                                        );
                                     }
-                                    overlap_buf = combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
+                                    overlap_buf = combined
+                                        [combined.len().saturating_sub(saved_overlap_len)..]
+                                        .to_vec();
                                     partial_buf.clear();
                                 } else {
                                     partial_buf.push(peek[0]);
@@ -932,23 +1002,33 @@ mod pty_wrap {
                     let masked = mask_output(&combined, &mask, &patterns, &client, &ri);
                     if masked.len() > prev_overlap_len {
                         let new_output = &masked[prev_overlap_len..];
-                        unsafe { libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len()); }
+                        unsafe {
+                            libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len());
+                        }
                     }
                 }
 
                 // Restore terminal
                 if has_termios {
-                    unsafe { libc::tcsetattr(stdin_fd, libc::TCSANOW, &old_termios); }
+                    unsafe {
+                        libc::tcsetattr(stdin_fd, libc::TCSANOW, &old_termios);
+                    }
                 }
 
                 let _ = std::fs::remove_file(&pid_path);
 
                 // Wait for child
                 let mut status: libc::c_int = 0;
-                unsafe { libc::waitpid(child.as_raw(), &mut status, 0); }
-                let exit_code = if libc::WIFEXITED(status) { libc::WEXITSTATUS(status) } else { 1 };
+                unsafe {
+                    libc::waitpid(child.as_raw(), &mut status, 0);
+                }
+                let exit_code = if libc::WIFEXITED(status) {
+                    libc::WEXITSTATUS(status)
+                } else {
+                    1
+                };
 
-                if mask.len() > 0 {
+                if !mask.is_empty() {
                     eprintln!("\n[veilkey] {} secret(s) masked in session", mask.len());
                 }
                 std::process::exit(exit_code);

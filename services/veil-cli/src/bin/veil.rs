@@ -112,7 +112,12 @@ export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
         // veil → enter protected shell with custom prompt
         exec_replace(
             &cli_bin,
-            &["wrap-pty".to_string(), "bash".to_string(), "--rcfile".to_string(), rc_path],
+            &[
+                "wrap-pty".to_string(),
+                "bash".to_string(),
+                "--rcfile".to_string(),
+                rc_path,
+            ],
         );
     }
 
@@ -178,7 +183,10 @@ export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
                     process::exit(status.code().unwrap_or(1));
                 }
                 "stop" => {
-                    let pid_file = format!("{}/.localvault/localvault.pid", env::current_dir().unwrap().display());
+                    let pid_file = format!(
+                        "{}/.localvault/localvault.pid",
+                        env::current_dir().unwrap().display()
+                    );
                     match std::fs::read_to_string(&pid_file) {
                         Ok(pid) => {
                             let pid = pid.trim();
@@ -190,7 +198,10 @@ export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
                     }
                 }
                 "log" | "logs" => {
-                    let log_file = format!("{}/.localvault/localvault.log", env::current_dir().unwrap().display());
+                    let log_file = format!(
+                        "{}/.localvault/localvault.log",
+                        env::current_dir().unwrap().display()
+                    );
                     exec_replace("tail", &["-f".to_string(), log_file]);
                 }
                 "status" => {
