@@ -1,7 +1,7 @@
 <div align="center">
   <img src=".github/banner.png" alt="VeilKey" width="720">
   <h1>VeilKey Self-Hosted</h1>
-  <p><strong>Secret management where AI never sees your passwords.<br>PTY-level bidirectional masking + blockchain audit.</strong></p>
+  <p><strong>Self-hosted secret manager — own your secrets, never expose them to AI or third parties.<br>셀프호스팅 시크릿 매니저 — AI와 외부에 노출 없이 시크릿을 직접 관리하세요.</strong></p>
   <p>
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
