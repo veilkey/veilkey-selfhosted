@@ -625,7 +625,7 @@ mod pty_wrap {
         }
     }
 
-    fn mask_output(data: &[u8], mask_map: &[(String, String)], patterns: &[CompiledPattern], client: &VeilKeyClient, _recent_input: &str) -> Vec<u8> {
+    fn mask_output(data: &[u8], mask_map: &[(String, String)], patterns: &[CompiledPattern], client: &VeilKeyClient, recent_input: &str) -> Vec<u8> {
         let mut s = String::from_utf8_lossy(data).to_string();
 
         // 1. Known secrets from mask_map — padded to same visible length
@@ -636,6 +636,8 @@ mod pty_wrap {
         }
 
         // 2. Pattern-detected secrets — scan, register, replace with padding
+        //    Skip matches that are echo-back of recent user input (prevents false positives
+        //    from commands the user just typed, e.g. `export TOKEN=...`)
         let scan_copy = s.clone();
         for pat in patterns {
             for caps in pat.regex.captures_iter(&scan_copy) {
@@ -649,12 +651,19 @@ mod pty_wrap {
                 if mask_map.iter().any(|(p, _)| p == secret) {
                     continue;
                 }
+                // Skip if the matched secret is part of recent user input (echo-back).
+                // The shell echoes typed commands; masking those would be a false positive.
+                if !recent_input.is_empty() && recent_input.contains(secret) {
+                    continue;
+                }
                 match client.issue(secret) {
                     Ok(ref_canonical) => {
                         s = s.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
                     }
                     Err(e) => {
-                        eprintln!("[veilkey] issue failed for pattern {}: {}", pat.name, e);
+                        eprintln!("[veilkey] issue failed for pattern {}: {} — redacting (fail-closed)", pat.name, e);
+                        let redacted = format!("[REDACTED:{}]", pat.name);
+                        s = s.replace(secret, &padded_colorize_ref(&redacted, secret.len()));
                     }
                 }
             }
@@ -689,7 +698,15 @@ mod pty_wrap {
         let _ = std::fs::write(&pid_path, format!("{}", std::process::id()));
 
         // 1. Fetch all secrets from VaultCenter → build mask_map
-        let mut mask_map: Vec<(String, String)> = client.fetch_all_secrets_mask_map();
+        //    fail-closed: if API is unreachable, refuse to start
+        let mut mask_map: Vec<(String, String)> = match client.fetch_all_secrets_mask_map() {
+            Some(map) => map,
+            None => {
+                eprintln!("[veilkey] FATAL: cannot build mask map — refusing to start shell (fail-closed)");
+                eprintln!("[veilkey] ensure VaultCenter is reachable and try again");
+                std::process::exit(1);
+            }
+        };
         eprintln!("[veilkey] loaded {} secret(s) from vaults", mask_map.len());
 
         // 2. Also resolve VK refs in environment variables
@@ -748,7 +765,12 @@ mod pty_wrap {
                     unsafe { libc::close(slave_fd); }
                 }
 
-                // Set resolved env vars
+                // Block /proc/self/environ reads BEFORE setting resolved env vars.
+                // PR_SET_DUMPABLE=0 prevents even root from reading /proc/{pid}/environ
+                // for env vars set after this point.
+                unsafe { libc::prctl(libc::PR_SET_DUMPABLE, 0); }
+
+                // Set resolved env vars (plaintext — protected by prctl above)
                 for (key, value) in &child_env {
                     std::env::set_var(key, value);
                 }
@@ -804,10 +826,24 @@ mod pty_wrap {
                 });
 
                 // master → stdout (filter output from PTY)
+                //
+                // Sliding-window design: keep an overlap buffer from the tail of the
+                // previous flush so that secrets spanning two reads are still caught.
+                // The overlap length equals the longest secret in mask_map.
                 let mask = mask_map.clone();
                 let input_ref = recent_input.clone();
                 let stdout_fd = io::stdout().as_raw_fd();
                 let mut partial_buf: Vec<u8> = Vec::new();
+
+                let max_secret_len = mask.iter().map(|(p, _)| p.len()).max().unwrap_or(0);
+                // overlap_buf holds the tail of the last flushed output (up to max_secret_len bytes).
+                // It is prepended to the next batch so cross-boundary secrets are matched.
+                let mut overlap_buf: Vec<u8> = Vec::new();
+
+                let lookahead_ms: u64 = std::env::var("VEILKEY_LOOKAHEAD_MS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(50);
 
                 let mut buf = [0u8; 32768];
                 loop {
@@ -816,10 +852,24 @@ mod pty_wrap {
                     let n = n as usize;
                     let chunk = &buf[..n];
                     if let Some(last_nl) = chunk.iter().rposition(|&b| b == b'\n') {
-                        partial_buf.extend_from_slice(&chunk[..last_nl + 1]);
+                        // Prepend overlap from previous flush to catch cross-boundary secrets
+                        let mut combined = std::mem::take(&mut overlap_buf);
+                        combined.extend_from_slice(&partial_buf);
+                        combined.extend_from_slice(&chunk[..last_nl + 1]);
+                        let overlap_len = overlap_buf.len(); // was taken, so 0 now — use saved value
+                        let saved_overlap_len = combined.len().min(max_secret_len);
+
                         let ri = input_ref.lock().unwrap().clone();
-                        let masked = mask_output(&partial_buf, &mask, &patterns, &client, &ri);
-                        unsafe { libc::write(stdout_fd, masked.as_ptr() as _, masked.len()); }
+                        let masked = mask_output(&combined, &mask, &patterns, &client, &ri);
+
+                        // Only write the NEW portion (skip the overlap that was already written)
+                        if masked.len() > overlap_len {
+                            let new_output = &masked[overlap_len..];
+                            unsafe { libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len()); }
+                        }
+
+                        // Save tail as overlap for next iteration
+                        overlap_buf = combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
                         partial_buf.clear();
                         if last_nl + 1 < n {
                             partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
@@ -836,28 +886,34 @@ mod pty_wrap {
                                 libc::fcntl(master_fd, libc::F_SETFL, flags);
                                 if peek_result <= 0 {
                                     // Check if partial_buf ends with prefix of any known secret
+                                    // (removed the >8 length gate — all secrets now checked)
                                     let buf_str = String::from_utf8_lossy(&partial_buf);
                                     let has_partial_secret = mask.iter().any(|(plaintext, _)| {
-                                        plaintext.len() > 8 && buf_str.len() < plaintext.len() + 50
-                                            && plaintext.starts_with(
-                                                &buf_str[buf_str.len().saturating_sub(plaintext.len())..])
-                                    }) || mask.iter().any(|(plaintext, _)| {
-                                        // Also check if any secret partially appears at end of buffer
                                         let pl = plaintext.as_str();
                                         (4..pl.len()).any(|i| buf_str.ends_with(&pl[..i]))
                                     });
                                     if has_partial_secret {
-                                        // Wait a bit more for the rest of the secret
-                                        std::thread::sleep(Duration::from_millis(50));
+                                        // Wait for the rest of the secret
+                                        std::thread::sleep(Duration::from_millis(lookahead_ms));
                                         let n2 = libc::read(master_fd, buf.as_mut_ptr() as _, buf.len());
                                         if n2 > 0 {
                                             partial_buf.extend_from_slice(&buf[..n2 as usize]);
                                             continue; // Re-enter loop to process combined buffer
                                         }
                                     }
+                                    // Flush partial with overlap
+                                    let mut combined = std::mem::take(&mut overlap_buf);
+                                    let prev_overlap_len = combined.len();
+                                    combined.extend_from_slice(&partial_buf);
+                                    let saved_overlap_len = combined.len().min(max_secret_len);
+
                                     let ri = input_ref.lock().unwrap().clone();
-                                    let masked = mask_output(&partial_buf, &mask, &patterns, &client, &ri);
-                                    libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
+                                    let masked = mask_output(&combined, &mask, &patterns, &client, &ri);
+                                    if masked.len() > prev_overlap_len {
+                                        let new_output = &masked[prev_overlap_len..];
+                                        libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len());
+                                    }
+                                    overlap_buf = combined[combined.len().saturating_sub(saved_overlap_len)..].to_vec();
                                     partial_buf.clear();
                                 } else {
                                     partial_buf.push(peek[0]);
@@ -868,10 +924,16 @@ mod pty_wrap {
                 }
 
                 // Flush remaining
-                if !partial_buf.is_empty() {
+                if !partial_buf.is_empty() || !overlap_buf.is_empty() {
+                    let mut combined = overlap_buf;
+                    let prev_overlap_len = combined.len();
+                    combined.extend_from_slice(&partial_buf);
                     let ri = input_ref.lock().unwrap().clone();
-                        let masked = mask_output(&partial_buf, &mask, &patterns, &client, &ri);
-                    unsafe { libc::write(stdout_fd, masked.as_ptr() as _, masked.len()); }
+                    let masked = mask_output(&combined, &mask, &patterns, &client, &ri);
+                    if masked.len() > prev_overlap_len {
+                        let new_output = &masked[prev_overlap_len..];
+                        unsafe { libc::write(stdout_fd, new_output.as_ptr() as _, new_output.len()); }
+                    }
                 }
 
                 // Restore terminal

@@ -1,3 +1,4 @@
+use base64::Engine as _;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -174,20 +175,39 @@ impl VeilKeyClient {
 
     /// Fetch all secrets from all vaults and resolve each to build a mask map.
     /// Returns Vec<(plaintext, vk_ref)> sorted by plaintext length descending.
-    pub fn fetch_all_secrets_mask_map(&self) -> Vec<(String, String)> {
+    /// Returns None if the API is unreachable after retries (fail-closed).
+    pub fn fetch_all_secrets_mask_map(&self) -> Option<Vec<(String, String)>> {
         let mut mask_map: Vec<(String, String)> = Vec::new();
 
         // 1. Get all tracked refs (no auth required, no values)
-        let refs_resp = self.agent.get(&format!("{}/api/refs", self.base_url))
-            .call();
-        let ref_entries: Vec<serde_json::Value> = match refs_resp {
-            Ok(resp) => {
-                let data: serde_json::Value = resp.into_json().unwrap_or_default();
-                data["refs"].as_array().cloned().unwrap_or_default()
+        //    Retry up to 3 times with backoff on failure (fail-closed: None on total failure)
+        let max_retries: u32 = std::env::var("VEILKEY_MASK_FETCH_RETRIES")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(3);
+        let mut ref_entries: Option<Vec<serde_json::Value>> = None;
+        for attempt in 0..max_retries {
+            if attempt > 0 {
+                let delay = std::time::Duration::from_millis(500 * (1 << attempt));
+                eprintln!("[veilkey] retrying refs fetch in {}ms (attempt {}/{})", delay.as_millis(), attempt + 1, max_retries);
+                std::thread::sleep(delay);
             }
-            Err(e) => {
-                eprintln!("[veilkey] failed to fetch refs: {}", e);
-                return mask_map;
+            match self.agent.get(&format!("{}/api/refs", self.base_url)).call() {
+                Ok(resp) => {
+                    let data: serde_json::Value = resp.into_json().unwrap_or_default();
+                    ref_entries = Some(data["refs"].as_array().cloned().unwrap_or_default());
+                    break;
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] failed to fetch refs (attempt {}/{}): {}", attempt + 1, max_retries, e);
+                }
+            }
+        }
+        let ref_entries = match ref_entries {
+            Some(entries) => entries,
+            None => {
+                eprintln!("[veilkey] FATAL: could not fetch refs after {} attempts — fail-closed", max_retries);
+                return None;
             }
         };
 
@@ -231,6 +251,34 @@ impl VeilKeyClient {
         }
         let mut result: Vec<(String, String)> = deduped.into_iter().collect();
 
+        // 4. Add encoded variants (base64, hex) so encoded secrets are also masked.
+        //    Each variant maps back to the same VK ref as the original plaintext.
+        //    Only add variants for secrets >= 8 chars to avoid false positives.
+        let mut encoded_variants: Vec<(String, String)> = Vec::new();
+        for (plaintext, vk_ref) in &result {
+            if plaintext.len() < 8 {
+                continue;
+            }
+            // base64 standard
+            let b64_std = base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes());
+            if !result.iter().any(|(p, _)| p == &b64_std) {
+                encoded_variants.push((b64_std, vk_ref.clone()));
+            }
+            // base64 URL-safe
+            let b64_url = base64::engine::general_purpose::URL_SAFE.encode(plaintext.as_bytes());
+            if b64_url != base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes())
+                && !result.iter().any(|(p, _)| p == &b64_url)
+            {
+                encoded_variants.push((b64_url, vk_ref.clone()));
+            }
+            // hex lowercase
+            let hex_lower: String = plaintext.bytes().map(|b| format!("{:02x}", b)).collect();
+            if !result.iter().any(|(p, _)| p == &hex_lower) {
+                encoded_variants.push((hex_lower, vk_ref.clone()));
+            }
+        }
+        result.extend(encoded_variants);
+
         // Sort by plaintext length descending (longest match first)
         result.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
 
@@ -241,7 +289,7 @@ impl VeilKeyClient {
             !all_refs.iter().any(|r| r.contains(plaintext.as_str()) && r != plaintext)
         });
 
-        result
+        Some(result)
     }
 
     pub fn health_check(&self) -> bool {
