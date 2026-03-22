@@ -215,7 +215,10 @@ func detectTabClick(x int, names []string) int {
 
 func (m Model) isEditing() bool {
 	if m.activePage == pageKeycenter {
-		return m.keycenter.creating
+		return m.keycenter.creating || m.keycenter.subview == kcPromote
+	}
+	if m.activePage == pageVaults {
+		return m.vaults.creatingSecret || m.vaults.searching || m.vaults.catalogSearching
 	}
 	if m.activePage == pageSettings {
 		return m.settings.creatingToken

@@ -108,6 +108,17 @@ func revokeTokenCmd(c *Client, tokenID string) tea.Cmd {
 	}
 }
 
+type configDeletedMsg struct{}
+
+func deleteConfigCmd(c *Client, key string) tea.Cmd {
+	return func() tea.Msg {
+		if err := c.DeleteConfig(key); err != nil {
+			return errMsg{err}
+		}
+		return configDeletedMsg{}
+	}
+}
+
 func scheduleRotationCmd(c *Client) tea.Cmd {
 	return func() tea.Msg {
 		_, err := c.ScheduleAllRotations()
@@ -148,6 +159,10 @@ func (m settingsModel) update(msg tea.Msg, c *Client) (settingsModel, tea.Cmd) {
 	case tokenRevokedMsg:
 		m.message = "Token revoked"
 		return m, loadTokensCmd(c)
+
+	case configDeletedMsg:
+		m.message = "Config deleted"
+		return m, loadConfigsCmd(c)
 
 	case rotationScheduledMsg:
 		m.message = "Rotation scheduled for all agents"
@@ -203,6 +218,11 @@ func (m settingsModel) update(msg tea.Msg, c *Client) (settingsModel, tea.Cmd) {
 			return m.updateTokens(msg, c)
 		case settingsConfigs:
 			switch msg.String() {
+			case "d":
+				if len(m.configs) > 0 {
+					key := str(m.configs[m.configCursor], "key")
+					return m, deleteConfigCmd(c, key)
+				}
 			case "j", "down":
 				if m.configCursor < len(m.configs)-1 {
 					m.configCursor++
@@ -418,6 +438,6 @@ func (m settingsModel) viewConfigs(width int) string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(styleDim.Render("  j/k move"))
+	b.WriteString(styleDim.Render("  j/k move  d delete"))
 	return b.String()
 }

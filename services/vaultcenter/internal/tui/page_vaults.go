@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -29,8 +30,20 @@ type vaultsModel struct {
 	showDetail     bool
 	detailVault    map[string]any
 	secrets        []map[string]any
+	filteredSecrets []map[string]any
 	secretsCursor  int
 	secretsLoading bool
+
+	// Search
+	searching   bool
+	searchInput textinput.Model
+	searchQuery string
+
+	// Secret create
+	creatingSecret bool
+	createName     textinput.Model
+	createValue    textinput.Model
+	createFocus    int
 
 	// Secret detail
 	showSecretDetail bool
@@ -46,8 +59,12 @@ type vaultsModel struct {
 	agentCursor int
 
 	// Catalog
-	catalog      []map[string]any
-	catalogCursor int
+	catalog          []map[string]any
+	filteredCatalog  []map[string]any
+	catalogCursor    int
+	catalogSearching bool
+	catalogSearch    textinput.Model
+	catalogQuery     string
 }
 
 type Vault = map[string]any
@@ -63,8 +80,56 @@ type secretMetaMsg struct {
 }
 type secretRevealedMsg struct{ value string }
 
+type secretCreatedMsg struct{}
+type secretDeletedMsg struct{}
+
 func newVaultsModel() vaultsModel {
-	return vaultsModel{loading: true}
+	si := textinput.New()
+	si.Placeholder = "search ref or name..."
+	si.Width = 40
+
+	ci := textinput.New()
+	ci.Placeholder = "search..."
+	ci.Width = 40
+
+	cn := textinput.New()
+	cn.Placeholder = "SECRET_NAME (A-Z_)"
+	cn.CharLimit = 128
+	cn.Width = 40
+
+	cv := textinput.New()
+	cv.Placeholder = "plaintext value"
+	cv.CharLimit = 4096
+	cv.Width = 40
+	cv.EchoMode = textinput.EchoPassword
+	cv.EchoCharacter = '•'
+
+	return vaultsModel{
+		loading:       true,
+		searchInput:   si,
+		catalogSearch: ci,
+		createName:    cn,
+		createValue:   cv,
+	}
+}
+
+func createSecretCmd(c *Client, runtimeHash, name, value string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := c.CreateVaultSecret(runtimeHash, name, value)
+		if err != nil {
+			return errMsg{err}
+		}
+		return secretCreatedMsg{}
+	}
+}
+
+func deleteSecretCmd(c *Client, runtimeHash, name string) tea.Cmd {
+	return func() tea.Msg {
+		if err := c.DeleteVaultSecret(runtimeHash, name); err != nil {
+			return errMsg{err}
+		}
+		return secretDeletedMsg{}
+	}
 }
 
 func loadVaultsCmd(c *Client) tea.Cmd {
@@ -141,8 +206,20 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 	case secretsLoadedMsg:
 		m.secrets = msg.secrets
 		m.secretsLoading = false
-		m.secretsCursor = clampCursor(m.secretsCursor, len(m.secrets))
+		m.applySecretFilter()
+		m.secretsCursor = clampCursor(m.secretsCursor, len(m.filteredSecrets))
 		return m, nil
+
+	case secretCreatedMsg:
+		m.creatingSecret = false
+		m.secretsLoading = true
+		return m, loadSecretsCmd(c, str(m.detailVault, "vault_runtime_hash"))
+
+	case secretDeletedMsg:
+		m.showSecretDetail = false
+		m.revealValue = ""
+		m.secretsLoading = true
+		return m, loadSecretsCmd(c, str(m.detailVault, "vault_runtime_hash"))
 
 	case agentsLoadedMsg:
 		m.agents = msg.agents
@@ -153,7 +230,8 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 	case catalogLoadedMsg:
 		m.catalog = msg.catalog
 		m.loading = false
-		m.catalogCursor = clampCursor(m.catalogCursor, len(m.catalog))
+		m.applyCatalogFilter()
+		m.catalogCursor = clampCursor(m.catalogCursor, len(m.filteredCatalog))
 		return m, nil
 
 	case secretMetaMsg:
@@ -173,6 +251,19 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Search mode in secrets
+		if m.searching {
+			return m.updateSearch(msg)
+		}
+		// Search mode in catalog
+		if m.catalogSearching {
+			return m.updateCatalogSearch(msg)
+		}
+		// Create secret mode
+		if m.creatingSecret {
+			return m.updateCreateSecret(msg, c)
+		}
+
 		// Tab switching
 		if !m.showDetail && !m.showSecretDetail {
 			switch msg.String() {
@@ -206,6 +297,18 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 				}
 			case "h":
 				m.revealValue = ""
+			case "d":
+				name := str(m.secretDetail, "name")
+				rh := str(m.detailVault, "vault_runtime_hash")
+				return m, deleteSecretCmd(c, rh, name)
+			case "e":
+				m.creatingSecret = true
+				m.createName.SetValue(str(m.secretDetail, "name"))
+				m.createValue.SetValue("")
+				m.createFocus = 1
+				m.createName.Blur()
+				m.createValue.Focus()
+				m.showSecretDetail = false
 			case "esc":
 				m.showSecretDetail = false
 				m.revealValue = ""
@@ -257,16 +360,29 @@ func (m vaultsModel) updateList(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd
 func (m vaultsModel) updateSecrets(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
-		if m.secretsCursor < len(m.secrets)-1 {
+		if m.secretsCursor < len(m.filteredSecrets)-1 {
 			m.secretsCursor++
 		}
 	case "k", "up":
 		if m.secretsCursor > 0 {
 			m.secretsCursor--
 		}
+	case "/":
+		m.searching = true
+		m.searchInput.SetValue(m.searchQuery)
+		m.searchInput.Focus()
+		return m, nil
+	case "n":
+		m.creatingSecret = true
+		m.createName.SetValue("")
+		m.createValue.SetValue("")
+		m.createFocus = 0
+		m.createName.Focus()
+		m.createValue.Blur()
+		return m, nil
 	case "enter":
-		if len(m.secrets) > 0 {
-			s := m.secrets[m.secretsCursor]
+		if len(m.filteredSecrets) > 0 {
+			s := m.filteredSecrets[m.secretsCursor]
 			m.showSecretDetail = true
 			m.secretDetail = s
 			m.metaLoading = true
@@ -301,13 +417,17 @@ func (m vaultsModel) updateAgents(msg tea.KeyMsg, c *Client) (vaultsModel, tea.C
 func (m vaultsModel) updateCatalog(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
-		if m.catalogCursor < len(m.catalog)-1 {
+		if m.catalogCursor < len(m.filteredCatalog)-1 {
 			m.catalogCursor++
 		}
 	case "k", "up":
 		if m.catalogCursor > 0 {
 			m.catalogCursor--
 		}
+	case "/":
+		m.catalogSearching = true
+		m.catalogSearch.SetValue(m.catalogQuery)
+		m.catalogSearch.Focus()
 	}
 	return m, nil
 }
@@ -316,8 +436,17 @@ func (m vaultsModel) view(width int) string {
 	if m.showSecretDetail {
 		return m.viewSecretDetail()
 	}
+	if m.creatingSecret {
+		return m.viewSecretCreate()
+	}
+	if m.searching {
+		return m.viewSearching()
+	}
 	if m.showDetail {
 		return m.viewSecrets(width)
+	}
+	if m.catalogSearching {
+		return m.viewCatalogSearching()
 	}
 
 	// Sub-tabs
@@ -403,16 +532,24 @@ func (m vaultsModel) viewSecrets(width int) string {
 		b.WriteString(styleDim.Render("  Loading..."))
 		return b.String()
 	}
-	if len(m.secrets) == 0 {
-		b.WriteString(styleDim.Render("  No secrets."))
-		b.WriteString("\n\n" + styleDim.Render("  esc back"))
+	if m.searchQuery != "" {
+		b.WriteString("  " + styleDim.Render("search: ") + styleReveal.Render(m.searchQuery) + "\n\n")
+	}
+
+	if len(m.filteredSecrets) == 0 {
+		if m.searchQuery != "" {
+			b.WriteString(styleDim.Render("  No matches."))
+		} else {
+			b.WriteString(styleDim.Render("  No secrets."))
+		}
+		b.WriteString("\n\n" + styleDim.Render("  / search  n create  esc back"))
 		return b.String()
 	}
 
 	h := fmt.Sprintf("  %-28s %-28s %-10s %-10s", "Name", "Ref", "Scope", "Status")
 	b.WriteString(styleDim.Render(h))
 	b.WriteString("\n")
-	for i, s := range m.secrets {
+	for i, s := range m.filteredSecrets {
 		ref := str(s, "token")
 		if ref == "" {
 			ref = str(s, "ref")
@@ -429,7 +566,20 @@ func (m vaultsModel) viewSecrets(width int) string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(styleDim.Render("  j/k move  enter detail  r refresh  esc back"))
+	b.WriteString(styleDim.Render("  j/k move  enter detail  / search  n create  r refresh  esc back"))
+	return b.String()
+}
+
+func (m vaultsModel) viewSecretCreate() string {
+	var b strings.Builder
+	name := str(m.detailVault, "vault_name")
+	b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — New Secret", name)))
+	b.WriteString("\n\n")
+	b.WriteString("  " + styleLabel.Render("Name") + "\n")
+	b.WriteString("  " + m.createName.View() + "\n\n")
+	b.WriteString("  " + styleLabel.Render("Value") + "\n")
+	b.WriteString("  " + m.createValue.View() + "\n\n")
+	b.WriteString(styleDim.Render("  tab switch  enter create  esc cancel"))
 	return b.String()
 }
 
@@ -501,9 +651,9 @@ func (m vaultsModel) viewSecretDetail() string {
 
 	b.WriteString("\n\n")
 	if isVK {
-		b.WriteString(styleDim.Render("  r reveal  h hide  esc back"))
+		b.WriteString(styleDim.Render("  r reveal  h hide  e edit  d delete  esc back"))
 	} else {
-		b.WriteString(styleDim.Render("  esc back"))
+		b.WriteString(styleDim.Render("  e edit  d delete  esc back"))
 	}
 	return b.String()
 }
@@ -553,15 +703,24 @@ func (m vaultsModel) viewCatalog(width int) string {
 		b.WriteString(styleDim.Render("  Loading..."))
 		return b.String()
 	}
-	if len(m.catalog) == 0 {
-		b.WriteString(styleDim.Render("  No secrets in catalog."))
+	if m.catalogQuery != "" {
+		b.WriteString("  " + styleDim.Render("search: ") + styleReveal.Render(m.catalogQuery) + "\n\n")
+	}
+
+	if len(m.filteredCatalog) == 0 {
+		if m.catalogQuery != "" {
+			b.WriteString(styleDim.Render("  No matches."))
+		} else {
+			b.WriteString(styleDim.Render("  No secrets in catalog."))
+		}
+		b.WriteString("\n\n" + styleDim.Render("  / search"))
 		return b.String()
 	}
 
 	h := fmt.Sprintf("  %-24s %-20s %-14s %-10s", "Name", "Ref", "Class", "Bindings")
 	b.WriteString(styleDim.Render(h))
 	b.WriteString("\n")
-	for i, s := range m.catalog {
+	for i, s := range m.filteredCatalog {
 		line := fmt.Sprintf("  %-24s %-20s %-14s %-10s",
 			truncate(str(s, "secret_name"), 22),
 			truncate(str(s, "ref_canonical"), 18),
@@ -574,8 +733,141 @@ func (m vaultsModel) viewCatalog(width int) string {
 		b.WriteString(line + "\n")
 	}
 	b.WriteString("\n")
-	b.WriteString(styleDim.Render("  j/k move  tab switch"))
+	b.WriteString(styleDim.Render("  j/k move  / search  tab switch"))
 	return b.String()
+}
+
+// ── Search ──
+
+func (m vaultsModel) updateSearch(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		m.searchQuery = m.searchInput.Value()
+		m.searching = false
+		m.applySecretFilter()
+		m.secretsCursor = 0
+	case "esc":
+		m.searching = false
+		if m.searchQuery == "" {
+			// No search active, go back to vault list
+		}
+	default:
+		var cmd tea.Cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m vaultsModel) updateCatalogSearch(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
+	switch msg.String() {
+	case "enter":
+		m.catalogQuery = m.catalogSearch.Value()
+		m.catalogSearching = false
+		m.applyCatalogFilter()
+		m.catalogCursor = 0
+	case "esc":
+		m.catalogSearching = false
+	default:
+		var cmd tea.Cmd
+		m.catalogSearch, cmd = m.catalogSearch.Update(msg)
+		return m, cmd
+	}
+	return m, nil
+}
+
+func (m *vaultsModel) applySecretFilter() {
+	if m.searchQuery == "" {
+		m.filteredSecrets = m.secrets
+		return
+	}
+	q := strings.ToLower(m.searchQuery)
+	var filtered []map[string]any
+	for _, s := range m.secrets {
+		name := strings.ToLower(str(s, "name"))
+		ref := strings.ToLower(str(s, "token"))
+		if ref == "" {
+			ref = strings.ToLower(str(s, "ref"))
+		}
+		scope := strings.ToLower(str(s, "scope"))
+		if strings.Contains(name, q) || strings.Contains(ref, q) || strings.Contains(scope, q) {
+			filtered = append(filtered, s)
+		}
+	}
+	m.filteredSecrets = filtered
+}
+
+func (m *vaultsModel) applyCatalogFilter() {
+	if m.catalogQuery == "" {
+		m.filteredCatalog = m.catalog
+		return
+	}
+	q := strings.ToLower(m.catalogQuery)
+	var filtered []map[string]any
+	for _, s := range m.catalog {
+		name := strings.ToLower(str(s, "secret_name"))
+		ref := strings.ToLower(str(s, "ref_canonical"))
+		class := strings.ToLower(str(s, "class"))
+		if strings.Contains(name, q) || strings.Contains(ref, q) || strings.Contains(class, q) {
+			filtered = append(filtered, s)
+		}
+	}
+	m.filteredCatalog = filtered
+}
+
+func (m vaultsModel) viewSearching() string {
+	var b strings.Builder
+	b.WriteString(styleHeader.Render("  Search secrets"))
+	b.WriteString("\n\n")
+	b.WriteString("  " + m.searchInput.View() + "\n\n")
+	b.WriteString(styleDim.Render("  enter search  esc cancel"))
+	return b.String()
+}
+
+func (m vaultsModel) viewCatalogSearching() string {
+	var b strings.Builder
+	b.WriteString(styleHeader.Render("  Search catalog"))
+	b.WriteString("\n\n")
+	b.WriteString("  " + m.catalogSearch.View() + "\n\n")
+	b.WriteString(styleDim.Render("  enter search  esc cancel"))
+	return b.String()
+}
+
+// ── Create secret ──
+
+func (m vaultsModel) updateCreateSecret(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd) {
+	switch msg.String() {
+	case "tab", "shift+tab":
+		if m.createFocus == 0 {
+			m.createFocus = 1
+			m.createName.Blur()
+			m.createValue.Focus()
+		} else {
+			m.createFocus = 0
+			m.createValue.Blur()
+			m.createName.Focus()
+		}
+		return m, nil
+	case "enter":
+		name := strings.TrimSpace(m.createName.Value())
+		value := strings.TrimSpace(m.createValue.Value())
+		if name == "" || value == "" {
+			return m, nil
+		}
+		runtimeHash := str(m.detailVault, "vault_runtime_hash")
+		return m, createSecretCmd(c, runtimeHash, name, value)
+	case "esc":
+		m.creatingSecret = false
+	default:
+		var cmd tea.Cmd
+		if m.createFocus == 0 {
+			m.createName, cmd = m.createName.Update(msg)
+		} else {
+			m.createValue, cmd = m.createValue.Update(msg)
+		}
+		return m, cmd
+	}
+	return m, nil
 }
 
 func clampCursor(cursor, length int) int {

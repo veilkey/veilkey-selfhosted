@@ -11,6 +11,7 @@ type refsLoadedMsg struct{ refs []TempRef }
 type refRevealedMsg struct{ value string }
 type refCreatedMsg struct{ ref string }
 type refDeletedMsg struct{}
+type refPromotedMsg struct{}
 
 // Auth messages
 type loginSuccessMsg struct{}

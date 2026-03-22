@@ -171,6 +171,52 @@ func (c *Client) GetVaultAudit(vaultHash string) ([]map[string]any, error) {
 	return decodeList[map[string]any](data, "events")
 }
 
+// ── Secret Create ──
+
+func (c *Client) CreateVaultSecret(runtimeHash, name, value string) (map[string]any, error) {
+	return c.postJSON("/api/vaults/"+runtimeHash+"/keys", marshal(map[string]string{
+		"name":  name,
+		"value": value,
+	}))
+}
+
+// ── Secret Update/Delete ──
+
+func (c *Client) UpdateVaultSecret(runtimeHash, name, value string) (map[string]any, error) {
+	return c.putJSON("/api/vaults/"+runtimeHash+"/keys/"+name, marshal(map[string]string{
+		"name":  name,
+		"value": value,
+	}))
+}
+
+func (c *Client) DeleteVaultSecret(runtimeHash, name string) error {
+	return c.deleteJSON("/api/vaults/" + runtimeHash + "/keys/" + name)
+}
+
+// ── Config CRUD ──
+
+func (c *Client) SaveConfig(key, value string) (map[string]any, error) {
+	return c.postJSON("/api/configs", marshal(map[string]string{"key": key, "value": value}))
+}
+
+func (c *Client) DeleteConfig(key string) error {
+	return c.deleteJSON("/api/configs/" + key)
+}
+
+// ── Approvals ──
+
+func (c *Client) ListRebindApprovals() ([]map[string]any, error) {
+	data, err := c.getJSON("/api/admin/approvals/rebind")
+	if err != nil {
+		return nil, err
+	}
+	return decodeList[map[string]any](data, "agents")
+}
+
+func (c *Client) ApproveRebind(agent string) (map[string]any, error) {
+	return c.postJSON("/api/admin/approvals/rebind/"+agent+"/approve", []byte("{}"))
+}
+
 // ── Secret Reveal ──
 
 // RevealAuthorize opens a reveal window for a secret ref.
@@ -317,6 +363,28 @@ func (c *Client) getJSON(path string) (map[string]any, error) {
 
 func (c *Client) postJSON(path string, body []byte) (map[string]any, error) {
 	resp, err := c.http.Post(c.baseURL+path, "application/json", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("API error (%d): %s", resp.StatusCode, string(respBody))
+	}
+	var result map[string]any
+	if err := json.Unmarshal(respBody, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+	return result, nil
+}
+
+func (c *Client) putJSON(path string, body []byte) (map[string]any, error) {
+	req, err := http.NewRequest("PUT", c.baseURL+path, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.http.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}

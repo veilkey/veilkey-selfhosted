@@ -16,6 +16,7 @@ const (
 	kcDetail
 	kcCreate
 	kcConfirm
+	kcPromote
 )
 
 type keycenterModel struct {
@@ -35,6 +36,11 @@ type keycenterModel struct {
 	nameInput  textinput.Model
 	valueInput textinput.Model
 	focusIdx   int
+
+	// Promote
+	vaults      []map[string]any
+	vaultCursor int
+	promoting   bool
 }
 
 func newKeycenterModel() keycenterModel {
@@ -83,8 +89,20 @@ func (m keycenterModel) update(msg tea.Msg, c *Client) (keycenterModel, tea.Cmd)
 		m.subview = kcList
 		return m, loadRefsCmd(c)
 
+	case vaultsLoadedMsg:
+		m.vaults = msg.vaults
+		m.vaultCursor = 0
+		return m, nil
+
+	case refPromotedMsg:
+		m.subview = kcList
+		m.promoting = false
+		return m, loadRefsCmd(c)
+
 	case tea.KeyMsg:
 		switch m.subview {
+		case kcPromote:
+			return m.updatePromote(msg, c)
 		case kcList:
 			return m.updateList(msg, c)
 		case kcDetail:
@@ -156,10 +174,46 @@ func (m keycenterModel) updateDetail(msg tea.KeyMsg, c *Client) (keycenterModel,
 		}
 	case "h":
 		m.revealed = ""
+	case "p":
+		m.subview = kcPromote
+		m.vaultCursor = 0
+		return m, loadVaultsCmd(c)
 	case "esc":
 		m.subview = kcList
 	}
 	return m, nil
+}
+
+func (m keycenterModel) updatePromote(msg tea.KeyMsg, c *Client) (keycenterModel, tea.Cmd) {
+	switch msg.String() {
+	case "j", "down":
+		if m.vaultCursor < len(m.vaults)-1 {
+			m.vaultCursor++
+		}
+	case "k", "up":
+		if m.vaultCursor > 0 {
+			m.vaultCursor--
+		}
+	case "enter":
+		if len(m.vaults) > 0 {
+			v := m.vaults[m.vaultCursor]
+			m.promoting = true
+			return m, promoteRefCmd(c, m.detailRef.RefCanonical, m.detailRef.SecretName, str(v, "vault_hash"))
+		}
+	case "esc":
+		m.subview = kcDetail
+	}
+	return m, nil
+}
+
+func promoteRefCmd(c *Client, ref, name, vaultHash string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := c.PromoteRef(ref, name, vaultHash)
+		if err != nil {
+			return errMsg{err}
+		}
+		return refPromotedMsg{}
+	}
 }
 
 func (m keycenterModel) updateCreate(msg tea.KeyMsg, c *Client) (keycenterModel, tea.Cmd) {
@@ -212,6 +266,8 @@ func (m keycenterModel) view(width int) string {
 		return m.viewCreate()
 	case kcConfirm:
 		return m.viewConfirm()
+	case kcPromote:
+		return m.viewPromote(width)
 	default:
 		return m.viewList(width)
 	}
@@ -291,7 +347,38 @@ func (m keycenterModel) viewDetail() string {
 		b.WriteString("  " + styleDim.Render("r reveal"))
 	}
 	b.WriteString("\n\n")
-	b.WriteString(styleDim.Render("  esc back"))
+	b.WriteString(styleDim.Render("  r reveal  h hide  p promote  esc back"))
+	return b.String()
+}
+
+func (m keycenterModel) viewPromote(width int) string {
+	var b strings.Builder
+	b.WriteString(styleHeader.Render(fmt.Sprintf("  Promote: %s → Vault", m.detailRef.RefCanonical)))
+	b.WriteString("\n\n")
+
+	if m.promoting {
+		b.WriteString("  " + styleDim.Render("Promoting..."))
+		return b.String()
+	}
+	if len(m.vaults) == 0 {
+		b.WriteString(styleDim.Render("  Loading vaults..."))
+		return b.String()
+	}
+
+	b.WriteString(styleDim.Render("  Select target vault:") + "\n\n")
+	for i, v := range m.vaults {
+		name := str(v, "vault_name")
+		if name == "" {
+			name = str(v, "vault_hash")
+		}
+		line := fmt.Sprintf("  %-24s %s", truncate(name, 22), str(v, "status"))
+		if i == m.vaultCursor {
+			line = lipgloss.NewStyle().Background(colorHighlight).Foreground(colorFg).Width(max(width-4, 60)).Render(line)
+		}
+		b.WriteString(line + "\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(styleDim.Render("  j/k move  enter promote  esc cancel"))
 	return b.String()
 }
 
