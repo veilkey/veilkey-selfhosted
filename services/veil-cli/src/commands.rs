@@ -161,8 +161,9 @@ pub fn cmd_scan(
         detector.stats.lines += 1;
         for det in detections {
             detector.stats.detections += 1;
-            let preview = if det.value.len() > SCAN_PREVIEW_LEN {
-                format!("{}***", &det.value[..SCAN_PREVIEW_LEN])
+            let preview = if det.value.chars().count() > SCAN_PREVIEW_LEN {
+                let end: usize = det.value.char_indices().nth(SCAN_PREVIEW_LEN).map(|(i, _)| i).unwrap_or(det.value.len());
+                format!("{}***", &det.value[..end])
             } else {
                 det.value.clone()
             };

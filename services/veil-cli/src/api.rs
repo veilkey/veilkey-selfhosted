@@ -305,7 +305,7 @@ impl VeilKeyClient {
                 }
             }
         }
-        result.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+        enrich_mask_map(&mut result);
         Some(result)
     }
 

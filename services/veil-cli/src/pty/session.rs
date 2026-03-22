@@ -187,7 +187,9 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                         let mut tracker = input_tracker.lock().unwrap();
                         tracker.push_str(s);
                         if tracker.len() > 4096 {
+                            // Find a char boundary at or after the trim point
                             let start = tracker.len() - 4096;
+                            let start = tracker.ceil_char_boundary(start);
                             *tracker = tracker[start..].to_string();
                         }
                     }

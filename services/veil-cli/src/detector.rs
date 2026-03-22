@@ -253,9 +253,9 @@ impl<'a> SecretDetector<'a> {
                     .then(b.full_match.len().cmp(&a.full_match.len()))
             });
 
-            let mut replaced: HashMap<String, bool> = HashMap::new();
+            let mut replaced: std::collections::HashSet<String> = std::collections::HashSet::new();
             for det in detections {
-                if replaced.contains_key(&det.value) {
+                if replaced.contains(&det.value) {
                     continue;
                 }
                 if let Some(vk) = self.issue_veilkey(&det.value) {
@@ -265,10 +265,11 @@ impl<'a> SecretDetector<'a> {
                     } else {
                         line = line.replacen(&det.value, &vk, 1);
                     }
-                    replaced.insert(det.value.clone(), true);
+                    replaced.insert(det.value.clone());
                     self.stats.detections += 1;
-                    let preview = if det.value.len() > PREVIEW_LEN {
-                        format!("{}***", &det.value[..PREVIEW_LEN])
+                    let preview = if det.value.chars().count() > PREVIEW_LEN {
+                        let end: usize = det.value.char_indices().nth(PREVIEW_LEN).map(|(i, _)| i).unwrap_or(det.value.len());
+                        format!("{}***", &det.value[..end])
                     } else {
                         "***".to_string()
                     };
@@ -288,8 +289,9 @@ impl<'a> SecretDetector<'a> {
                 if line.contains(&value) {
                     line = line.replace(&value, &vk);
                     self.stats.detections += 1;
-                    let preview = if value.len() > PREVIEW_LEN {
-                        format!("{}***", &value[..PREVIEW_LEN])
+                    let preview = if value.chars().count() > PREVIEW_LEN {
+                        let end: usize = value.char_indices().nth(PREVIEW_LEN).map(|(i, _)| i).unwrap_or(value.len());
+                        format!("{}***", &value[..end])
                     } else {
                         "***".to_string()
                     };
