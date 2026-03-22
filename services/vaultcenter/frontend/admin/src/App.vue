@@ -839,9 +839,8 @@
                                                     <div style="text-align:center;padding:16px;background:#fff;border-radius:8px;display:inline-block">
                                                         <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=' + encodeURIComponent(state.totpOtpauthURI)" alt="QR Code" style="width:200px;height:200px">
                                                     </div>
-                                                    <div class="value" style="font-family:monospace;word-break:break-all;font-size:0.85rem;background:#f3f4f6;padding:8px;border-radius:4px">{{ state.totpSecret }}</div>
                                                     <div style="margin-top:4px">
-                                                        <button class="btn btn-soft" style="font-size:0.8rem" @click="navigator.clipboard.writeText(state.totpOtpauthURI)">{{ t('security_2fa_copy_uri') }}</button>
+                                                        <input class="field" readonly :value="state.totpOtpauthURI" @click="$event.target.select()" style="font-size:0.75rem;font-family:monospace;width:100%;cursor:text">
                                                     </div>
                                                     <div class="value" style="color:#b45309;font-size:0.82rem;background:#fffbeb;padding:8px;border-radius:4px;border:1px solid #fde68a">⚠ {{ t('security_2fa_sha256_note') }}</div>
                                                     <div class="value">{{ t('security_2fa_step2') }}</div>

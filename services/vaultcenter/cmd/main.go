@@ -12,6 +12,9 @@ func main() {
 		case "init":
 			commands.RunInit()
 			return
+		case "keycenter":
+			commands.RunKeycenter()
+			return
 		}
 	}
 
