@@ -107,12 +107,12 @@ func LoadInstance(ctx context.Context, wasmBytes []byte, hostFns HostFunctions) 
 	// Call plugin_info to get metadata
 	info, err := inst.callJSON("plugin_info", nil)
 	if err != nil {
-		plugin.Close(ctx)
+		_ = plugin.Close(ctx)
 		return nil, fmt.Errorf("plugin_info: %w", err)
 	}
 	var pInfo PluginInfo
 	if err := json.Unmarshal(info, &pInfo); err != nil {
-		plugin.Close(ctx)
+		_ = plugin.Close(ctx)
 		return nil, fmt.Errorf("parse plugin_info: %w", err)
 	}
 	inst.info = pInfo
@@ -214,7 +214,7 @@ func (inst *Instance) Render(ctx context.Context, action string, input any) (*Re
 
 // Close releases the Extism plugin.
 func (inst *Instance) Close(ctx context.Context) error {
-	inst.plugin.Close(ctx)
+	_ = inst.plugin.Close(ctx)
 	return nil
 }
 
