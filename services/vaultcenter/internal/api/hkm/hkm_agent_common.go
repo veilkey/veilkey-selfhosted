@@ -24,22 +24,24 @@ func (e *agentStateError) Error() string {
 }
 
 type agentInfo struct {
-	NodeID         string
-	Label          string
-	AgentHash      string
-	VaultHash      string
-	VaultName      string
-	IP             string
-	Port           int
-	KeyVersion     int
-	DEK            []byte
-	DEKNonce       []byte
-	RebindRequired bool
-	RebindReason   string
-	RetryStage     int
-	NextRetryAt    string
-	Blocked        bool
-	BlockReason    string
+	NodeID           string
+	Label            string
+	AgentHash        string
+	VaultHash        string
+	VaultName        string
+	IP               string
+	Port             int
+	KeyVersion       int
+	DEK              []byte
+	DEKNonce         []byte
+	AgentSecretEnc   []byte
+	AgentSecretNonce []byte
+	RebindRequired   bool
+	RebindReason     string
+	RetryStage       int
+	NextRetryAt      string
+	Blocked          bool
+	BlockReason      string
 }
 
 func (a *agentInfo) URL() string {
@@ -78,9 +80,11 @@ func agentToInfo(agent *db.Agent) *agentInfo {
 		IP:             agent.IP,
 		Port:           agent.Port,
 		KeyVersion:     agent.KeyVersion,
-		DEK:            agent.DEK,
-		DEKNonce:       agent.DEKNonce,
-		RebindRequired: agent.RebindRequired,
+		DEK:              agent.DEK,
+		DEKNonce:         agent.DEKNonce,
+		AgentSecretEnc:   agent.AgentSecretEnc,
+		AgentSecretNonce: agent.AgentSecretNonce,
+		RebindRequired:   agent.RebindRequired,
 		RebindReason:   agent.RebindReason,
 		RetryStage:     agent.RetryStage,
 		NextRetryAt:    nextRetryAt,
@@ -122,13 +126,9 @@ func (h *Handler) decryptAgentSecret(encSecret, encNonce []byte) string {
 	return string(plaintext)
 }
 
-// setAgentAuthHeader adds an Authorization Bearer header to the request if the agent has a secret.
+// setAgentAuthHeader adds an Authorization Bearer header to the request using the agent's cached secret.
 func (h *Handler) setAgentAuthHeader(req *http.Request, agent *agentInfo) {
-	dbAgent, err := h.deps.DB().GetAgentByHash(agent.AgentHash)
-	if err != nil {
-		return
-	}
-	secret := h.decryptAgentSecret(dbAgent.AgentSecretEnc, dbAgent.AgentSecretNonce)
+	secret := h.decryptAgentSecret(agent.AgentSecretEnc, agent.AgentSecretNonce)
 	if secret != "" {
 		req.Header.Set("Authorization", "Bearer "+secret)
 	}

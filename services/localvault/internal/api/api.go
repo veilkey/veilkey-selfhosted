@@ -42,6 +42,10 @@ type Server struct {
 	unlockLimiter *ratelimit.UnlockRateLimiter
 	httpClient    *http.Client
 
+	// agentAuthCache caches the decrypted agent secret to avoid repeated DB+KEK lookups.
+	agentAuthCache   string
+	agentAuthCacheAt time.Time
+
 	secretsHandler   *secrets.Handler
 	configsHandler   *configs.Handler
 	bulkHandler      *bulk.Handler
@@ -163,10 +167,13 @@ func (s *Server) CleanupExpiredTestFunctions(now time.Time) (int, error) {
 }
 
 // agentAuthHeader returns the Authorization header value for requests to VaultCenter.
-// Returns empty string if agent secret is not available.
+// Caches the decrypted secret for 1 minute to avoid repeated DB+KEK lookups.
 func (s *Server) agentAuthHeader() string {
 	if s.IsLocked() {
 		return ""
+	}
+	if s.agentAuthCache != "" && time.Since(s.agentAuthCacheAt) < time.Minute {
+		return s.agentAuthCache
 	}
 	info, err := s.db.GetNodeInfo()
 	if err != nil || len(info.AgentSecret) == 0 {
@@ -177,7 +184,15 @@ func (s *Server) agentAuthHeader() string {
 	if err != nil {
 		return ""
 	}
-	return "Bearer " + string(decrypted)
+	s.agentAuthCache = "Bearer " + string(decrypted)
+	s.agentAuthCacheAt = time.Now()
+	return s.agentAuthCache
+}
+
+// invalidateAgentAuthCache clears the cached agent secret (call after receiving a new secret).
+func (s *Server) invalidateAgentAuthCache() {
+	s.agentAuthCache = ""
+	s.agentAuthCacheAt = time.Time{}
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
