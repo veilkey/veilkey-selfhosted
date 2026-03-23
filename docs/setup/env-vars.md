@@ -20,13 +20,14 @@
 |----------|---------|-------------|
 | `VEILKEY_ADDR` | `:10181` / `:10180` | Listen address |
 | `VEILKEY_DB_PATH` | `/data/veilkey.db` | Database path |
-| `VEILKEY_TLS_INSECURE` | `0` | Accept self-signed certs |
+| `VEILKEY_DB_KEY` | **(required)** | SQLCipher encryption key (64-char hex). Server refuses to start without it |
+| `VEILKEY_TLS_INSECURE` | `0` | Accept self-signed certs (also applies to `init --token` validation) |
 | `VEILKEY_TLS_CERT` | - | TLS certificate path |
 | `VEILKEY_TLS_KEY` | - | TLS private key path |
 | `VEILKEY_CHAIN_HOME` | `/data/chain` | CometBFT data directory |
 | `VEILKEY_TEMP_REF_TTL` | `1h` | Temp ref expiry |
 | `VEILKEY_ADMIN_SESSION_TTL` | `2h` | Admin session duration |
-| `VEILKEY_PASSWORD_FILE` | - | Auto-unlock password file path |
+| ~~`VEILKEY_PASSWORD_FILE`~~ | - | **Removed (v0.5.0).** KEK is memory-only |
 | `VEILKEY_AGENT_SCHEME` | `https` | Scheme for agent connections |
 
 ## Standalone LocalVault
