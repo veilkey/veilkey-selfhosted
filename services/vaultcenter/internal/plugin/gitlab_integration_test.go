@@ -21,7 +21,7 @@ func TestGitLabPluginWASM(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	defer _ = inst.Close(ctx)
+	defer func() { _ = inst.Close(ctx) }()
 
 	t.Run("plugin_info", func(t *testing.T) {
 		info := inst.Info()
