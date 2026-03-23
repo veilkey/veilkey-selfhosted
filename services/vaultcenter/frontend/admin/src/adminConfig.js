@@ -3,6 +3,7 @@ export const pageConfig = {
     vaults: { labelKey: 'page_vaults', tabs: ['ALL_VAULTS', 'VAULT_ITEMS', 'BULK_APPLY'] },
     functions: { labelKey: 'page_functions', tabs: ['FUNCTION_LIST', 'FUNCTION_BINDINGS', 'FUNCTION_IMPACT', 'FUNCTION_RUN'] },
     audit: { labelKey: 'page_audit', tabs: ['AUDIT_LOG'] },
+    plugins: { labelKey: 'page_plugins', tabs: ['PLUGIN_LIST'] },
     settings: { labelKey: 'page_settings', tabs: ['UI', 'SECURITY', 'ADMIN'] }
 };
 
@@ -14,6 +15,7 @@ export const routeEntries = [
     { page: 'functions', tab: 'FUNCTION_IMPACT', path: '/functions/impact' },
     { page: 'functions', tab: 'FUNCTION_RUN', path: '/functions/run' },
     { page: 'audit', tab: 'AUDIT_LOG', path: '/audit' },
+    { page: 'plugins', tab: 'PLUGIN_LIST', path: '/plugins' },
     { page: 'settings', tab: 'UI', path: '/settings/ui' },
     { page: 'settings', tab: 'SECURITY', path: '/settings/security' },
     { page: 'settings', tab: 'ADMIN', path: '/settings/admin' }

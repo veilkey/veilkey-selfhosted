@@ -16,11 +16,12 @@ const (
 	pageVaults
 	pageFunctions
 	pageAudit
+	pagePlugins
 	pageSettings
 )
 
-var pageNames = []string{"Keycenter", "Vaults", "Functions", "Audit", "Settings"}
-var pages = []page{pageKeycenter, pageVaults, pageFunctions, pageAudit, pageSettings}
+var pageNames = []string{"Keycenter", "Vaults", "Functions", "Audit", "Plugins", "Settings"}
+var pages = []page{pageKeycenter, pageVaults, pageFunctions, pageAudit, pagePlugins, pageSettings}
 
 // Model is the top-level bubbletea model.
 type Model struct {
@@ -37,6 +38,7 @@ type Model struct {
 	vaults    vaultsModel
 	functions functionsModel
 	audit     auditModel
+	plugins   pluginsModel
 	settings  settingsModel
 }
 
@@ -52,6 +54,7 @@ func NewModel(serverURL string) Model {
 		vaults:     newVaultsModel(),
 		functions:  newFunctionsModel(),
 		audit:      newAuditModel(),
+		plugins:    newPluginsModel(),
 		settings:   newSettingsModel(),
 	}
 }
@@ -123,6 +126,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.functions, cmd = m.functions.update(msg, m.client)
 	case pageAudit:
 		m.audit, cmd = m.audit.update(msg, m.client)
+	case pagePlugins:
+		m.plugins, cmd = m.plugins.update(msg, m.client)
 	case pageSettings:
 		m.settings, cmd = m.settings.update(msg, m.client)
 	}
@@ -146,6 +151,8 @@ func (m Model) View() string {
 			pageContent = m.functions.view(m.width)
 		case pageAudit:
 			pageContent = m.audit.view(m.width)
+		case pagePlugins:
+			pageContent = m.plugins.view(m.width)
 		case pageSettings:
 			pageContent = m.settings.view(m.width)
 		}
