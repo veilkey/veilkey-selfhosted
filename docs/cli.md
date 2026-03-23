@@ -1,6 +1,16 @@
 # CLI Reference
 
-`veilkey-cli` is the operator-facing tool for detecting, encrypting, and managing secrets.
+## Quick Usage
+
+```bash
+veil                          # Enter protected shell
+veil status                   # Check connection
+veil resolve VK:LOCAL:xxx     # Decrypt a reference
+veil exec echo VK:LOCAL:xxx   # Run command with real values
+veil scan file.env            # Find secrets in files
+```
+
+`veil` is a shorthand for `veilkey-cli wrap-pty`. All commands below also work via `veilkey-cli` directly.
 
 ## Usage via Docker
 
@@ -175,3 +185,6 @@ scan:
 | `VEILKEY_HUB_URL` | Fallback API endpoint |
 | `VEILKEY_STATE_DIR` | Session state directory (default: `$TMPDIR/veilkey-cli`) |
 | `VEILKEY_FUNCTION_DIR` | Function wrapper directory |
+| `VEILKEY_DB_KEY` | **Required.** SQLCipher encryption key for database |
+| `VEILKEY_TLS_INSECURE` | Set `1` to skip TLS certificate verification |
+| `VEILKEY_CURL_OPTS` | Custom curl options for bulk-apply sync (default: `-sk`) |

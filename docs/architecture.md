@@ -37,7 +37,8 @@ Central management server. Single instance per deployment.
 
 **Does NOT:**
 - Store ciphertext (only agentDEK)
-- Auto-unlock by default (starts LOCKED; requires master password via web UI or optional `VEILKEY_PASSWORD_FILE`)
+- Auto-unlock (starts LOCKED; requires master password via `POST /api/unlock`)
+- Allow password files or env vars for auto-unlock (KEK is memory-only)
 
 **Port:** `:10181` (host: `11181`)
 
@@ -211,6 +212,9 @@ Host ports: 11181 (VC), 11180 (LV), 26656 (P2P), 26657 (RPC)
 | POST | `/api/keycenter/temp-refs` | admin | Create temp ref |
 | POST | `/api/keycenter/promote` | admin | Promote to vault |
 | POST | `/api/admin/registration-tokens` | admin | Issue registration token |
+| POST | `/api/admin/change-password` | owner+trusted | Change admin password |
+| GET | `/api/agents/{hash}/secrets` | agent | List agent secrets |
+| GET | `/api/agents/{hash}/secrets/{name}` | agent | Get secret value |
 | GET | `/api/resolve/{ref}` | - | Resolve VK ref |
 | GET | `/api/vault-inventory` | - | List vaults |
 | GET | `/api/vaults/{hash}/keys` | - | List vault keys |
@@ -231,6 +235,24 @@ Host ports: 11181 (VC), 11180 (LV), 26656 (P2P), 26657 (RPC)
 
 ## Database
 
-Both services use SQLite (WAL mode):
+Both services use SQLCipher (encrypted SQLite, WAL mode). `VEILKEY_DB_KEY` is **required** — server refuses to start without it. Plain `sqlite3` cannot read the database.
+
 - **VaultCenter:** agents, token_refs, audit_events, configs, secrets, admin_sessions
 - **LocalVault:** secrets, configs, node_info, functions
+
+## Agent Authentication (v0.5.0)
+
+Each LocalVault authenticates to VaultCenter with an `agent_secret` Bearer token, issued during registration. Authentication is bidirectional:
+
+| Direction | Mechanism |
+|-----------|-----------|
+| LV → VC | `Authorization: Bearer {agent_secret}` — VC verifies SHA256(token) → agent_hash |
+| VC → LV | Same token — LV verifies via constant-time comparison |
+
+Unauthenticated requests to agent APIs are rejected. `mask-map` endpoint remains open (trusted IP only) for PTY masking.
+
+### Admin Password
+
+- Initial setup: `POST /api/admin/setup` (requires owner password)
+- Change: `POST /api/admin/change-password` (requires owner password — not admin session)
+- No other method can change the admin password (DB is encrypted)
