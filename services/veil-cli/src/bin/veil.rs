@@ -102,15 +102,25 @@ fn main() {
     if args.is_empty() {
         // Create temp rcfile for custom prompt
         let rc_path = format!("{}/veil-bashrc", env::temp_dir().display());
-        let rc_content = r#"
+        let hist_path = format!(
+            "{}/veil-history.{}",
+            env::temp_dir().display(),
+            std::process::id()
+        );
+        let rc_content = format!(
+            r#"
 [ -f ~/.bashrc ] && source ~/.bashrc
 [ -f ~/.bash_profile ] && source ~/.bash_profile
 export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
-# Disable history to prevent secret leakage via up-arrow
-export HISTFILE=/dev/null
-export HISTSIZE=0
-set +o history
-"#;
+# Session-only history: works within session, deleted on exit
+export HISTFILE="{}"
+export HISTSIZE=500
+export HISTFILESIZE=0
+export HISTCONTROL=ignoreboth:erasedups
+trap 'rm -f "$HISTFILE"' EXIT
+"#,
+            hist_path
+        );
         let _ = std::fs::write(&rc_path, rc_content);
 
         // veil → enter protected shell with custom prompt

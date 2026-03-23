@@ -1,9 +1,12 @@
 pub mod api;
+pub mod commands;
 pub mod config;
 pub mod detector;
 pub mod logger;
 pub mod output;
 pub mod project_config;
+pub mod proxy;
+pub mod pty;
 pub mod state;
 
 use std::env;
