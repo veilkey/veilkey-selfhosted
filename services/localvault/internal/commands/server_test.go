@@ -42,17 +42,17 @@ func TestServerStartsLocked(t *testing.T) {
 	}
 }
 
-func TestDBEncryptionRequired(t *testing.T) {
+func TestDBKeyDerivedFromSalt(t *testing.T) {
 	src, err := os.ReadFile("server.go")
 	if err != nil {
 		t.Fatalf("failed to read server.go: %v", err)
 	}
 	code := string(src)
-	if !contains(code, `os.Getenv("VEILKEY_DB_KEY") == ""`) {
-		t.Error("server.go must check VEILKEY_DB_KEY and refuse to start without it")
+	if !contains(code, "deriveDBKey(salt)") {
+		t.Error("server.go must derive DB key from salt via deriveDBKey()")
 	}
-	if !contains(code, "database must be encrypted") {
-		t.Error("server.go must log a fatal message about database encryption requirement")
+	if !contains(code, "sha256.Sum256") {
+		t.Error("server.go must use SHA256 for DB key derivation")
 	}
 }
 

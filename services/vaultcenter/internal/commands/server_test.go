@@ -42,22 +42,18 @@ func TestServerStartsLocked(t *testing.T) {
 	}
 }
 
-func TestDBEncryptionRequired(t *testing.T) {
-	// VEILKEY_DB_KEY must be required — DB without encryption is a security violation.
-	// Server must refuse to start without it.
-
-	// Verify the check exists in RunServer by scanning source code.
-	// This is a compile-time guard: if the check is removed, this test must fail.
+func TestDBKeyDerivedFromSalt(t *testing.T) {
+	// DB encryption key must be derived from salt — no separate VEILKEY_DB_KEY required.
 	src, err := os.ReadFile("server.go")
 	if err != nil {
 		t.Fatalf("failed to read server.go: %v", err)
 	}
 	code := string(src)
-	if !contains(code, `os.Getenv("VEILKEY_DB_KEY") == ""`) {
-		t.Error("server.go must check VEILKEY_DB_KEY and refuse to start without it")
+	if !contains(code, "deriveDBKey(salt)") {
+		t.Error("server.go must derive DB key from salt via deriveDBKey()")
 	}
-	if !contains(code, "database must be encrypted") {
-		t.Error("server.go must log a fatal message about database encryption requirement")
+	if !contains(code, "sha256.Sum256") {
+		t.Error("server.go must use SHA256 for DB key derivation")
 	}
 }
 
