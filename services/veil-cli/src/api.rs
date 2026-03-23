@@ -281,11 +281,7 @@ impl VeilKeyClient {
                         max_retries,
                         e
                     );
-                    // Fallback: try legacy /api/refs + resolve path
-                    if attempt == max_retries - 1 {
-                        eprintln!("[veilkey] trying legacy refs+resolve fallback...");
-                        return self.fetch_all_secrets_mask_map_legacy();
-                    }
+                    // No fallback — fail-closed if mask-map is unavailable
                 }
             }
         }
@@ -314,40 +310,6 @@ impl VeilKeyClient {
 
         enrich_mask_map(&mut result);
 
-        Some(result)
-    }
-
-    /// Legacy fallback: fetch refs + resolve each individually (N+1 requests).
-    fn fetch_all_secrets_mask_map_legacy(&self) -> Option<Vec<(String, String)>> {
-        let refs_resp = self
-            .agent
-            .get(&format!("{}/api/refs", self.base_url))
-            .call();
-        let ref_entries: Vec<serde_json::Value> = match refs_resp {
-            Ok(resp) => {
-                let data: serde_json::Value = resp.into_json().unwrap_or_default();
-                data["refs"].as_array().cloned().unwrap_or_default()
-            }
-            Err(_) => return None,
-        };
-
-        let mut result: Vec<(String, String)> = Vec::new();
-        for entry in &ref_entries {
-            let canonical = match entry["ref_canonical"].as_str() {
-                Some(c) => c,
-                None => continue,
-            };
-            if !canonical.starts_with("VK:") {
-                continue;
-            }
-            if let Ok(value) = self.resolve(canonical) {
-                let trimmed = value.trim_end_matches(['\r', '\n']);
-                if !trimmed.is_empty() {
-                    result.push((trimmed.to_string(), canonical.to_string()));
-                }
-            }
-        }
-        enrich_mask_map(&mut result);
         Some(result)
     }
 
