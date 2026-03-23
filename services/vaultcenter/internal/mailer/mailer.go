@@ -58,7 +58,7 @@ func sendSMTP(from, to, subject, body string) error {
 	startTLSStr := strings.TrimSpace(os.Getenv("VEILKEY_SMTP_STARTTLS"))
 	startTLS := defaultSTARTTLS
 	if startTLSStr != "" {
-		startTLS = strings.ToLower(startTLSStr) != "false"
+		startTLS = !strings.EqualFold(startTLSStr, "false")
 	}
 
 	m := mail.NewMsg()

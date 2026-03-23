@@ -115,11 +115,11 @@ func (h *Handler) handleEmailOTPPage(w http.ResponseWriter, r *http.Request) {
 	}
 	if challenge.Status == "verified" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, emailOTPSuccessHTML)
+		_, _ = fmt.Fprint(w, emailOTPSuccessHTML)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, emailOTPHTML, challenge.Email, defaultEmailOTPReason(challenge.Reason), token)
+	_, _ = fmt.Fprintf(w, emailOTPHTML, challenge.Email, defaultEmailOTPReason(challenge.Reason), token)
 }
 
 func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
@@ -169,7 +169,7 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, emailOTPSuccessHTML)
+		_, _ = fmt.Fprint(w, emailOTPSuccessHTML)
 	default:
 		respondErr(w, http.StatusBadRequest, "unsupported action")
 	}

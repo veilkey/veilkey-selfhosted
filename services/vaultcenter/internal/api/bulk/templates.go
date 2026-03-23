@@ -67,16 +67,6 @@ func bulkApplyPlaceholders(body string) []map[string]string {
 	return items
 }
 
-func renderBulkApplyPreview(body string) string {
-	return bulkApplyPlaceholderPattern.ReplaceAllStringFunc(body, func(token string) string {
-		match := bulkApplyPlaceholderPattern.FindStringSubmatch(token)
-		if len(match) != 3 {
-			return token
-		}
-		return "<" + strings.TrimSpace(match[1]) + "." + strings.TrimSpace(match[2]) + ">"
-	})
-}
-
 func isSensitiveBulkApplyValue(kind, name string) bool {
 	if strings.EqualFold(strings.TrimSpace(kind), db.RefFamilyVE) {
 		return false

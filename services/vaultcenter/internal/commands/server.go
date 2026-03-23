@@ -94,7 +94,7 @@ func RunServer() {
 		if chainErr != nil {
 			log.Fatalf("Failed to start chain node: %v", chainErr)
 		}
-		defer chain.StopNode(cometNode)
+		defer func() { _ = chain.StopNode(cometNode) }()
 		server.SetChainClient(chain.NewClient(cometNode))
 		server.SetChainHome(chainHome)
 		server.SetChainNodeID(string(cometNode.NodeInfo().ID()))
