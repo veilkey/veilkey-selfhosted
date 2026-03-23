@@ -2,10 +2,14 @@
 # vk-bulk-apply-sync.sh — VeilKey bulk-apply 자동 동기화 파이프라인
 #
 # 동작:
-#   1. LocalVault에 등록된 시크릿 이름 목록을 기준으로 동작 (= 키명이 없으면 대상 아님)
-#   2. VaultCenter에서 해당 키 resolve — 같은 이름이 다른 vault에 있으면 재사용 (통일성)
-#   3. 현재 .env와 비교하여 변경 사항이 있을 때만 bulk-apply 실행
+#   1. LocalVault에 등록된 active 시크릿 이름 목록 = sync 대상
+#   2. 자기 vault의 시크릿만 resolve (VaultCenter의 자기 agent만 조회)
+#   3. 현재 상태와 비교하여 변경 사항이 있을 때만 bulk-apply 실행
 #   4. 변경 시 post-deploy hook 실행 (서비스 재시작 등)
+#
+# 보안:
+#   - 다른 vault의 시크릿은 조회하지 않음 (vault 격리)
+#   - VaultCenter API는 자기 AGENT_HASH로만 요청
 #
 # 환경변수:
 #   VEILKEY_VAULTCENTER_URL   VaultCenter URL (필수)
@@ -52,26 +56,14 @@ fi
 SECRET_COUNT=$(echo "$SECRET_NAMES" | wc -l)
 log "Found $SECRET_COUNT active secrets in LocalVault"
 
-# ── 2. 전체 vault 목록 가져오기 (같은 키 재사용 위해) ──
-log "Fetching agents for cross-vault key lookup"
-ALL_AGENTS=$($CURL "$VC_URL/api/agents" | \
-  python3 -c "
-import json, sys
-data = json.load(sys.stdin)
-agents = data if isinstance(data, list) else data.get('agents', data.get('data', []))
-for a in agents:
-    if isinstance(a, dict):
-        h = a.get('agent_hash', '')
-        if h: print(h)
-" 2>/dev/null) || ALL_AGENTS=""
-
-# ── 3. 시크릿 resolve (이 vault 우선 → 다른 vault fallback) ──
-log "Resolving secrets..."
+# ── 2. 자기 vault 시크릿만 resolve ──
+log "Resolving secrets from own vault (agent=$AGENT)..."
 declare -A RESOLVED
 
-resolve_from_agent() {
-  local agent_hash="$1" name="$2"
-  $CURL "$VC_URL/api/agents/$agent_hash/secrets/$name" 2>/dev/null | \
+while IFS= read -r name; do
+  [ -z "$name" ] && continue
+
+  val=$($CURL "$VC_URL/api/agents/$AGENT/secrets/$name" 2>/dev/null | \
     python3 -c "
 import json, sys
 try:
@@ -79,36 +71,17 @@ try:
     v = d.get('value', '')
     if v: print(v)
 except: pass
-" 2>/dev/null
-}
-
-while IFS= read -r name; do
-  [ -z "$name" ] && continue
-
-  # 이 vault에서 먼저 resolve
-  val=$(resolve_from_agent "$AGENT" "$name")
-
-  # 값이 없거나 placeholder(16자 미만)면 다른 vault에서 같은 이름 찾기 (통일성)
-  if [ -z "$val" ] || [ "${#val}" -lt 16 ]; then
-    for other_agent in $ALL_AGENTS; do
-      [ "$other_agent" = "$AGENT" ] && continue
-      val=$(resolve_from_agent "$other_agent" "$name")
-      if [ -n "$val" ]; then
-        log "  $name: reused from agent $other_agent"
-        break
-      fi
-    done
-  fi
+" 2>/dev/null)
 
   if [ -n "$val" ]; then
     RESOLVED["$name"]="$val"
     log "  $name: resolved (${#val} chars)"
   else
-    log "  $name: MISSING — no value in any vault"
+    log "  $name: MISSING — not found in own vault"
   fi
 done <<< "$SECRET_NAMES"
 
-# ── 4. .env 내용 생성 ──
+# ── 3. .env 내용 생성 ──
 ENV_CONTENT="# VeilKey managed — auto-synced $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 while IFS= read -r name; do
   [ -z "$name" ] && continue
@@ -118,7 +91,7 @@ done <<< "$SECRET_NAMES"
 ENV_CONTENT="$ENV_CONTENT
 "
 
-# ── 5. 변경 감지 (체크섬 기반, 타임스탬프 무시) ──
+# ── 4. 변경 감지 (체크섬 기반, 타임스탬프 무시) ──
 CHECKSUM_FILE="${TARGET}.vk-checksum"
 NEW_CHECKSUM=$(echo "$ENV_CONTENT" | grep -v '^# VeilKey managed' | sort | md5sum | cut -d' ' -f1)
 if [ -f "$CHECKSUM_FILE" ]; then
@@ -131,7 +104,7 @@ fi
 
 log "Changes detected — applying"
 
-# ── 6. bulk-apply 실행 ──
+# ── 5. bulk-apply 실행 ──
 if [ "$DRY_RUN" = "1" ]; then
   log "[DRY RUN] Would write to $TARGET:"
   echo "$ENV_CONTENT" | sed 's/=.\{8\}/=****/g'
@@ -171,7 +144,7 @@ echo "$NEW_CHECKSUM" > "$CHECKSUM_FILE"
 
 log "bulk-apply applied to $TARGET"
 
-# ── 7. post-deploy hook ──
+# ── 6. post-deploy hook ──
 if [ -n "$POST_HOOK" ]; then
   log "Running post-hook: $POST_HOOK"
   eval "$POST_HOOK" || log "WARNING: post-hook failed (exit $?)"

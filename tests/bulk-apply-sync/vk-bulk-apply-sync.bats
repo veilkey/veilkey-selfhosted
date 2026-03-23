@@ -113,16 +113,18 @@ assert 'DB_PASSWORD=super-secret-db-pw' in s['content']
 }
 
 # ══════════════════════════════════════════════════════════════
-# cross-vault 키 재사용
+# vault 격리 — 자기 vault만 resolve
 # ══════════════════════════════════════════════════════════════
 
-@test "cross-vault: 이 vault에 없으면 다른 vault에서 재사용" {
+@test "다른 vault에만 있는 키는 MISSING 처리 (cross-vault 차단)" {
   load_fixture "$FIXTURES/cross_vault.json"
   run run_sync
   [ "$status" -eq 0 ]
-  grep -q "SHARED_KEY=shared-from-secondary" "$TEST_ENV"
+  # SHARED_KEY는 agent-2에만 있음 → agent-1에서 못 찾으므로 빈 값
+  grep -q "SHARED_KEY=$" "$TEST_ENV"
+  # LOCAL_ONLY는 agent-1에 있음 → resolve 성공
   grep -q "LOCAL_ONLY=local-only-value" "$TEST_ENV"
-  [[ "$output" == *"reused from agent agent-2"* ]]
+  [[ "$output" == *"SHARED_KEY: MISSING"* ]]
 }
 
 # ══════════════════════════════════════════════════════════════
