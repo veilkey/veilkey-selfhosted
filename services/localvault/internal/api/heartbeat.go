@@ -149,6 +149,7 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 				log.Printf("heartbeat: failed to store agent_secret: %v", err)
 			} else {
 				log.Println("heartbeat: agent_secret stored successfully")
+				s.invalidateAgentAuthCache()
 			}
 		}
 		if hbResp.Status == "registered" {
