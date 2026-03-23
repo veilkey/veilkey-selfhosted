@@ -233,13 +233,13 @@ func (h *Handler) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request
 
 	rendered, err := h.renderGlobalFunctionCommand(fn)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request")
+		respondError(w, http.StatusBadRequest, "command render failed: "+err.Error())
 		return
 	}
 
 	env, appliedEnvKeys, err := h.buildGlobalFunctionRunEnv(req)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid request")
+		respondError(w, http.StatusBadRequest, "env build failed: "+err.Error())
 		return
 	}
 
