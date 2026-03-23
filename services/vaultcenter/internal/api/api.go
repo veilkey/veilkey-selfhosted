@@ -448,7 +448,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		ResolveSecret: func(name string) (string, bool) { return srv.ResolveTemplateValue("", "secret", name) },
 		ResolveConfig: func(name string) (string, bool) { return srv.ResolveTemplateValue("", "config", name) },
 	})
-	srv.pluginHandler = plugin.NewHandler(srv.pluginRegistry)
+	srv.pluginHandler = plugin.NewHandler(srv.pluginRegistry, srv)
 
 	return srv
 }
