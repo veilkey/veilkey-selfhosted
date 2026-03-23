@@ -67,7 +67,6 @@ function loadEnvFile(filePath) {
 }
 
 loadEnv();
-process.env.VEILKEY_VEIL = "1";
 process.env.VEILKEY_CLI_BIN = cliBin;
 if (process.env.VEILKEY_LOCALVAULT_URL) {
   process.env.VEILKEY_API = process.env.VEILKEY_LOCALVAULT_URL;

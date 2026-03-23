@@ -81,7 +81,7 @@ fi
 # *.sh 파일 + 서비스 내 scripts/ 하위의 확장자 없는 스크립트도 포함
 _sh_files=$(find $ALL_SERVICES -name "*.sh" -o \( -path "*/scripts/*" -type f ! -name "*.*" \) 2>/dev/null | sort)
 sh_fallbacks=$(echo "$_sh_files" | xargs grep -n 'VEILKEY_[A-Z_]*:-[^}]' 2>/dev/null | \
-  grep -v 'VEILKEY_VEIL_PROMPT_LABEL\|VEILKEY_STATE_DIR' || true)
+  grep -v 'VEILKEY_STATE_DIR' || true)
 if [[ -n "$sh_fallbacks" ]]; then
   echo "❌ sh fallback 금지: VEILKEY_* 기본값을 코드에 박지 마세요"
   echo "$sh_fallbacks"

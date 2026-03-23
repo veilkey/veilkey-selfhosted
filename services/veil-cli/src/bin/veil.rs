@@ -94,9 +94,6 @@ fn main() {
 
     let cli_bin = find_bin("VEILKEY_CLI_BIN", "veilkey-cli");
 
-    env::set_var("VEILKEY_VEIL", "1");
-    env::set_var("VEIL_PS1", "(veil) ");
-
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
