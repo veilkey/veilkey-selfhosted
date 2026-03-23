@@ -98,6 +98,42 @@ func generateAgentHash() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// generateAgentSecret generates a 32-byte random secret and returns its hex representation.
+func generateAgentSecret() (string, error) {
+	b := make([]byte, 32)
+	_, err := rand.Read(b)
+	if err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// decryptAgentSecret decrypts an agent's stored encrypted secret using the KEK.
+// Returns empty string if the agent has no encrypted secret stored.
+func (h *Handler) decryptAgentSecret(encSecret, encNonce []byte) string {
+	if len(encSecret) == 0 {
+		return ""
+	}
+	kek := h.deps.GetKEK()
+	plaintext, err := crypto.Decrypt(kek, encSecret, encNonce)
+	if err != nil {
+		return ""
+	}
+	return string(plaintext)
+}
+
+// setAgentAuthHeader adds an Authorization Bearer header to the request if the agent has a secret.
+func (h *Handler) setAgentAuthHeader(req *http.Request, agent *agentInfo) {
+	dbAgent, err := h.deps.DB().GetAgentByHash(agent.AgentHash)
+	if err != nil {
+		return
+	}
+	secret := h.decryptAgentSecret(dbAgent.AgentSecretEnc, dbAgent.AgentSecretNonce)
+	if secret != "" {
+		req.Header.Set("Authorization", "Bearer "+secret)
+	}
+}
+
 func (h *Handler) decryptAgentDEK(encDEK, encNonce []byte) ([]byte, error) {
 	if len(encDEK) == 0 {
 		return nil, fmt.Errorf("agent has no DEK assigned")
@@ -156,8 +192,14 @@ func (h *Handler) respondAgentLookupError(w http.ResponseWriter, err error) {
 	respondError(w, http.StatusNotFound, "not found")
 }
 
-func (h *Handler) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, error) {
-	resp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathCipher, ref))
+func (h *Handler) fetchAgentCiphertext(agent *agentInfo, ref string) (*cipherSecret, error) {
+	req, err := http.NewRequest(http.MethodGet, joinPath(agent.URL(), agentPathCipher, ref), nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	h.setAgentAuthHeader(req, agent)
+
+	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}
@@ -183,8 +225,14 @@ func (h *Handler) fetchAgentCiphertext(agentURL, ref string) (*cipherSecret, err
 	}, nil
 }
 
-func (h *Handler) fetchAgentFieldCiphertext(agentURL, ref, fieldKey string) (*cipherSecretField, error) {
-	resp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathCipher, ref, "fields", fieldKey))
+func (h *Handler) fetchAgentFieldCiphertext(agent *agentInfo, ref, fieldKey string) (*cipherSecretField, error) {
+	req, err := http.NewRequest(http.MethodGet, joinPath(agent.URL(), agentPathCipher, ref, "fields", fieldKey), nil)
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	h.setAgentAuthHeader(req, agent)
+
+	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("agent unreachable: %w", err)
 	}

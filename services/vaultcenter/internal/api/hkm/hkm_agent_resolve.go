@@ -38,7 +38,7 @@ func (h *Handler) handleAgentResolve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	ai := agentToInfo(agent)
-	cipherSecret, err := h.fetchAgentCiphertext(ai.URL(), secretRef)
+	cipherSecret, err := h.fetchAgentCiphertext(ai, secretRef)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "failed to fetch secret from agent")
 		return

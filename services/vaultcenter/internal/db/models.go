@@ -185,6 +185,9 @@ type Agent struct {
 	DEKNonce         []byte     `gorm:"column:dek_nonce" json:"dek_nonce"`
 	SecretsCount     int        `gorm:"column:secrets_count;default:0" json:"secrets_count"`
 	ConfigsCount     int        `gorm:"column:configs_count;default:0" json:"configs_count"`
+	AgentSecretHash  string     `gorm:"column:agent_secret_hash;size:64" json:"agent_secret_hash,omitempty"`
+	AgentSecretEnc   []byte     `gorm:"column:agent_secret_enc" json:"-"`
+	AgentSecretNonce []byte     `gorm:"column:agent_secret_nonce" json:"-"`
 	Version          int        `gorm:"column:version;default:1" json:"version"`
 	FirstSeen        time.Time  `gorm:"column:first_seen;autoCreateTime" json:"first_seen"`
 	LastSeen         time.Time  `gorm:"column:last_seen;autoUpdateTime" json:"last_seen"`

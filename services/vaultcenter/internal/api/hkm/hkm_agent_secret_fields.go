@@ -18,6 +18,11 @@ type agentSecretField struct {
 }
 
 func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Request) {
+	if !h.verifyAgentAccess(r) {
+		respondError(w, http.StatusForbidden, "agent access denied")
+		return
+	}
+
 	hashOrLabel := r.PathValue("agent")
 	name := r.PathValue("name")
 	agent, err := h.findAgent(hashOrLabel)
@@ -34,7 +39,7 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -90,7 +95,10 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 		"name":   name,
 		"fields": payloadFields,
 	})
-	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathSecretFields, httputil.ContentTypeJSON, bytes.NewReader(reqBody))
+	fieldsReq, _ := http.NewRequest(http.MethodPost, agent.URL()+agentPathSecretFields, bytes.NewReader(reqBody))
+	fieldsReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	h.setAgentAuthHeader(fieldsReq, agent)
+	resp, err := h.deps.HTTPClient().Do(fieldsReq)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -120,6 +128,11 @@ func (h *Handler) handleAgentSaveSecretFields(w http.ResponseWriter, r *http.Req
 }
 
 func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Request) {
+	if !h.verifyAgentAccess(r) {
+		respondError(w, http.StatusForbidden, "agent access denied")
+		return
+	}
+
 	hashOrLabel := r.PathValue("agent")
 	name := r.PathValue("name")
 	fieldKey := r.PathValue("field")
@@ -129,7 +142,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -149,7 +162,7 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	cipher, err := h.fetchAgentFieldCiphertext(agent.URL(), meta.Ref, fieldKey)
+	cipher, err := h.fetchAgentFieldCiphertext(agent, meta.Ref, fieldKey)
 	if err != nil {
 		if strings.Contains(err.Error(), "agent returned 404") {
 			respondError(w, http.StatusNotFound, "secret field not found")
@@ -185,6 +198,11 @@ func (h *Handler) handleAgentGetSecretField(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Request) {
+	if !h.verifyAgentAccess(r) {
+		respondError(w, http.StatusForbidden, "agent access denied")
+		return
+	}
+
 	hashOrLabel := r.PathValue("agent")
 	name := r.PathValue("name")
 	fieldKey := r.PathValue("field")
@@ -194,12 +212,13 @@ func (h *Handler) handleAgentDeleteSecretField(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	req, err := http.NewRequest(http.MethodDelete, joinPath(agent.URL(), agentPathSecrets, name, "fields", fieldKey), nil)
+	deleteReq, err := http.NewRequest(http.MethodDelete, joinPath(agent.URL(), agentPathSecrets, name, "fields", fieldKey), nil)
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to build delete request")
 		return
 	}
-	resp, err := http.DefaultClient.Do(req)
+	h.setAgentAuthHeader(deleteReq, agent)
+	resp, err := h.deps.HTTPClient().Do(deleteReq)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return

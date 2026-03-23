@@ -53,6 +53,7 @@ func (h *Handler) handleConfigsSearch(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				return
 			}
+			h.setAgentAuthHeader(req, ai)
 			resp, err := h.deps.HTTPClient().Do(req)
 			if err != nil {
 				return

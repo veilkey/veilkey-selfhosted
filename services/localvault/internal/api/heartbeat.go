@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/veilkey/veilkey-go-package/crypto"
 	"github.com/veilkey/veilkey-go-package/httputil"
 )
 
@@ -94,7 +95,15 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return fmt.Errorf("heartbeat marshal failed: %w", err)
 	}
 
-	resp, err := s.httpClient.Post(endpoint, httputil.ContentTypeJSON, bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewReader(body))
+	if err != nil {
+		return fmt.Errorf("heartbeat: failed to build request: %w", err)
+	}
+	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	if auth := s.agentAuthHeader(); auth != "" {
+		req.Header.Set("Authorization", auth)
+	}
+	resp, err := s.httpClient.Do(req)
 	if err != nil {
 		return err
 	}
@@ -126,13 +135,28 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 
 	// On successful registration, consume the one-time registration token
 	var hbResp struct {
-		Status string `json:"status"`
+		Status      string `json:"status"`
+		AgentSecret string `json:"agent_secret"`
 	}
-	if json.Unmarshal(respBody, &hbResp) == nil && hbResp.Status == "registered" {
-		if err := s.db.DeleteConfig("VEILKEY_REGISTRATION_TOKEN"); err != nil {
-			log.Printf("heartbeat: failed to delete registration token config: %v", err)
-		} else {
-			log.Println("heartbeat: registration token consumed (one-time use)")
+	if json.Unmarshal(respBody, &hbResp) == nil {
+		// Store agent_secret if provided (first-time registration or upgrade)
+		if hbResp.AgentSecret != "" && !s.IsLocked() {
+			kek := s.GetKEK()
+			encrypted, nonce, encErr := crypto.Encrypt(kek, []byte(hbResp.AgentSecret))
+			if encErr != nil {
+				log.Printf("heartbeat: failed to encrypt agent_secret: %v", encErr)
+			} else if err := s.db.UpdateAgentSecret(encrypted, nonce); err != nil {
+				log.Printf("heartbeat: failed to store agent_secret: %v", err)
+			} else {
+				log.Println("heartbeat: agent_secret stored successfully")
+			}
+		}
+		if hbResp.Status == "registered" {
+			if err := s.db.DeleteConfig("VEILKEY_REGISTRATION_TOKEN"); err != nil {
+				log.Printf("heartbeat: failed to delete registration token config: %v", err)
+			} else {
+				log.Println("heartbeat: registration token consumed (one-time use)")
+			}
 		}
 	}
 	return nil

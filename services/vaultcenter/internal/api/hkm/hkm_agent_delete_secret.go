@@ -9,6 +9,11 @@ import (
 )
 
 func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request) {
+	if !h.verifyAgentAccess(r) {
+		respondError(w, http.StatusForbidden, "agent access denied")
+		return
+	}
+
 	hashOrLabel := r.PathValue("agent")
 	name := r.PathValue("name")
 
@@ -19,7 +24,7 @@ func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request
 	}
 
 	var trackedRef string
-	meta, status, _, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, status, _, err := h.fetchAgentSecretMeta(agent, name)
 	if err == nil && status == http.StatusOK && meta != nil && meta.Ref != "" {
 		if err := normalizeMeta(meta); err == nil {
 			trackedRef = meta.Token
@@ -27,7 +32,8 @@ func (h *Handler) handleAgentDeleteSecret(w http.ResponseWriter, r *http.Request
 	}
 
 	req, _ := http.NewRequest(http.MethodDelete, joinPath(agent.URL(), agentPathSecrets, name), nil)
-	resp, err := http.DefaultClient.Do(req)
+	h.setAgentAuthHeader(req, agent)
+	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return

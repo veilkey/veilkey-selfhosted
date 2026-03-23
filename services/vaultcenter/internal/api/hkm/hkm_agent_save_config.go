@@ -11,6 +11,11 @@ import (
 )
 
 func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) {
+	if !h.verifyAgentAccess(r) {
+		respondError(w, http.StatusForbidden, "agent access denied")
+		return
+	}
+
 	hashOrLabel := r.PathValue("agent")
 	agent, err := h.findAgent(hashOrLabel)
 	if err != nil {
@@ -45,6 +50,7 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 	}
 	req, _ := http.NewRequestWithContext(r.Context(), http.MethodPost, agent.URL()+agentPathConfigs, bytes.NewReader(body))
 	req.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	h.setAgentAuthHeader(req, agent)
 	resp, err := h.deps.HTTPClient().Do(req)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -24,8 +25,8 @@ func TestRemove(t *testing.T) {
 	dir := t.TempDir()
 	reg := NewRegistry(dir, HostFunctions{})
 	_ = reg.Install("removable", []byte("wasm"), &PluginManifest{Name: "removable", Version: "1.0.0"})
-	if err := reg.Remove(nil, "nonexistent"); err == nil { t.Error("expected error") }
-	if err := reg.Remove(nil, "removable"); err != nil { t.Fatalf("remove: %v", err) }
+	if err := reg.Remove(context.TODO(), "nonexistent"); err == nil { t.Error("expected error") }
+	if err := reg.Remove(context.TODO(), "removable"); err != nil { t.Fatalf("remove: %v", err) }
 	plugins, _ := reg.List()
 	if len(plugins) != 0 { t.Errorf("expected 0, got %d", len(plugins)) }
 }

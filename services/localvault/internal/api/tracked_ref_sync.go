@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 
 	"veilkey-localvault/internal/db"
@@ -46,7 +47,17 @@ func (s *Server) syncTrackedRefWithVaultcenter(ref string, previousRef string, v
 		return result
 	}
 
-	resp, err := s.httpClient.Post(target.URL+"/api/tracked-refs/sync", httputil.ContentTypeJSON, bytes.NewReader(body))
+	syncReq, reqErr := http.NewRequest(http.MethodPost, target.URL+"/api/tracked-refs/sync", bytes.NewReader(body))
+	if reqErr != nil {
+		result.Status = "degraded"
+		result.Error = reqErr.Error()
+		return result
+	}
+	syncReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	if auth := s.agentAuthHeader(); auth != "" {
+		syncReq.Header.Set("Authorization", auth)
+	}
+	resp, err := s.httpClient.Do(syncReq)
 	if err != nil {
 		result.Status = "degraded"
 		result.Error = err.Error()

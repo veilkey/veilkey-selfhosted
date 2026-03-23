@@ -57,7 +57,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 			agentDEK, dekErr := h.decryptAgentDEK(agent.DEK, agent.DEKNonce)
 			if dekErr == nil {
 				ai := agentToInfo(agent)
-				cipher, cipherErr := h.fetchAgentCiphertext(ai.URL(), secretRef)
+				cipher, cipherErr := h.fetchAgentCiphertext(ai, secretRef)
 				if cipherErr == nil {
 					plaintext, decErr := crypto.Decrypt(agentDEK, cipher.Ciphertext, cipher.Nonce)
 					if decErr == nil {
@@ -86,7 +86,7 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			ai := agentToInfo(agent)
-			cipher, cipherErr := h.fetchAgentCiphertext(ai.URL(), ref)
+			cipher, cipherErr := h.fetchAgentCiphertext(ai, ref)
 			if cipherErr != nil {
 				continue
 			}
@@ -223,7 +223,7 @@ func (h *Handler) resolveTrackedRef(w http.ResponseWriter, ref string, tracked *
 			return false
 		}
 		ai := agentToInfo(agent)
-		cipher, err := h.fetchAgentCiphertext(ai.URL(), secretRef)
+		cipher, err := h.fetchAgentCiphertext(ai, secretRef)
 		if err != nil {
 			return false
 		}

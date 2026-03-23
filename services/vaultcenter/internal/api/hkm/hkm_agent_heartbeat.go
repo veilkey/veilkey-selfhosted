@@ -1,6 +1,8 @@
 package hkm
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"log"
 	"net"
 	"net/http"
@@ -292,6 +294,25 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		}
 		setNodeIdentityAliases(resp, nodeID)
 		setRuntimeHashAliases(resp, agentHash)
+
+		// Generate agent_secret for new registrations
+		agentSecret, secretErr := generateAgentSecret()
+		if secretErr == nil {
+			secretHashBytes := sha256.Sum256([]byte(agentSecret))
+			secretHash := hex.EncodeToString(secretHashBytes[:])
+			encSecret, encNonce, encErr := crypto.Encrypt(kek, []byte(agentSecret))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt agent_secret for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateAgentSecretHash(nodeID, secretHash, encSecret, encNonce); err != nil {
+				log.Printf("agent: failed to store agent_secret_hash for %s: %v", nodeID, err)
+			} else {
+				resp["agent_secret"] = agentSecret
+				log.Printf("agent: issued agent_secret for %s (%s)", nodeID, req.Label)
+			}
+		} else {
+			log.Printf("agent: failed to generate agent_secret for %s: %v", nodeID, secretErr)
+		}
+
 		respondJSON(w, http.StatusOK, resp)
 		return
 	}
@@ -304,6 +325,26 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 	setNodeIdentityAliases(resp, nodeID)
 	setRuntimeHashAliases(resp, agent.AgentHash)
+
+	// Issue agent_secret if not yet assigned
+	if agent.AgentSecretHash == "" {
+		agentSecret, secretErr := generateAgentSecret()
+		if secretErr == nil {
+			kek := h.deps.GetKEK()
+			secretHashBytes := sha256.Sum256([]byte(agentSecret))
+			secretHash := hex.EncodeToString(secretHashBytes[:])
+			encSecret, encNonce, encErr := crypto.Encrypt(kek, []byte(agentSecret))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt agent_secret for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateAgentSecretHash(nodeID, secretHash, encSecret, encNonce); err != nil {
+				log.Printf("agent: failed to store agent_secret_hash for %s: %v", nodeID, err)
+			} else {
+				resp["agent_secret"] = agentSecret
+				log.Printf("agent: issued agent_secret for existing agent %s (%s)", nodeID, agent.Label)
+			}
+		}
+	}
+
 	respondJSON(w, http.StatusOK, resp)
 }
 

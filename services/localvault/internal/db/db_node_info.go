@@ -33,6 +33,19 @@ func (d *DB) UpdateNodeDEK(dek, nonce []byte, version int) error {
 	return nil
 }
 
+func (d *DB) UpdateAgentSecret(encSecret, encNonce []byte) error {
+	result := d.conn.Model(&NodeInfo{}).Where("1 = 1").
+		Select("AgentSecret", "AgentSecretNonce").
+		Updates(&NodeInfo{AgentSecret: encSecret, AgentSecretNonce: encNonce})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("no node_info to update")
+	}
+	return nil
+}
+
 func (d *DB) UpdateNodeVersion(version int) error {
 	result := d.conn.Model(&NodeInfo{}).Where("1 = 1").
 		Update("version", version)

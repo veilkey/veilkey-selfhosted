@@ -40,20 +40,20 @@ func LoadInstance(ctx context.Context, wasmBytes []byte, hostFns HostFunctions) 
 		NewFunctionBuilder().WithFunc(inst.hostResolveConfig).Export("host_resolve_config").
 		Instantiate(ctx)
 	if err != nil {
-		rt.Close(ctx)
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("register host module: %w", err)
 	}
 
 	mod, err := rt.Instantiate(ctx, wasmBytes)
 	if err != nil {
-		rt.Close(ctx)
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("instantiate wasm: %w", err)
 	}
 	inst.mod = mod
 
 	info, err := inst.callPluginInfo(ctx)
 	if err != nil {
-		rt.Close(ctx)
+		_ = rt.Close(ctx)
 		return nil, fmt.Errorf("plugin_info: %w", err)
 	}
 	inst.info = *info

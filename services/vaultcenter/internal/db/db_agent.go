@@ -237,6 +237,23 @@ func (d *DB) GetAgentByLabel(label string) (*Agent, error) {
 func (d *DB) GetAgentByHash(agentHash string) (*Agent, error) {
 	return dbFirst[Agent](d, "agent hash "+agentHash+" not found", "agent_hash = ?", agentHash)
 }
+func (d *DB) GetAgentBySecretHash(secretHash string) (*Agent, error) {
+	return dbFirst[Agent](d, "agent with secret hash not found", "agent_secret_hash = ?", secretHash)
+}
+
+func (d *DB) UpdateAgentSecretHash(nodeID, secretHash string, encSecret, encNonce []byte) error {
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("AgentSecretHash", "AgentSecretEnc", "AgentSecretNonce").
+		Updates(&Agent{AgentSecretHash: secretHash, AgentSecretEnc: encSecret, AgentSecretNonce: encNonce})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("agent %s not found", nodeID)
+	}
+	return nil
+}
+
 func (d *DB) DeleteAgentByNodeID(nodeID string) error {
 	now := time.Now().UTC()
 	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("deleted_at", &now)
