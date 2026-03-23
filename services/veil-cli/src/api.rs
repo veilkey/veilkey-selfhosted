@@ -200,11 +200,11 @@ impl VeilKeyClient {
             self.base_url,
             urlencoding::encode(r#ref)
         );
-        let resp = self
-            .agent
-            .get(&url)
-            .call()
-            .map_err(|e| format!("resolve request failed: {}", e))?;
+        let mut req = self.agent.get(&url);
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        let resp = req.call().map_err(|_| "resolve failed".to_string())?;
 
         let result: serde_json::Value = resp
             .into_json()

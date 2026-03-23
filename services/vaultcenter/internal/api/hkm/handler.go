@@ -87,8 +87,8 @@ func (h *Handler) Register(
 	mux.HandleFunc("DELETE /api/children/{node_id}", trusted(ready(h.handleDeleteChild)))
 	mux.HandleFunc("GET /api/registry", ready(h.handleListRegistry))
 
-	// Resolve scoped VK ref → plaintext value
-	mux.HandleFunc("GET /api/resolve/{ref}", ready(h.handleResolveSecret))
+	// Resolve scoped VK ref → plaintext value — requires admin session
+	mux.HandleFunc("GET /api/resolve/{ref}", adminAuth(ready(h.handleResolveSecret)))
 
 	// Child heartbeat (report URL)
 	mux.HandleFunc("POST /api/heartbeat", trusted(ready(h.handleHeartbeat)))
