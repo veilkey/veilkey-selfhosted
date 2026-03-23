@@ -59,7 +59,10 @@ impl SessionLogger {
     }
 
     pub fn count(&self) -> usize {
-        self.read_entries().len()
+        match fs::read_to_string(&self.path) {
+            Ok(data) => data.lines().filter(|l| !l.is_empty()).count(),
+            Err(_) => 0,
+        }
     }
 
     pub fn clear(&self) -> std::io::Result<()> {

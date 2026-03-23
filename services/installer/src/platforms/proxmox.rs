@@ -46,7 +46,12 @@ pub struct ProxmoxArgs {
 }
 
 pub fn run(args: ProxmoxArgs) -> Result<(), String> {
-    println!("{}", "=== VeilKey Installer (Proxmox LXC Debian) ===".blue().bold());
+    println!(
+        "{}",
+        "=== VeilKey Installer (Proxmox LXC Debian) ==="
+            .blue()
+            .bold()
+    );
     println!();
 
     check_cmd("pct", "This command must run on a Proxmox host")?;
@@ -99,7 +104,12 @@ pub fn run(args: ProxmoxArgs) -> Result<(), String> {
 }
 
 fn check_cmd(name: &str, help: &str) -> Result<(), String> {
-    if Command::new("which").arg(name).output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg(name)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         Ok(())
     } else {
         Err(format!("{} not found.\n  {}", name, help))

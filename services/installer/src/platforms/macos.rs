@@ -22,9 +22,15 @@ pub fn run(args: MacosArgs) -> Result<(), String> {
     println!();
 
     // Check prerequisites
-    check_cmd("docker", "Install Docker Desktop: https://docs.docker.com/desktop/install/mac-install/")?;
+    check_cmd(
+        "docker",
+        "Install Docker Desktop: https://docs.docker.com/desktop/install/mac-install/",
+    )?;
     check_cmd("npm", "Install Node.js: brew install node")?;
-    check_cmd("cargo", "Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh")?;
+    check_cmd(
+        "cargo",
+        "Install Rust: curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh",
+    )?;
     println!("{}", "[1/4] Prerequisites OK".green());
 
     if !args.cli_only {
@@ -58,7 +64,12 @@ pub fn run(args: MacosArgs) -> Result<(), String> {
 }
 
 fn check_cmd(name: &str, help: &str) -> Result<(), String> {
-    if Command::new("which").arg(name).output().map(|o| o.status.success()).unwrap_or(false) {
+    if Command::new("which")
+        .arg(name)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+    {
         Ok(())
     } else {
         Err(format!("{} not found.\n  {}", name, help))
