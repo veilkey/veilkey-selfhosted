@@ -74,6 +74,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 			if err != nil {
 				return
 			}
+			h.setAgentAuthHeader(httpReq, ai)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
@@ -167,6 +168,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				return
 			}
 			httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+			h.setAgentAuthHeader(httpReq, ac.ai)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ac: ac, err: err}
@@ -212,6 +214,7 @@ func (h *Handler) handleConfigsBulkUpdate(w http.ResponseWriter, r *http.Request
 				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ac.ai.URL()+agentPathConfigs, bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+					h.setAgentAuthHeader(httpReq, ac.ai)
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {
 						resp.Body.Close()

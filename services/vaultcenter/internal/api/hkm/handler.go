@@ -100,6 +100,7 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/mask-map", trusted(ready(h.handleMaskMap)))
 
 	// Agent management (Hub-only decryption)
+	agentAuth := h.requireAgentAuth
 	mux.HandleFunc("POST /api/agents/heartbeat", ready(h.handleAgentHeartbeat))
 	mux.HandleFunc("DELETE /api/agents/by-node/{node_id}", trusted(ready(h.handleAgentUnregisterByNode)))
 	mux.HandleFunc("POST /api/agents/by-node/{node_id}/archive", trusted(ready(h.handleAgentArchive)))
@@ -127,13 +128,13 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/functions/global/{name}", ready(h.handleGlobalFunction))
 	mux.HandleFunc("DELETE /api/functions/global/{name}", trusted(ready(h.handleGlobalFunction)))
 	mux.HandleFunc("POST /api/functions/global/{name}/run", trusted(ready(h.handleGlobalFunctionRun)))
-	mux.HandleFunc("GET /api/agents/{agent}/secrets", ready(h.handleAgentSecrets))
-	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}", ready(h.handleAgentGetSecret))
-	mux.HandleFunc("POST /api/agents/{agent}/secrets", trusted(ready(h.handleAgentSaveSecret)))
-	mux.HandleFunc("POST /api/agents/{agent}/secrets/{name}/fields", trusted(ready(h.handleAgentSaveSecretFields)))
-	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}/fields/{field}", ready(h.handleAgentGetSecretField))
-	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}/fields/{field}", trusted(ready(h.handleAgentDeleteSecretField)))
-	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}", trusted(ready(h.handleAgentDeleteSecret)))
+	mux.HandleFunc("GET /api/agents/{agent}/secrets", agentAuth(ready(h.handleAgentSecrets)))
+	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}", agentAuth(ready(h.handleAgentGetSecret)))
+	mux.HandleFunc("POST /api/agents/{agent}/secrets", agentAuth(trusted(ready(h.handleAgentSaveSecret))))
+	mux.HandleFunc("POST /api/agents/{agent}/secrets/{name}/fields", agentAuth(trusted(ready(h.handleAgentSaveSecretFields))))
+	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}/fields/{field}", agentAuth(ready(h.handleAgentGetSecretField)))
+	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}/fields/{field}", agentAuth(trusted(ready(h.handleAgentDeleteSecretField))))
+	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}", agentAuth(trusted(ready(h.handleAgentDeleteSecret))))
 	mux.HandleFunc("GET /api/vaults", ready(h.handleVaultList))
 	mux.HandleFunc("GET /api/vaults/{vault}", ready(h.handleVaultGet))
 	mux.HandleFunc("PATCH /api/vaults/{vault}", trusted(ready(h.handleVaultPatch)))
@@ -159,7 +160,7 @@ func (h *Handler) Register(
 	mux.HandleFunc("DELETE /api/vaults/{vault}/keys/{name}/bindings/{binding_id}", trusted(ready(h.handleVaultKeyBindingDelete)))
 	mux.HandleFunc("POST /api/vaults/{vault}/keys/{name}/activate", trusted(ready(h.handleVaultKeyActivate)))
 	mux.HandleFunc("DELETE /api/vaults/{vault}/keys/{name}", trusted(ready(h.handleVaultKeyDelete)))
-	mux.HandleFunc("POST /api/agents/{agent}/migrate", trusted(ready(h.handleAgentMigrate)))
+	mux.HandleFunc("POST /api/agents/{agent}/migrate", agentAuth(trusted(ready(h.handleAgentMigrate))))
 	mux.HandleFunc("POST /api/agents/{agent}/approve-rebind", trusted(ready(h.handleAgentApproveRebind)))
 
 	// Configs aggregate (cross-agent search/bulk-update)
@@ -169,11 +170,11 @@ func (h *Handler) Register(
 	mux.HandleFunc("POST /api/configs/bulk-set", trusted(ready(h.handleConfigsBulkSet)))
 
 	// Agent configs (plaintext key-value proxy)
-	mux.HandleFunc("GET /api/agents/{agent}/configs", ready(h.handleAgentConfigs))
-	mux.HandleFunc("GET /api/agents/{agent}/configs/{key}", ready(h.handleAgentGetConfig))
-	mux.HandleFunc("POST /api/agents/{agent}/configs", trusted(ready(h.handleAgentSaveConfig)))
-	mux.HandleFunc("PUT /api/agents/{agent}/configs/bulk", trusted(ready(h.handleAgentSaveConfigsBulk)))
-	mux.HandleFunc("DELETE /api/agents/{agent}/configs/{key}", trusted(ready(h.handleAgentDeleteConfig)))
+	mux.HandleFunc("GET /api/agents/{agent}/configs", agentAuth(ready(h.handleAgentConfigs)))
+	mux.HandleFunc("GET /api/agents/{agent}/configs/{key}", agentAuth(ready(h.handleAgentGetConfig)))
+	mux.HandleFunc("POST /api/agents/{agent}/configs", agentAuth(trusted(ready(h.handleAgentSaveConfig))))
+	mux.HandleFunc("PUT /api/agents/{agent}/configs/bulk", agentAuth(trusted(ready(h.handleAgentSaveConfigsBulk))))
+	mux.HandleFunc("DELETE /api/agents/{agent}/configs/{key}", agentAuth(trusted(ready(h.handleAgentDeleteConfig))))
 
 	// Identity aliases
 

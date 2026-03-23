@@ -3,10 +3,12 @@ package db
 import "time"
 
 type NodeInfo struct {
-	NodeID   string `gorm:"column:node_id;primaryKey"`
-	DEK      []byte `gorm:"column:dek;not null"`
-	DEKNonce []byte `gorm:"column:dek_nonce;not null"`
-	Version  int    `gorm:"column:version;default:1"`
+	NodeID           string `gorm:"column:node_id;primaryKey"`
+	DEK              []byte `gorm:"column:dek;not null"`
+	DEKNonce         []byte `gorm:"column:dek_nonce;not null"`
+	AgentSecret      []byte `gorm:"column:agent_secret"`
+	AgentSecretNonce []byte `gorm:"column:agent_secret_nonce"`
+	Version          int    `gorm:"column:version;default:1"`
 }
 
 func (NodeInfo) TableName() string { return "node_info" }

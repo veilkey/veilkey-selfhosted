@@ -24,8 +24,7 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	agentURL := agent.URL()
-	meta, status, body, err := h.fetchAgentSecretMeta(agentURL, name)
+	meta, status, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -46,7 +45,7 @@ func (h *Handler) handleAgentGetSecret(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = h.upsertTrackedRef(r.Context(), meta.Token, agent.KeyVersion, refStatus(meta.Status), agent.AgentHash)
 
-	cipher, err := h.fetchAgentCiphertext(agentURL, meta.Ref)
+	cipher, err := h.fetchAgentCiphertext(agent, meta.Ref)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "failed to fetch ciphertext")
 		return

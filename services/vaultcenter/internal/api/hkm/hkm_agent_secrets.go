@@ -18,7 +18,9 @@ func (h *Handler) handleAgentSecrets(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.deps.HTTPClient().Get(agent.URL() + agentPathSecrets)
+	listReq, _ := http.NewRequest(http.MethodGet, agent.URL()+agentPathSecrets, nil)
+	h.setAgentAuthHeader(listReq, agent)
+	resp, err := h.deps.HTTPClient().Do(listReq)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return

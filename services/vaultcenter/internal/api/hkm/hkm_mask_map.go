@@ -87,7 +87,7 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 				rawRef = parts[2]
 			}
 
-			cipher, fetchErr := h.fetchAgentCiphertext(ai.URL(), rawRef)
+			cipher, fetchErr := h.fetchAgentCiphertext(ai, rawRef)
 			if fetchErr != nil {
 				continue
 			}

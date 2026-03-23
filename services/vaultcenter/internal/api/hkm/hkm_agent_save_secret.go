@@ -54,7 +54,10 @@ func (h *Handler) handleAgentSaveSecret(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusInternalServerError, "failed to marshal request body")
 		return
 	}
-	resp, err := h.deps.HTTPClient().Post(agent.URL()+agentPathCipher, httputil.ContentTypeJSON, bytes.NewReader(body))
+	saveReq, _ := http.NewRequest(http.MethodPost, agent.URL()+agentPathCipher, bytes.NewReader(body))
+	saveReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	h.setAgentAuthHeader(saveReq, agent)
+	resp, err := h.deps.HTTPClient().Do(saveReq)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return

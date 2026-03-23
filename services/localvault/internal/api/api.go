@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -161,6 +162,24 @@ func (s *Server) CleanupExpiredTestFunctions(now time.Time) (int, error) {
 	return s.functionsHandler.CleanupExpiredTestFunctions(now)
 }
 
+// agentAuthHeader returns the Authorization header value for requests to VaultCenter.
+// Returns empty string if agent secret is not available.
+func (s *Server) agentAuthHeader() string {
+	if s.IsLocked() {
+		return ""
+	}
+	info, err := s.db.GetNodeInfo()
+	if err != nil || len(info.AgentSecret) == 0 {
+		return ""
+	}
+	kek := s.GetKEK()
+	decrypted, err := crypto.Decrypt(kek, info.AgentSecret, info.AgentSecretNonce)
+	if err != nil {
+		return ""
+	}
+	return "Bearer " + string(decrypted)
+}
+
 // ── Middleware ────────────────────────────────────────────────────────────────
 
 func (s *Server) requireUnlocked(next http.HandlerFunc) http.HandlerFunc {
@@ -220,6 +239,45 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireAgentSecret validates the agent secret on incoming requests from VaultCenter.
+// If no agent secret is configured yet, requests pass through (allow initial setup).
+func (s *Server) requireAgentSecret(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.IsLocked() {
+			// Can't validate when locked
+			next(w, r)
+			return
+		}
+		info, err := s.db.GetNodeInfo()
+		if err != nil || len(info.AgentSecret) == 0 {
+			// No agent secret configured yet, allow through
+			next(w, r)
+			return
+		}
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			s.respondError(w, http.StatusUnauthorized, "agent secret required")
+			return
+		}
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if token == authHeader || token == "" {
+			s.respondError(w, http.StatusUnauthorized, "agent secret required")
+			return
+		}
+		kek := s.GetKEK()
+		decrypted, err := crypto.Decrypt(kek, info.AgentSecret, info.AgentSecretNonce)
+		if err != nil {
+			s.respondError(w, http.StatusInternalServerError, "failed to verify agent secret")
+			return
+		}
+		if subtle.ConstantTimeCompare([]byte(token), decrypted) != 1 {
+			s.respondError(w, http.StatusUnauthorized, "invalid agent secret")
+			return
+		}
+		next(w, r)
+	}
+}
+
 func (s *Server) respondJSON(w http.ResponseWriter, status int, data interface{}) {
 	httputil.RespondJSON(w, status, data)
 }
@@ -266,7 +324,7 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("POST /api/revoke", s.requireUnlocked(s.handleRevoke))
 
 	// Domain subpackage routes
-	s.secretsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
+	s.secretsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP, s.requireAgentSecret)
 	s.configsHandler.Register(mux, s.requireTrustedIP)
 	s.bulkHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
 	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)

@@ -88,6 +88,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				checkMu.Unlock()
 				return
 			}
+			h.setAgentAuthHeader(httpReq, ai)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil || resp.StatusCode != http.StatusOK {
 				if resp != nil {
@@ -198,6 +199,7 @@ func (h *Handler) handleConfigsBulkSet(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+			h.setAgentAuthHeader(httpReq, ai)
 			resp, err := h.deps.HTTPClient().Do(httpReq)
 			if err != nil {
 				results[idx] = applyResult{ai: ai, err: err}
@@ -274,6 +276,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodPost, ai.URL()+agentPathConfigs, bytes.NewReader(body))
 				if httpReq != nil {
 					httpReq.Header.Set("Content-Type", httputil.ContentTypeJSON)
+					h.setAgentAuthHeader(httpReq, ai)
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {
 						resp.Body.Close()
@@ -286,6 +289,7 @@ func (h *Handler) rollbackBulkSet(ctx context.Context, agents []*agentInfo, chec
 				defer wg.Done()
 				httpReq, _ := http.NewRequestWithContext(ctx, http.MethodDelete, joinPath(ai.URL(), agentPathConfigs, key), nil)
 				if httpReq != nil {
+					h.setAgentAuthHeader(httpReq, ai)
 					resp, err := h.deps.HTTPClient().Do(httpReq)
 					if err == nil {
 						resp.Body.Close()

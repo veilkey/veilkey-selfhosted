@@ -222,8 +222,15 @@ func (h *Handler) handleVaultList(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta, int, []byte, error) {
-	resp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathSecrets, "meta", name))
+func (h *Handler) fetchAgentSecretMeta(agent *agentInfo, name string) (*agentSecretMeta, int, []byte, error) {
+	agentURL := agent.URL()
+
+	metaReq, err := http.NewRequest(http.MethodGet, joinPath(agentURL, agentPathSecrets, "meta", name), nil)
+	if err != nil {
+		return nil, 0, nil, err
+	}
+	h.setAgentAuthHeader(metaReq, agent)
+	resp, err := h.deps.HTTPClient().Do(metaReq)
 	if err != nil {
 		return nil, 0, nil, err
 	}
@@ -231,7 +238,12 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 
 	body, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode == http.StatusNotFound {
-		fallbackResp, err := h.deps.HTTPClient().Get(joinPath(agentURL, agentPathSecrets, name))
+		fallbackReq, err := http.NewRequest(http.MethodGet, joinPath(agentURL, agentPathSecrets, name), nil)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		h.setAgentAuthHeader(fallbackReq, agent)
+		fallbackResp, err := h.deps.HTTPClient().Do(fallbackReq)
 		if err != nil {
 			return nil, 0, nil, err
 		}
@@ -267,7 +279,12 @@ func (h *Handler) fetchAgentSecretMeta(agentURL, name string) (*agentSecretMeta,
 			}
 		}
 
-		listResp, err := h.deps.HTTPClient().Get(agentURL + agentPathSecrets)
+		listReq, err := http.NewRequest(http.MethodGet, agentURL+agentPathSecrets, nil)
+		if err != nil {
+			return nil, fallbackResp.StatusCode, fallbackBody, nil
+		}
+		h.setAgentAuthHeader(listReq, agent)
+		listResp, err := h.deps.HTTPClient().Do(listReq)
 		if err != nil {
 			return nil, fallbackResp.StatusCode, fallbackBody, nil
 		}
@@ -392,7 +409,7 @@ func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -437,7 +454,7 @@ func (h *Handler) handleVaultKeyUsage(w http.ResponseWriter, r *http.Request) {
 		h.respondAgentLookupError(w, err)
 		return
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -493,7 +510,7 @@ func (h *Handler) handleVaultKeyBindings(w http.ResponseWriter, r *http.Request)
 		h.respondAgentLookupError(w, err)
 		return
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -548,7 +565,7 @@ func (h *Handler) handleVaultKeyBindingSave(w http.ResponseWriter, r *http.Reque
 		h.respondAgentLookupError(w, err)
 		return
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -777,7 +794,7 @@ func (h *Handler) handleVaultKeyAudit(w http.ResponseWriter, r *http.Request) {
 		h.respondAgentLookupError(w, err)
 		return
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -837,7 +854,7 @@ func (h *Handler) handleVaultKeyBindingDelete(w http.ResponseWriter, r *http.Req
 		h.respondAgentLookupError(w, err)
 		return
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
@@ -886,7 +903,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(ctx context.Context, w http.Resp
 		h.respondAgentLookupError(w, err)
 		return nil, nil, false
 	}
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return nil, nil, false
@@ -1077,7 +1094,7 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent.URL(), name)
+	meta, statusCode, body, err := h.fetchAgentSecretMeta(agent, name)
 	if err != nil {
 		respondError(w, http.StatusBadGateway, "agent unreachable")
 		return
