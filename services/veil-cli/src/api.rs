@@ -327,21 +327,27 @@ impl VeilKeyClient {
 /// Add encoded variants (base64, hex) to a mask_map, sort by length descending,
 /// and remove entries where plaintext is a substring of any VK ref.
 pub fn enrich_mask_map(map: &mut Vec<(String, String)>) {
+    use std::collections::HashSet;
+    let mut seen: HashSet<String> = map.iter().map(|(p, _)| p.clone()).collect();
     let mut encoded: Vec<(String, String)> = Vec::new();
     for (plaintext, vk_ref) in map.iter() {
+        // VE (config) entries don't need encoding variants — display only
+        if vk_ref.starts_with("VE:") {
+            continue;
+        }
         if plaintext.len() < 8 {
             continue;
         }
         let b64_std = base64::engine::general_purpose::STANDARD.encode(plaintext.as_bytes());
-        if !map.iter().any(|(p, _)| p == &b64_std) {
+        if seen.insert(b64_std.clone()) {
             encoded.push((b64_std.clone(), vk_ref.clone()));
         }
         let b64_url = base64::engine::general_purpose::URL_SAFE.encode(plaintext.as_bytes());
-        if b64_url != b64_std && !map.iter().any(|(p, _)| p == &b64_url) {
+        if b64_url != b64_std && seen.insert(b64_url.clone()) {
             encoded.push((b64_url, vk_ref.clone()));
         }
         let hex: String = plaintext.bytes().map(|b| format!("{:02x}", b)).collect();
-        if !map.iter().any(|(p, _)| p == &hex) {
+        if seen.insert(hex.clone()) {
             encoded.push((hex, vk_ref.clone()));
         }
     }
