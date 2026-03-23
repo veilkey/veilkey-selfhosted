@@ -108,9 +108,9 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add VE (config) entries — deduplicated by value to avoid repeated tagging
+	// VE (config) entries — separate from VK entries, deduplicated by value
+	var veEntries []maskEntry
 	veSeenValues := make(map[string]bool)
-	// Also skip values that already appear as VK secrets (avoid double masking)
 	for _, e := range entries {
 		veSeenValues[e.Value] = true
 	}
@@ -144,11 +144,11 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 					continue
 				}
 				if veSeenValues[cfg.Value] {
-					continue // skip duplicate values
+					continue
 				}
 				veSeenValues[cfg.Value] = true
 				veRef := "VE:" + cfg.Scope + ":" + cfg.Key
-				entries = append(entries, maskEntry{
+				veEntries = append(veEntries, maskEntry{
 					Ref:   veRef,
 					Value: cfg.Value,
 					Vault: agent.VaultName,
@@ -159,9 +159,10 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{
-		"version": serverVersion,
-		"changed": true,
-		"count":   len(entries),
-		"entries": entries,
+		"version":    serverVersion,
+		"changed":    true,
+		"count":      len(entries),
+		"entries":    entries,
+		"ve_entries": veEntries,
 	})
 }

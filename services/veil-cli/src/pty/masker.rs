@@ -5,7 +5,7 @@ const BOLD: &str = "\x1b[1m";
 const CYAN: &str = "\x1b[36m";
 const RED: &str = "\x1b[31m";
 const DIM: &str = "\x1b[2m";
-const MAGENTA: &str = "\x1b[35m";
+const GREEN: &str = "\x1b[92m";
 const RESET: &str = "\x1b[0m";
 
 pub fn colorize_ref(vk_ref: &str) -> String {
@@ -18,10 +18,10 @@ pub fn colorize_ref(vk_ref: &str) -> String {
     }
 }
 
-/// VE ref: show original value with ref tag appended in a distinct color.
-/// e.g. "soulflow-lv" → "soulflow-lv(VE:LOCAL:VAULT_NAME)" with tag dimmed magenta.
-pub fn colorize_ve_ref(original: &str, ve_ref: &str) -> String {
-    format!("{}{}{}({}){}", original, DIM, MAGENTA, ve_ref, RESET)
+/// VE ref: colorize original value without changing it — just add color.
+/// e.g. "soulflow-lv" → (green)"soulflow-lv"(reset) — same text, different color.
+pub fn colorize_ve_ref(original: &str, _ve_ref: &str) -> String {
+    format!("{}{}{}", GREEN, original, RESET)
 }
 
 pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
@@ -41,6 +41,7 @@ pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
 pub fn mask_output(
     data: &[u8],
     mask_map: &[(String, String)],
+    ve_map: &[(String, String)],
     patterns: &[CompiledPattern],
     client: &VeilKeyClient,
     recent_input: &str,
@@ -107,6 +108,13 @@ pub fn mask_output(
                     s = s.replace(secret, &padded_colorize_ref(&redacted, secret.len()));
                 }
             }
+        }
+    }
+
+    // 3. VE (config) entries — display-only: original value + colored tag
+    for (plaintext, ve_ref) in ve_map {
+        if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
+            s = s.replace(plaintext.as_str(), &colorize_ve_ref(plaintext, ve_ref));
         }
     }
 

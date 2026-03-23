@@ -92,7 +92,12 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
         }
     }
     crate::api::enrich_mask_map(&mut mask_map);
-    eprintln!("[veilkey] {} secret(s) masked", mask_map.len());
+    let ve_entries = client.get_ve_entries();
+    eprintln!(
+        "[veilkey] {} secret(s) masked, {} config(s) tagged",
+        mask_map.len(),
+        ve_entries.len()
+    );
 
     // Open PTY
     let (master_fd, slave_fd): (RawFd, RawFd) = unsafe {
@@ -176,6 +181,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             }
 
             let mask_map = Arc::new(RwLock::new(mask_map));
+            let ve_map = Arc::new(RwLock::new(ve_entries));
             let patterns = Arc::new(patterns);
             let client = Arc::new(client);
 
@@ -213,6 +219,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
             // PTY master → stdout (output thread with masking)
             let mask = mask_map.clone();
+            let ve = ve_map.clone();
             let input_ref = recent_input.clone();
             let stdout_fd = io::stdout().as_raw_fd();
             let mut partial_buf: Vec<u8> = Vec::new();
@@ -237,6 +244,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     let masked = masker::mask_output(
                         &to_mask,
                         &mask.read().unwrap(),
+                        &ve.read().unwrap(),
                         &patterns,
                         &client,
                         &ri,
@@ -269,6 +277,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                             let flushed = masker::mask_output(
                                 &partial_buf,
                                 &mask.read().unwrap(),
+                                &ve.read().unwrap(),
                                 &patterns,
                                 &client,
                                 &ri,
@@ -292,6 +301,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                 let masked = masker::mask_output(
                     &partial_buf,
                     &mask.read().unwrap(),
+                    &ve.read().unwrap(),
                     &patterns,
                     &client,
                     &ri,

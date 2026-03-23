@@ -68,6 +68,7 @@ pub struct VeilKeyClient {
     agent: ureq::Agent,
     cache: Arc<Mutex<HashMap<String, String>>>,
     session_cookie: Arc<Mutex<Option<String>>>,
+    ve_entries: Arc<Mutex<Vec<(String, String)>>>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -88,11 +89,16 @@ impl VeilKeyClient {
             agent: build_agent(),
             cache: Arc::new(Mutex::new(HashMap::new())),
             session_cookie: Arc::new(Mutex::new(None)),
+            ve_entries: Arc::new(Mutex::new(Vec::new())),
         }
     }
 
     pub fn base_url(&self) -> &str {
         &self.base_url
+    }
+
+    pub fn get_ve_entries(&self) -> Vec<(String, String)> {
+        self.ve_entries.lock().unwrap().clone()
     }
 
     /// Login to VaultCenter with admin password.
@@ -309,6 +315,21 @@ impl VeilKeyClient {
         }
 
         enrich_mask_map(&mut result);
+
+        if let Some(ve_arr) = data["ve_entries"].as_array() {
+            let mut ve: Vec<(String, String)> = Vec::new();
+            for entry in ve_arr {
+                let ve_ref = entry["ref"].as_str().unwrap_or_default();
+                let value = entry["value"].as_str().unwrap_or_default();
+                let trimmed = value.trim_end_matches(['\r', '\n']);
+                if !trimmed.is_empty() && !ve_ref.is_empty() {
+                    ve.push((trimmed.to_string(), ve_ref.to_string()));
+                }
+            }
+            if let Ok(mut guard) = self.ve_entries.lock() {
+                *guard = ve;
+            }
+        }
 
         Some(result)
     }
