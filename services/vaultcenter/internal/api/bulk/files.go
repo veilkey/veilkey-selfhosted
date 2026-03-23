@@ -258,10 +258,10 @@ func (h *Handler) loadBulkApplyTemplateRecord(vaultHash, name string) (*bulkAppl
 		ValidationStatus: "valid",
 	}
 	var fileMeta bulkApplyTemplateFile
-	if err := decodeStrictJSON(metaRaw, &fileMeta); err != nil {
+	if decodeErr := decodeStrictJSON(metaRaw, &fileMeta); decodeErr != nil {
 		record.ValidationStatus = "parse_error"
-		record.ValidationMessage = err.Error()
-		return record, nil
+		record.ValidationMessage = decodeErr.Error()
+		return record, nil //nolint:nilerr // validation error captured in record
 	}
 	if strings.TrimSpace(fileMeta.Kind) != bulkApplyTemplateKind {
 		record.ValidationStatus = "schema_error"
@@ -283,19 +283,19 @@ func (h *Handler) loadBulkApplyTemplateRecord(vaultHash, name string) (*bulkAppl
 		record.ValidationMessage = "bodyFile is required"
 		return record, nil
 	}
-	bodyRaw, err := os.ReadFile(filepath.Join(h.bulkApplyTemplatesDir(vaultHash), fileMeta.BodyFile))
-	if err != nil {
+	bodyRaw, readErr := os.ReadFile(filepath.Join(h.bulkApplyTemplatesDir(vaultHash), fileMeta.BodyFile))
+	if readErr != nil {
 		record.ValidationStatus = "missing_body"
 		record.ValidationMessage = "body file not found"
-		return record, nil
+		return record, nil //nolint:nilerr // validation error captured in record
 	}
 	record.Body = string(bodyRaw)
 	if record.Format == "json" || record.Format == "json_merge" {
 		var js any
-		if err := json.Unmarshal(bodyRaw, &js); err != nil {
+		if parseErr := json.Unmarshal(bodyRaw, &js); parseErr != nil {
 			record.ValidationStatus = "schema_error"
 			record.ValidationMessage = "body is not valid JSON"
-			return record, nil
+			return record, nil //nolint:nilerr // validation error captured in record
 		}
 	}
 	return record, nil
@@ -369,21 +369,6 @@ func (h *Handler) loadBulkApplyWorkflowFile(vaultHash, name string) (*bulkApplyW
 		}
 	}
 	return &workflow, "valid", "", nil
-}
-
-func (h *Handler) saveBulkApplyWorkflowFile(vaultHash string, workflow *bulkApplyWorkflowFile) error {
-	if workflow == nil {
-		return fmt.Errorf("workflow is required")
-	}
-	if err := h.ensureBulkApplyBase(); err != nil {
-		return err
-	}
-	raw, err := json.MarshalIndent(workflow, "", "  ")
-	if err != nil {
-		return err
-	}
-	raw = append(raw, '\n')
-	return atomicWriteFile(h.bulkApplyWorkflowPath(vaultHash, workflow.Name), raw, 0o644)
 }
 
 func (h *Handler) listBulkApplyWorkflowSummaries(vaultHash string) ([]bulkApplyWorkflowSummary, error) {

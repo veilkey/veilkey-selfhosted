@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"veilkey-vaultcenter/internal/db"
 	"veilkey-vaultcenter/internal/httputil"
 )
 
@@ -36,7 +37,8 @@ func (h *Handler) handleAgentSaveConfig(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
-	normScope, normStatus, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(reqData.Scope), refStatus(reqData.Status), refScopeLocal)
+	normScope, _, normalizeErr := normalizeScopeStatus(refFamilyVE, refScope(reqData.Scope), refStatus(reqData.Status), refScopeLocal)
+	var normStatus db.RefStatus
 	if normalizeErr != nil {
 		respondError(w, http.StatusBadRequest, normalizeErr.Error())
 		return

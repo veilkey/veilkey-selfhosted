@@ -40,8 +40,8 @@ func loadAndDeleteChallenge(sessionKey string) (*pendingChallenge, bool) {
 	if !ok {
 		return nil, false
 	}
-	ch := val.(*pendingChallenge)
-	if time.Now().After(ch.expiresAt) {
+	ch, _ := val.(*pendingChallenge)
+	if ch == nil || time.Now().After(ch.expiresAt) {
 		return nil, false
 	}
 	return ch, true
@@ -240,7 +240,12 @@ func (h *Handler) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Req
 	}
 
 	// Serialize public key for storage (uncompressed point: 0x04 + X + Y)
-	pubKeyBytes := elliptic.Marshal(pubKey.Curve, pubKey.X, pubKey.Y)
+	ecdhKey, err := pubKey.ECDH()
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "failed to convert public key: "+err.Error())
+		return
+	}
+	pubKeyBytes := ecdhKey.Bytes()
 
 	credIDEncoded := base64.RawURLEncoding.EncodeToString(credentialID)
 	name := strings.TrimSpace(req.Name)
@@ -753,7 +758,7 @@ func parseCOSEES256Key(data []byte) (*ecdsa.PublicKey, error) {
 		Y:     new(big.Int).SetBytes(yBytes),
 	}
 
-	if !pubKey.Curve.IsOnCurve(pubKey.X, pubKey.Y) {
+	if !pubKey.IsOnCurve(pubKey.X, pubKey.Y) {
 		return nil, fmt.Errorf("public key point is not on curve")
 	}
 
@@ -774,7 +779,7 @@ func unmarshalECPublicKey(data []byte) (*ecdsa.PublicKey, error) {
 		X:     x,
 		Y:     y,
 	}
-	if !pubKey.Curve.IsOnCurve(pubKey.X, pubKey.Y) {
+	if !pubKey.IsOnCurve(pubKey.X, pubKey.Y) {
 		return nil, fmt.Errorf("public key point is not on curve")
 	}
 	return pubKey, nil

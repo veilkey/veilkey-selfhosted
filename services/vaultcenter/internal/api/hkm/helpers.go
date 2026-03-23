@@ -21,18 +21,6 @@ func respondError(w http.ResponseWriter, status int, msg string) {
 }
 
 
-// federatedSecretEntry represents a secret found on a child node.
-type federatedSecretEntry struct {
-	NodeID  string `json:"node_id"`
-	Label   string `json:"label"`
-	URL     string `json:"url"`
-	Name    string `json:"name"`
-	Ref     string `json:"ref,omitempty"`
-	Token   string `json:"token,omitempty"`
-	Version int    `json:"version"`
-	Value   string `json:"value,omitempty"`
-}
-
 // AgentScheme returns the URL scheme for agent communication.
 func AgentScheme() string { return httputil.AgentScheme() }
 

@@ -93,14 +93,15 @@ func loginPasswordCmd(c *Client, password string) tea.Cmd {
 func (m loginModel) update(msg tea.Msg, c *Client) (loginModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case statusMsg:
-		if msg.status == "locked" {
+		switch msg.status {
+		case "locked":
 			m.step = loginStepUnlock
 			m.serverLocked = true
 			m.kekInput.Focus()
-		} else if msg.status == "ready" {
+		case "ready":
 			m.step = loginStepAuth
 			m.focusActiveInput()
-		} else {
+		default:
 			m.errText = "Server is " + msg.status
 		}
 		return m, nil

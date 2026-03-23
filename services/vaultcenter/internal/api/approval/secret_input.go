@@ -151,7 +151,7 @@ func (h *Handler) handleSubmitSecretInput(w http.ResponseWriter, r *http.Request
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprint(w, secretInputSuccessHTML)
+	_, _ = fmt.Fprint(w, secretInputSuccessHTML)
 }
 
 func (h *Handler) storeSecretViaAgentEndpoint(endpoint, name, value string) error {

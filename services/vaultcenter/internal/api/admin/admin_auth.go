@@ -402,8 +402,9 @@ func (h *Handler) handleAdminReveal(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "not found")
 		return
 	}
-	_ = h.deps.DB().MarkSecretCatalogRevealed(payload["ref"].(string), now)
-	h.deps.SaveAuditEvent("secret", payload["ref"].(string), "admin_reveal", "admin_session", session.SessionID, "", "admin_auth", nil, map[string]any{
+	refStr, _ := payload["ref"].(string)
+	_ = h.deps.DB().MarkSecretCatalogRevealed(refStr, now)
+	h.deps.SaveAuditEvent("secret", refStr, "admin_reveal", "admin_session", session.SessionID, "", "admin_auth", nil, map[string]any{
 		"ref":           payload["ref"],
 		"name":          payload["name"],
 		"vault":         payload["vault"],
@@ -666,16 +667,6 @@ func (h *Handler) handleAdminScheduleRotation(w http.ResponseWriter, r *http.Req
 		"rotation_required":  updated.RotationRequired,
 		"reason":             reason,
 	})
-}
-
-func (h *Handler) requireAdminSession(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if _, err := h.currentAdminSession(r); err != nil {
-			respondError(w, http.StatusUnauthorized, "admin session required")
-			return
-		}
-		next(w, r)
-	}
 }
 
 func (h *Handler) currentAdminSession(r *http.Request) (*db.AdminSession, error) {

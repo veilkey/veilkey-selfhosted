@@ -619,11 +619,11 @@ func (m vaultsModel) viewSecretDetail() string {
 		if len(m.secretBindings) > 0 {
 			b.WriteString("\n  " + styleHeader.Render("Bindings") + "\n")
 			for _, bind := range m.secretBindings {
-				b.WriteString(fmt.Sprintf("    %s → %s (%s)\n",
+				fmt.Fprintf(&b, "    %s → %s (%s)\n",
 					str(bind, "binding_type"),
 					str(bind, "target_name"),
 					str(bind, "binding_id"),
-				))
+				)
 			}
 		}
 	}
@@ -748,9 +748,6 @@ func (m vaultsModel) updateSearch(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
 		m.secretsCursor = 0
 	case "esc":
 		m.searching = false
-		if m.searchQuery == "" {
-			// No search active, go back to vault list
-		}
 	default:
 		var cmd tea.Cmd
 		m.searchInput, cmd = m.searchInput.Update(msg)
