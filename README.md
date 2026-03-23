@@ -217,9 +217,39 @@ Two ways to manage VeilKey:
 
 Both provide: secret management, vault browsing, audit logs, TOTP login, and server unlock.
 
+## Security
+
+### Database Encryption (Required)
+
+All databases are encrypted with SQLCipher. `VEILKEY_DB_KEY` is required — the server refuses to start without it.
+
+```bash
+# Generate a key
+python3 -c "import secrets; print(secrets.token_hex(32))"
+
+# Add to .env
+VEILKEY_DB_KEY=<generated-key>
+```
+
+Direct `sqlite3` access is blocked. Admin password can only be changed via API with the owner password.
+
+### Vault Isolation
+
+Each LocalVault authenticates to VaultCenter with an `agent_secret` (Bearer token). A vault can only access its own secrets — cross-vault queries are rejected.
+
+### Memory-Only KEK
+
+The master password (KEK) exists only in memory. No password file, no environment variable. On restart, you must unlock via `POST /api/unlock`.
+
 ## Server Restart
 
 When the server restarts, secrets are locked. You must enter the master password to unlock.
+
+```bash
+curl -sk -X POST https://<server>:10180/api/unlock \
+  -H 'Content-Type: application/json' \
+  -d '{"password":"<master-password>"}'
+```
 
 ```
 Server starts → Locked

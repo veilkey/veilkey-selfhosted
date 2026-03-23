@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.5.0 (2026-03-23)
+
+### Security — Vault Isolation
+- **Agent auth**: Bearer token authentication between VaultCenter ↔ LocalVault (bidirectional)
+- **Cross-vault blocked**: agents can only access their own secrets
+- **DB encryption required**: `VEILKEY_DB_KEY` mandatory — server refuses to start without SQLCipher
+- **Memory-only KEK**: removed `VEILKEY_PASSWORD_FILE` and `VEILKEY_PASSWORD` — unlock via API only
+- **Admin password change**: `POST /api/admin/change-password` requires owner password (KEK verification)
+
+### Refactoring
+- PTY module split: `masker.rs`, `sync.rs`, `session.rs` (737 → 195 lines in main)
+- 11 bug fixes: UB removal (static mut → AtomicI32), UTF-8 safety, long poll timeout, line-clear false positive
+- 19 golangci-lint errors resolved in VaultCenter
+- CI: auto-sync UI build instead of diff check
+
+### Features
+- VE ref display: original value with ref tag in distinct color
+- `scripts/vk-bulk-apply-sync.sh`: automated secret sync pipeline with change detection
+- Agent auth caching: reduced DB+KEK lookups
+
+### Testing
+- Go unit tests: 46 cases (LocalVault API, DB, VaultCenter httputil)
+- Bats tests: 17 cases (bulk-apply sync) + 6 (security regression) + 2 (DB encryption)
+- Server startup tests: locked mode, no password env vars, DB_KEY required
+
 ## v0.4.0 (2026-03-22)
 
 ### Security — PTY Masking
