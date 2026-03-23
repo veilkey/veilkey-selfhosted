@@ -285,18 +285,7 @@ func mustLoadServer() (*api.Server, string, int) {
 	})
 	log.Printf("VeilKey agent: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
 
-	if pw := cmdutil.ReadPasswordFromFileEnv(); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if _, err := crypto.Decrypt(kek, info.DEK, info.DEKNonce); err != nil {
-			log.Fatalf("Failed to unlock: invalid password")
-		}
-		server.Unlock(kek)
-		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
-		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
-	} else {
-		log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
-	}
+	log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 
 	listenPort := 0
 	if idx := strings.LastIndex(addr, ":"); idx >= 0 {
