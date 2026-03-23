@@ -2,7 +2,6 @@
 set -e
 
 DATA_DIR="/data"
-SALT_FILE="$DATA_DIR/salt"
 ADDR="${VEILKEY_ADDR:?VEILKEY_ADDR is required}"
 
 # Auto-generate self-signed TLS certificate on first run
@@ -19,14 +18,6 @@ fi
 export VEILKEY_TLS_CERT="$CERT_FILE"
 export VEILKEY_TLS_KEY="$KEY_FILE"
 AUTO_INSTALL_COMPLETE="${VEILKEY_AUTO_COMPLETE_INSTALL_FLOW:?VEILKEY_AUTO_COMPLETE_INSTALL_FLOW is required}"
-PASSWORD_FILE="${VEILKEY_PASSWORD_FILE:-}"
-
-# Reject legacy VEILKEY_PASSWORD env var
-if [ -n "${VEILKEY_PASSWORD:-}" ]; then
-  echo "ERROR: VEILKEY_PASSWORD env var is no longer supported (exposes password in process environment)."
-  echo "Use VEILKEY_PASSWORD_FILE instead."
-  exit 1
-fi
 
 wait_for_http() {
   url="$1"
@@ -73,34 +64,7 @@ seed_install_complete() {
     }' >/dev/null
 }
 
-if [ ! -f "$SALT_FILE" ] && [ -n "$PASSWORD_FILE" ] && [ -f "$PASSWORD_FILE" ]; then
-  MODE="${VEILKEY_MODE:?VEILKEY_MODE is required}"
-
-  case "$MODE" in
-    root)
-      echo "=== VeilKey HKM Init (root) ==="
-      veilkey-vaultcenter init --root < "$PASSWORD_FILE"
-      ;;
-    child)
-      if [ -z "${VEILKEY_PARENT_URL:-}" ]; then
-        echo "ERROR: VEILKEY_PARENT_URL required for child mode."
-        exit 1
-      fi
-      LABEL="${VEILKEY_LABEL:?VEILKEY_LABEL is required}"
-      echo "=== VeilKey HKM Init (child) ==="
-      veilkey-vaultcenter init --child \
-        --parent "$VEILKEY_PARENT_URL" \
-        --label "$LABEL" < "$PASSWORD_FILE"
-      ;;
-    *)
-      echo "ERROR: Unknown VEILKEY_MODE '$MODE'. Use 'root' or 'child'."
-      exit 1
-      ;;
-  esac
-
-  echo "Init complete."
-fi
-# If no salt and no password file: server starts in web setup mode automatically.
+# If no salt file exists, the server starts in web setup mode automatically.
 
 if [ "$AUTO_INSTALL_COMPLETE" = "1" ]; then
   veilkey-vaultcenter "$@" &

@@ -13,7 +13,6 @@ import (
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/cmdutil"
-	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 func RunServer() {
@@ -75,17 +74,7 @@ func RunServer() {
 		log.Fatal("node info not found. Legacy centralized mode is no longer supported; initialize HKM root with 'init --root'.")
 	}
 
-	if pw := cmdutil.ReadPasswordFromFileEnv(); pw != "" {
-		kek := crypto.DeriveKEK(pw, salt)
-		if err := server.Unlock(kek); err != nil {
-			log.Fatalf("Failed to unlock with VEILKEY_PASSWORD_FILE: %v", err)
-		}
-		log.Println("Server unlocked via VEILKEY_PASSWORD_FILE")
-	} else if os.Getenv("VEILKEY_PASSWORD") != "" {
-		log.Fatal("VEILKEY_PASSWORD env var is no longer supported (password exposed in process environment). Use VEILKEY_PASSWORD_FILE instead.")
-	} else {
-		log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
-	}
+	log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 
 	// CometBFT chain node (optional — set VEILKEY_CHAIN_HOME to enable)
 	if chainHome := os.Getenv("VEILKEY_CHAIN_HOME"); chainHome != "" {
