@@ -30,7 +30,8 @@ LOG_TAG="vk-sync"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$LOG_TAG] $*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
 
-CURL="curl -sk --max-time 10"
+CURL_OPTS="${VEILKEY_CURL_OPTS:--sk}"
+CURL="curl $CURL_OPTS --max-time 10"
 
 # ── 1. LocalVault에 등록된 시크릿 이름 목록 = sync 대상 ──
 log "Fetching secret names from LocalVault"
@@ -115,11 +116,12 @@ done <<< "$SECRET_NAMES"
 ENV_CONTENT="$ENV_CONTENT
 "
 
-# ── 5. 변경 감지 (타임스탬프 줄 제외) ──
-if [ -f "$TARGET" ]; then
-  CURRENT=$(grep -v '^# VeilKey managed' "$TARGET" 2>/dev/null | sort)
-  NEW=$(echo "$ENV_CONTENT" | grep -v '^# VeilKey managed' | sort)
-  if [ "$CURRENT" = "$NEW" ]; then
+# ── 5. 변경 감지 (체크섬 기반, 타임스탬프 무시) ──
+CHECKSUM_FILE="${TARGET}.vk-checksum"
+NEW_CHECKSUM=$(echo "$ENV_CONTENT" | grep -v '^# VeilKey managed' | sort | md5sum | cut -d' ' -f1)
+if [ -f "$CHECKSUM_FILE" ]; then
+  OLD_CHECKSUM=$(cat "$CHECKSUM_FILE" 2>/dev/null)
+  if [ "$NEW_CHECKSUM" = "$OLD_CHECKSUM" ]; then
     log "No changes detected — skipping"
     exit 0
   fi
@@ -159,8 +161,11 @@ if [ "$STATUS" != "applied" ]; then
   die "bulk-apply failed: $RESULT"
 fi
 
-# bulk-apply가 성공했으므로 로컬에도 동일 내용 기록 (변경 감지 기준용)
-echo "$ENV_CONTENT" > "$TARGET"
+# 변경 감지 기준용 체크섬 저장
+echo "$NEW_CHECKSUM" > "$CHECKSUM_FILE"
+
+# fallback: LocalVault bulk-apply가 파일을 쓰지만, 독립 실행 시에도 보장
+[ -f "$TARGET" ] || echo "$ENV_CONTENT" > "$TARGET"
 
 log "bulk-apply applied to $TARGET"
 

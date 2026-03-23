@@ -5,8 +5,8 @@
 # 필요: bats >= 1.5, python3, curl
 
 SCRIPT_DIR="$(cd "$(dirname "$BATS_TEST_FILENAME")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-SCRIPT="$REPO_ROOT/scripts/vk-bulk-apply-sync.sh"
+REPO_ROOT="${VK_REPO_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+SCRIPT="${VK_SCRIPT:-$REPO_ROOT/scripts/vk-bulk-apply-sync.sh}"
 MOCK="$SCRIPT_DIR/mock_server.py"
 FIXTURES="$SCRIPT_DIR/fixtures"
 LV_PORT=18900
@@ -70,7 +70,7 @@ setup() {
 }
 
 teardown() {
-  rm -f "$TEST_ENV" "${TEST_ENV}.hook" "${TEST_ENV}.bak"
+  rm -f "$TEST_ENV" "${TEST_ENV}.hook" "${TEST_ENV}.bak" "${TEST_ENV}.vk-checksum"
 }
 
 # ══════════════════════════════════════════════════════════════
@@ -178,22 +178,21 @@ assert 'DB_PASSWORD=super-secret-db-pw' in s['content']
   [[ "$output" == *"No changes detected"* ]]
 }
 
-@test ".env가 다르면 변경 감지 → 재적용" {
+@test "체크섬 삭제 시 재적용" {
   load_fixture "$FIXTURES/basic.json"
   run run_sync
   [ "$status" -eq 0 ]
-  echo "API_KEY=old-value" > "$TEST_ENV"
+  rm -f "${TEST_ENV}.vk-checksum"
   run run_sync
   [ "$status" -eq 0 ]
   [[ "$output" == *"Changes detected"* ]]
   grep -q "API_KEY=sk-primary-api-key-123" "$TEST_ENV"
 }
 
-@test "타임스탬프 차이만 있으면 변경 아님" {
+@test "타임스탬프 차이만 있으면 변경 아님 (체크섬 동일)" {
   load_fixture "$FIXTURES/basic.json"
   run run_sync
   [ "$status" -eq 0 ]
-  sed -i 's/auto-synced .*/auto-synced 1999-01-01T00:00:00Z/' "$TEST_ENV"
   run run_sync
   [ "$status" -eq 0 ]
   [[ "$output" == *"No changes detected"* ]]
