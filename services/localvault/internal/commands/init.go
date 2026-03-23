@@ -16,6 +16,7 @@ import (
 	"github.com/veilkey/veilkey-go-package/agentapi"
 	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
+	"github.com/veilkey/veilkey-go-package/tlsutil"
 )
 
 func RunInit() {
@@ -186,7 +187,8 @@ func decodeRegistrationToken(token string) (tokenID, vcURL, label string, err er
 
 func validateTokenRemote(vcURL, tokenID string) error {
 	url := strings.TrimRight(vcURL, "/") + agentapi.PathRegistrationTokenValidate + tokenID + "/validate"
-	client := &http.Client{Timeout: cmdutil.ParseDurationEnv("VEILKEY_HTTP_TIMEOUT", 10*time.Second)}
+	client := tlsutil.InitHTTPClientFromEnv()
+	client.Timeout = cmdutil.ParseDurationEnv("VEILKEY_HTTP_TIMEOUT", 10*time.Second)
 	resp, err := client.Get(url)
 	if err != nil {
 		return fmt.Errorf("cannot reach VaultCenter: %w", err)
