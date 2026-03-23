@@ -985,30 +985,10 @@ mod pty_wrap {
                 });
 
                 // master → stdout (filter output from PTY)
-                //
-                // Sliding-window design: keep an overlap buffer from the tail of the
-                // previous flush so that secrets spanning two reads are still caught.
-                // The overlap length equals the longest secret in mask_map.
                 let mask = mask_map.clone();
                 let input_ref = recent_input.clone();
                 let stdout_fd = io::stdout().as_raw_fd();
                 let mut partial_buf: Vec<u8> = Vec::new();
-
-                let max_secret_len = mask
-                    .read()
-                    .unwrap()
-                    .iter()
-                    .map(|(p, _)| p.len())
-                    .max()
-                    .unwrap_or(0);
-                // overlap_buf holds the tail of the last flushed output (up to max_secret_len bytes).
-                // It is prepended to the next batch so cross-boundary secrets are matched.
-                let mut overlap_buf: Vec<u8> = Vec::new();
-
-                let lookahead_ms: u64 = std::env::var("VEILKEY_LOOKAHEAD_MS")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-                    .unwrap_or(50);
 
                 let mut buf = [0u8; 32768];
                 loop {
