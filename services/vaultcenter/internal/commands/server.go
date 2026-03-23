@@ -45,7 +45,8 @@ func RunServer() {
 	}
 
 	// Derive DB encryption key from salt — no separate VEILKEY_DB_KEY needed
-	if os.Getenv("VEILKEY_DB_KEY") == "" {
+	// Always derive DB key from salt — ignore VEILKEY_DB_KEY env var
+	{
 		dbKey := deriveDBKey(salt)
 		_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
 	}
