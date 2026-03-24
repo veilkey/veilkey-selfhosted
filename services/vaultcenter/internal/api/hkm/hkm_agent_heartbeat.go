@@ -331,18 +331,29 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store vault_unlock_key if provided on existing agent (first-time migration)
+	// Store vault_unlock_key if provided on existing agent (first-time migration).
+	// Requires valid agent_secret in Authorization header to prevent unauthenticated key injection.
 	vukStored := false
 	if req.VaultUnlockKey != "" && len(agent.VaultUnlockKeyEnc) == 0 {
-		kek := h.deps.GetKEK()
-		encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
-		if encErr != nil {
-			log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
-		} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
-			log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+		authHeader := r.Header.Get("Authorization")
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if authHeader == "" || token == authHeader {
+			log.Printf("agent: rejected vault_unlock_key from %s: missing agent auth", nodeID)
+		} else if authedAgent, authErr := h.authenticateAgentBySecret(token); authErr != nil {
+			log.Printf("agent: rejected vault_unlock_key from %s: invalid agent secret", nodeID)
+		} else if authedAgent.NodeID != nodeID {
+			log.Printf("agent: rejected vault_unlock_key from %s: secret belongs to different agent %s", nodeID, authedAgent.NodeID)
 		} else {
-			vukStored = true
-			log.Printf("agent: vault_unlock_key stored for existing agent %s (%s)", nodeID, agent.Label)
+			kek := h.deps.GetKEK()
+			encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
+				log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+			} else {
+				vukStored = true
+				log.Printf("agent: vault_unlock_key stored for existing agent %s (%s)", nodeID, agent.Label)
+			}
 		}
 	}
 

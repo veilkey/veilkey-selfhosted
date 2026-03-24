@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"crypto/sha256"
 	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -14,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"veilkey-localvault/internal/api"
 	"veilkey-localvault/internal/db"
 
 	"github.com/veilkey/veilkey-go-package/agentapi"
@@ -41,7 +41,7 @@ func RunInit() {
 		case strings.HasPrefix(os.Args[i], "--center="):
 			centerURL = strings.TrimPrefix(os.Args[i], "--center=")
 		case os.Args[i] == "--password":
-			log.Fatal("--password flag is no longer supported (password exposed in ps/proc). Provide password via stdin or interactive prompt.")
+			log.Fatal("Passwords are now auto-generated. The --password flag is no longer supported.")
 		}
 	}
 
@@ -107,8 +107,7 @@ func RunInit() {
 	kek := crypto.DeriveKEK(password, salt)
 
 	// Derive DB encryption key from KEK (not from salt)
-	dbKeyHash := sha256.Sum256(kek)
-	_ = os.Setenv("VEILKEY_DB_KEY", hex.EncodeToString(dbKeyHash[:]))
+	_ = os.Setenv("VEILKEY_DB_KEY", api.DeriveDBKeyFromKEK(kek))
 
 	// Remove any existing unencrypted DB (from setup mode)
 	_ = os.Remove(dbPath)

@@ -67,8 +67,9 @@ func (s *Server) Close() {
 	}
 }
 
-// deriveDBKeyFromKEK derives a SQLCipher encryption key from the KEK.
-func deriveDBKeyFromKEK(kek []byte) string {
+// DeriveDBKeyFromKEK derives a SQLCipher encryption key from the KEK.
+// Exported so commands package (init, server) can use the same derivation logic.
+func DeriveDBKeyFromKEK(kek []byte) string {
 	h := sha256.Sum256(kek)
 	return hex.EncodeToString(h[:])
 }
@@ -216,7 +217,7 @@ func (s *Server) Unlock(kek []byte) error {
 	}
 
 	// 2. Derive DB_KEY from KEK and open database
-	dbKey := deriveDBKeyFromKEK(kek)
+	dbKey := DeriveDBKeyFromKEK(kek)
 	_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
 
 	database, err := db.New(s.dbPath)
