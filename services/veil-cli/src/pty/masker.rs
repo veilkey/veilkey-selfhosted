@@ -576,4 +576,86 @@ mod tests {
         let data = b"\x1b[?1049lstuff\x1b[?1049h";
         assert!(detect_alt_screen(data, false), "enable comes last");
     }
+
+    // ── No line-clear (prompt preservation) ─────────────────────────
+
+    /// Helper: simulate masking and return the raw output (with ANSI codes)
+    fn simulate_mask_raw(input: &str, mask_map: &[(String, String)]) -> String {
+        let mut s = input.to_string();
+        for (plaintext, vk_ref) in mask_map {
+            if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
+                s = s.replace(
+                    plaintext.as_str(),
+                    &padded_colorize_ref(vk_ref, plaintext.len()),
+                );
+            }
+        }
+        s
+    }
+
+    #[test]
+    fn test_mask_no_line_clear_single_line() {
+        // Masking must NOT insert \r\x1b[2K — it erases the prompt on
+        // readline redraws (history recall, tab completion).
+        let result = simulate_mask_raw(
+            "echo SuperSecret123\n",
+            &[("SuperSecret123".to_string(), "VK:LOCAL:aaa11111".to_string())],
+        );
+        assert!(!result.contains("\r\x1b[2K"), "line-clear must not be present");
+        assert!(!result.contains("SuperSecret"), "secret must be masked");
+    }
+
+    #[test]
+    fn test_mask_preserves_prompt_on_history_recall() {
+        // Simulate readline history recall: CR + prompt + recalled command
+        let result = simulate_mask_raw(
+            "\r(VEIL) root$ echo hunter2",
+            &[("hunter2".to_string(), "VK:LOCAL:bbb22222".to_string())],
+        );
+        assert!(result.contains("(VEIL) root$"), "prompt must be preserved");
+        assert!(!result.contains("hunter2"), "secret must be masked");
+        assert!(!result.contains("\x1b[2K"), "no line-clear");
+    }
+
+    #[test]
+    fn test_mask_multiline_no_line_clear() {
+        let result = simulate_mask_raw(
+            "line1=secret1\nline2=secret2\n",
+            &[
+                ("secret1".to_string(), "VK:LOCAL:ccc".to_string()),
+                ("secret2".to_string(), "VK:LOCAL:ddd".to_string()),
+            ],
+        );
+        assert!(!result.contains("\x1b[2K"), "no line-clear anywhere");
+        assert!(!result.contains("secret1"));
+        assert!(!result.contains("secret2"));
+        assert!(result.contains("line1="));
+        assert!(result.contains("line2="));
+    }
+
+    #[test]
+    fn test_mask_readline_cursor_movement_preserved() {
+        // readline uses \x1b[C (cursor forward) to position text.
+        // Masking must not corrupt these sequences.
+        let result = simulate_mask_raw(
+            "\x1b[C\x1b[C\x1b[Cecho hunter2\x1b[K",
+            &[("hunter2".to_string(), "VK:LOCAL:eee".to_string())],
+        );
+        // Cursor movement sequences must survive
+        assert!(result.contains("\x1b[C"), "cursor sequences must be preserved");
+        // Erase-to-end must survive
+        assert!(result.contains("\x1b[K"), "erase-to-end must be preserved");
+        assert!(!result.contains("hunter2"), "secret must be masked");
+    }
+
+    #[test]
+    fn test_mask_backspace_sequence_preserved() {
+        // readline uses \x08 (backspace) to erase chars during history navigation
+        let result = simulate_mask_raw(
+            "\x08\x08\x08\x08\x08hunter2",
+            &[("hunter2".to_string(), "VK:LOCAL:fff".to_string())],
+        );
+        assert!(result.contains("\x08"), "backspaces must be preserved");
+        assert!(!result.contains("hunter2"), "secret must be masked");
+    }
 }
