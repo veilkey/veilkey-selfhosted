@@ -95,7 +95,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"secrets_count":   secretsCount,
 		"configs_count":   configsCount,
 		"version":         version,
-		"salt":            base64.StdEncoding.EncodeToString(s.Salt()),
+	}
+	if saltBytes := s.Salt(); len(saltBytes) > 0 {
+		payload["salt"] = base64.StdEncoding.EncodeToString(saltBytes)
 	}
 	if saltBytes := s.Salt(); len(saltBytes) > 0 {
 		payload["salt"] = base64.StdEncoding.EncodeToString(saltBytes)
