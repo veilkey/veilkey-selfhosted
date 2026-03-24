@@ -178,3 +178,96 @@ fn handle_connection(mut stream: TcpStream, allow_set: &HashSet<String>) -> io::
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── host_allowed ──────────────────────────────────────────────
+
+    #[test]
+    fn test_host_allowed_empty_set_allows_all() {
+        let allow = HashSet::new();
+        assert!(host_allowed("example.com", &allow));
+        assert!(host_allowed("anything.io", &allow));
+    }
+
+    #[test]
+    fn test_host_allowed_matching_host() {
+        let allow: HashSet<String> = vec!["example.com".to_string()].into_iter().collect();
+        assert!(host_allowed("example.com", &allow));
+    }
+
+    #[test]
+    fn test_host_allowed_non_matching_host() {
+        let allow: HashSet<String> = vec!["example.com".to_string()].into_iter().collect();
+        assert!(!host_allowed("evil.com", &allow));
+    }
+
+    #[test]
+    fn test_host_allowed_case_insensitive() {
+        // The allow_set is lowercased during construction in run()
+        let allow: HashSet<String> = vec!["example.com".to_string()].into_iter().collect();
+        // host_allowed lowercases the input
+        assert!(host_allowed("EXAMPLE.COM", &allow));
+        assert!(host_allowed("Example.Com", &allow));
+    }
+
+    #[test]
+    fn test_host_allowed_multiple_hosts() {
+        let allow: HashSet<String> = vec![
+            "api.example.com".to_string(),
+            "cdn.example.com".to_string(),
+        ]
+        .into_iter()
+        .collect();
+        assert!(host_allowed("api.example.com", &allow));
+        assert!(host_allowed("cdn.example.com", &allow));
+        assert!(!host_allowed("www.example.com", &allow));
+    }
+
+    // ── proxy_max_header ──────────────────────────────────────────
+
+    #[test]
+    fn test_proxy_max_header_default() {
+        // Clear env var to get default
+        std::env::remove_var("VEILKEY_PROXY_MAX_HEADER");
+        assert_eq!(proxy_max_header(), 16384);
+    }
+
+    #[test]
+    fn test_proxy_max_header_env_override() {
+        std::env::set_var("VEILKEY_PROXY_MAX_HEADER", "32768");
+        assert_eq!(proxy_max_header(), 32768);
+        std::env::remove_var("VEILKEY_PROXY_MAX_HEADER");
+    }
+
+    #[test]
+    fn test_proxy_max_header_invalid_env_uses_default() {
+        std::env::set_var("VEILKEY_PROXY_MAX_HEADER", "not_a_number");
+        assert_eq!(proxy_max_header(), 16384);
+        std::env::remove_var("VEILKEY_PROXY_MAX_HEADER");
+    }
+
+    // ── proxy_timeout ─────────────────────────────────────────────
+
+    #[test]
+    fn test_proxy_timeout_default() {
+        std::env::remove_var("VEILKEY_PROXY_TIMEOUT");
+        assert_eq!(proxy_timeout(), Duration::from_secs(30));
+    }
+
+    #[test]
+    fn test_proxy_timeout_env_override() {
+        std::env::set_var("VEILKEY_PROXY_TIMEOUT", "60");
+        assert_eq!(proxy_timeout(), Duration::from_secs(60));
+        std::env::remove_var("VEILKEY_PROXY_TIMEOUT");
+    }
+
+    #[test]
+    fn test_proxy_timeout_invalid_env_uses_default() {
+        std::env::set_var("VEILKEY_PROXY_TIMEOUT", "invalid");
+        assert_eq!(proxy_timeout(), Duration::from_secs(30));
+        std::env::remove_var("VEILKEY_PROXY_TIMEOUT");
+    }
+}
