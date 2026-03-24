@@ -57,8 +57,8 @@ func TestDBKeyDerivedFromKEK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to read api.go: %v", err)
 	}
-	if !contains(string(apiSrc), "deriveDBKeyFromKEK") {
-		t.Error("api.go must derive DB key from KEK via deriveDBKeyFromKEK()")
+	if !contains(string(apiSrc), "DeriveDBKeyFromKEK") {
+		t.Error("api.go must derive DB key from KEK via DeriveDBKeyFromKEK()")
 	}
 }
 
