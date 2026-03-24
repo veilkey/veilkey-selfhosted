@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -154,8 +155,11 @@ func loadVaultsCmd(c *Client) tea.Cmd {
 		if err != nil {
 			return errMsg{err}
 		}
-		// Enrich vaults with agent info
-		agents, _ := c.ListAgents()
+		// Enrich vaults with agent info; failure is non-fatal — agent fields will be empty.
+		agents, err := c.ListAgents()
+		if err != nil {
+			log.Printf("[tui] loadVaultsCmd: ListAgents: %v", err)
+		}
 		agentByHash := map[string]map[string]any{}
 		for _, a := range agents {
 			if rh := str(a, "vault_runtime_hash"); rh != "" {
@@ -562,6 +566,10 @@ func (m vaultsModel) viewList(width int) string {
 	b.WriteString(styleDim.Render(h))
 	b.WriteString("\n")
 	for i, v := range m.vaults {
+		// Prefer display_name (human-readable label) over vault_name (internal identifier).
+		// Fallback order was intentionally changed from vault_name->display_name to
+		// display_name->vault_name when the enriched vault list view was introduced,
+		// so that the human-friendly label is shown as the primary column.
 		name := str(v, "display_name")
 		if name == "" {
 			name = str(v, "vault_name")
