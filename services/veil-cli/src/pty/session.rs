@@ -8,6 +8,32 @@ use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
+/// Read from fd, retrying on EINTR. Returns bytes read, or <= 0 on EOF/error.
+unsafe fn read_eintr(fd: RawFd, buf: &mut [u8]) -> isize {
+    loop {
+        let n = libc::read(fd, buf.as_mut_ptr() as _, buf.len());
+        if n == -1 && *libc::__errno_location() == libc::EINTR {
+            continue;
+        }
+        return n;
+    }
+}
+
+/// Write all bytes to fd, handling partial writes and EINTR.
+unsafe fn write_all_fd(fd: RawFd, buf: &[u8]) {
+    let mut offset = 0;
+    while offset < buf.len() {
+        let n = libc::write(fd, buf[offset..].as_ptr() as _, buf.len() - offset);
+        if n == -1 {
+            if *libc::__errno_location() == libc::EINTR {
+                continue;
+            }
+            break;
+        }
+        offset += n as usize;
+    }
+}
+
 /// Result of processing stdin input for the secret guard.
 #[derive(Debug, PartialEq)]
 pub(crate) enum StdinGuardResult {
@@ -58,33 +84,6 @@ pub(crate) fn check_stdin_for_secrets(
     }
     StdinGuardResult::Forward
 }
-
-/// Read from fd, retrying on EINTR. Returns bytes read, or <= 0 on EOF/error.
-unsafe fn read_eintr(fd: RawFd, buf: &mut [u8]) -> isize {
-    loop {
-        let n = libc::read(fd, buf.as_mut_ptr() as _, buf.len());
-        if n == -1 && *libc::__errno_location() == libc::EINTR {
-            continue;
-        }
-        return n;
-    }
-}
-
-/// Write all bytes to fd, handling partial writes and EINTR.
-unsafe fn write_all_fd(fd: RawFd, buf: &[u8]) {
-    let mut offset = 0;
-    while offset < buf.len() {
-        let n = libc::write(fd, buf[offset..].as_ptr() as _, buf.len() - offset);
-        if n == -1 {
-            if *libc::__errno_location() == libc::EINTR {
-                continue;
-            }
-            break;
-        }
-        offset += n as usize;
-    }
-}
-
 use crate::api::VeilKeyClient;
 use crate::config::{load_config, CompiledPattern};
 use crate::state::state_dir;
@@ -404,7 +403,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
                 // Output coalesce: 5ms drain loop to collect char-by-char echo
                 // into larger chunks, improving cross-chunk secret detection.
-                std::thread::sleep(Duration::from_millis(50));
+                std::thread::sleep(Duration::from_millis(5));
                 loop {
                     let mut pfd = libc::pollfd {
                         fd: master_fd,
