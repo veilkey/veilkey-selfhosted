@@ -594,7 +594,10 @@ func (m vaultsModel) viewList(width int) string {
 
 func (m vaultsModel) viewSecrets(width int) string {
 	var b strings.Builder
-	name := str(m.detailVault, "vault_name")
+	name := str(m.detailVault, "display_name")
+	if name == "" {
+		name = str(m.detailVault, "vault_name")
+	}
 	if name == "" {
 		name = str(m.detailVault, "vault_hash")
 	}
