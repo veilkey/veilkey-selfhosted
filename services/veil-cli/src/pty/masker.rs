@@ -208,6 +208,12 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
+    // Cross-chunk mask_map: secrets typed char-by-char span tail + new_text.
+    // Same-width refs ensure cursor position stays correct after erase.
+    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+        output = m.output;
+    }
+
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
@@ -1075,5 +1081,124 @@ mod tests {
         let map = vec![("not-in-output-at-all".to_string(), "VK:LOCAL:fp".to_string())];
         let (output, _) = mask_with_ve("completely normal text", &map, &[], "");
         assert_eq!(output, "completely normal text");
+    }
+}
+
+#[cfg(test)]
+mod same_width_tests {
+    use super::*;
+
+    fn strip_ansi(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn vw(vk_ref: &str, len: usize) -> usize {
+        strip_ansi(&padded_colorize_ref(vk_ref, len)).chars().count()
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(s, r)| (s.to_string(), r.to_string())).collect()
+    }
+
+    // ── Same-width guarantee ────────────────────────────────────
+    #[test] fn sw_full_17()   { assert_eq!(vw("VK:LOCAL:6da25530", 17), 17); }
+    #[test] fn sw_compact_11() { assert_eq!(vw("VK:LOCAL:6da25530", 11), 11); assert_eq!(strip_ansi(&padded_colorize_ref("VK:LOCAL:6da25530", 11)), "VK:6da25530"); }
+    #[test] fn sw_hash_8()    { assert_eq!(vw("VK:LOCAL:6da25530", 8), 8); }
+    #[test] fn sw_padded_9()  { assert_eq!(vw("VK:LOCAL:6da25530", 9), 9); }
+    #[test] fn sw_stars_2()   { assert_eq!(vw("VK:LOCAL:6da25530", 2), 2); assert_eq!(strip_ansi(&padded_colorize_ref("VK:LOCAL:6da25530", 2)), "**"); }
+    #[test] fn sw_star_1()    { assert_eq!(vw("VK:LOCAL:6da25530", 1), 1); }
+    #[test] fn sw_zero()      { assert_eq!(padded_colorize_ref("VK:LOCAL:6da25530", 0), ""); }
+    #[test] fn sw_all_1_50()  { for l in 1..=50 { assert_eq!(vw("VK:LOCAL:6da25530", l), l, "len={}", l); } }
+    #[test] fn sw_temp_1_50() { for l in 1..=50 { assert_eq!(vw("VK:TEMP:abc12345", l), l, "len={}", l); } }
+
+    // ── Cross-chunk erase + same-width ──────────────────────────
+    #[test]
+    fn cc_erase_same_width() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let r = find_cross_chunk_mask("(VEIL) $ Ghdrhkdgh1", "@", &map).unwrap();
+        assert!(!r.output.contains("Ghdrhkdgh1@"));
+    }
+    #[test]
+    fn cc_no_vkloc_fragments() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let r = find_cross_chunk_mask("$ Ghdrhkdg", "h1@", &map).unwrap();
+        let v = strip_ansi(&r.output);
+        assert!(!v.contains("VK:6dVK:"), "no VK:LOC fragments: [{}]", v);
+    }
+
+    // ── Arrow key safety ────────────────────────────────────────
+    #[test] fn cc_skip_escape()    { let m = mk(&[("s99", "VK:LOCAL:x")]); assert!(find_cross_chunk_mask("s9", "9\x1b[C", &m).is_none()); }
+    #[test] fn cc_skip_down_arrow() { let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]); assert!(find_cross_chunk_mask("tail", "\x1b[B\x1b[2K", &m).is_none()); }
+    #[test] fn cc_fires_on_cr()    { let m = mk(&[("s99", "VK:LOCAL:y")]); assert!(find_cross_chunk_mask("s9", "9\r", &m).is_some()); }
+
+    // ── Repeated invocations ────────────────────────────────────
+    #[test]
+    fn cc_repeated_10x() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = String::new();
+        for i in 0..10 {
+            tail.push_str("(VEIL) $ ");
+            let r = find_cross_chunk_mask(&format!("{}Ghdrhkdgh1", tail), "@\r", &map);
+            assert!(r.is_some(), "#{}", i);
+            tail.push_str("Ghdrhkdgh1@\nbash: VK:6da25530: not found\n");
+            if tail.len() > 4096 { tail = tail[tail.len()-4096..].to_string(); }
+        }
+    }
+
+    // ── 103 secrets ─────────────────────────────────────────────
+    #[test]
+    fn cc_103_secrets() {
+        let mut map: Vec<(String, String)> = (0..102).map(|i| (format!("other_{:04}", i), format!("VK:LOCAL:{:08x}", i))).collect();
+        map.push(("Ghdrhkdgh1@".into(), "VK:LOCAL:6da25530".into()));
+        let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@", &map);
+        assert!(r.is_some());
+    }
+
+    // ── Security ────────────────────────────────────────────────
+    #[test] fn sec_no_plaintext()  { let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]); let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@\r", &m).unwrap(); assert!(!r.output.contains("Ghdrhkdgh1@")); }
+    #[test] fn sec_empty_map()     { assert!(find_cross_chunk_mask("x", "y", &[]).is_none()); }
+    #[test] fn sec_long_tail()     { let m = mk(&[("needle", "VK:LOCAL:n")]); let t = format!("{}needl", "x".repeat(50000)); assert!(find_cross_chunk_mask(&t, "e", &m).is_some()); }
+    #[test] fn sec_unicode()       { let m = mk(&[("비밀abc", "VK:LOCAL:k")]); assert!(find_cross_chunk_mask("비밀ab", "c", &m).is_some()); }
+    #[test] fn sec_special_chars() { let m = mk(&[("p@$$!", "VK:LOCAL:s")]); assert!(find_cross_chunk_mask("p@$$", "!", &m).is_some()); }
+
+    // ── Stdin guard ─────────────────────────────────────────────
+    #[test]
+    fn sg_blocks_env() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("SuperSecret", "VK:LOCAL:e")]); let mut b = String::new();
+        assert_eq!(check_stdin_for_secrets(b"export X=SuperSecret\r", &mut b, &m), StdinGuardResult::Blocked);
+    }
+    #[test]
+    fn sg_multi_chunk() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("pass123", "VK:LOCAL:p")]); let mut b = String::new();
+        check_stdin_for_secrets(b"pass", &mut b, &m);
+        assert_eq!(check_stdin_for_secrets(b"123\r", &mut b, &m), StdinGuardResult::Blocked);
+    }
+    #[test]
+    fn sg_safe_after_ctrl_c() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("secret", "VK:LOCAL:c")]); let mut b = String::new();
+        check_stdin_for_secrets(b"secret", &mut b, &m);
+        check_stdin_for_secrets(b"\x03", &mut b, &m);
+        assert_eq!(check_stdin_for_secrets(b"ls\r", &mut b, &m), StdinGuardResult::Forward);
+    }
+    #[test]
+    fn sg_empty_enter() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("s", "VK:LOCAL:x")]); let mut b = String::new();
+        assert_eq!(check_stdin_for_secrets(b"\r", &mut b, &m), StdinGuardResult::Forward);
+    }
+    #[test]
+    fn sg_binary_no_panic() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("s", "VK:LOCAL:x")]); let mut b = String::new();
+        assert_eq!(check_stdin_for_secrets(&[0xFF, 0xFE, 0x0D], &mut b, &m), StdinGuardResult::Forward);
+    }
+    #[test]
+    fn sg_line_buf_capped() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult, MAX_LINE_BUF};
+        let m = mk(&[("x", "VK:LOCAL:x")]); let mut b = String::new();
+        check_stdin_for_secrets(&vec![b'A'; 100_000], &mut b, &m);
+        assert!(b.len() <= MAX_LINE_BUF);
     }
 }
