@@ -89,27 +89,23 @@ pub fn colorize_ve_ref(original: &str, _ve_ref: &str) -> String {
     format!("{}{}{}", GREEN, original, RESET)
 }
 
-/// Replace a secret with a colorized VK ref, sized to EXACTLY match original width.
-/// If the ref is shorter, pad with spaces. If longer, truncate the ref.
-/// This is critical — mismatched width breaks readline cursor tracking and
-/// leaves VK:LOC fragments when the terminal redraws (arrow keys, etc).
+/// Replace a secret with a colorized VK ref.
+/// If the ref is shorter, pad with spaces. If longer, show full ref.
 pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
     if original_len == 0 {
         return String::new();
     }
     let ref_visible_len = vk_ref.chars().count();
+    let colored = colorize_ref(vk_ref);
     if ref_visible_len <= original_len {
         let pad = original_len - ref_visible_len;
-        let colored = colorize_ref(vk_ref);
         if pad > 0 {
             format!("{}{}", colored, " ".repeat(pad))
         } else {
             colored
         }
     } else {
-        // Ref is longer — truncate to fit original width exactly
-        let truncated: String = vk_ref.chars().take(original_len).collect();
-        colorize_ref(&truncated)
+        colored
     }
 }
 
@@ -339,11 +335,11 @@ mod tests {
 
     #[test]
     fn test_pad_ref_longer_than_secret() {
-        // ref 17 chars, secret 10 chars → truncated to exactly 10 chars
+        // ref 17 chars, secret 10 chars → full ref shown as-is (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 10);
         let visible = strip_ansi(&result);
-        assert_eq!(visible.chars().count(), 10);
-        assert_eq!(visible, "VK:LOCAL:6");
+        assert_eq!(visible, "VK:LOCAL:6da25530");
+        assert!(visible.chars().count() >= 10);
     }
 
     #[test]
@@ -357,11 +353,11 @@ mod tests {
 
     #[test]
     fn test_pad_very_short_secret() {
-        // secret 3 chars → ref truncated to exactly 3 chars
+        // secret 3 chars → full ref shown as-is (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 3);
         let visible = strip_ansi(&result);
-        assert_eq!(visible.chars().count(), 3);
-        assert_eq!(visible, "VK:");
+        assert_eq!(visible, "VK:LOCAL:abc");
+        assert!(visible.chars().count() >= 3);
     }
 
     #[test]
@@ -374,11 +370,11 @@ mod tests {
 
     #[test]
     fn test_pad_single_char_secret() {
-        // secret 1 char → ref truncated to exactly 1 char
+        // secret 1 char → full ref shown as-is (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 1);
         let visible = strip_ansi(&result);
-        assert_eq!(visible.chars().count(), 1);
-        assert_eq!(visible, "V");
+        assert_eq!(visible, "VK:LOCAL:abc");
+        assert!(visible.chars().count() >= 1);
     }
 
     #[test]
@@ -400,19 +396,28 @@ mod tests {
 
     #[test]
     fn test_ref_truncated_to_exact_width_all_lengths() {
-        // For every secret length 1..30, visible width must equal secret_len
+        // For every secret length 1..30, check visible width
         let vk_ref = "VK:LOCAL:6da25530"; // 17 chars
+        let ref_len = vk_ref.chars().count();
         for secret_len in 1..=30 {
             let result = padded_colorize_ref(vk_ref, secret_len);
             let visible = strip_ansi(&result);
-            assert_eq!(
-                visible.chars().count(), secret_len,
-                "width mismatch at secret_len={}: got [{}] ({})",
-                secret_len, visible, visible.chars().count()
-            );
-            // When secret_len >= ref_len, full ref is present
-            if secret_len >= vk_ref.chars().count() {
+            if secret_len >= ref_len {
+                // ref shorter/equal → padded to secret_len
+                assert_eq!(
+                    visible.chars().count(), secret_len,
+                    "width mismatch at secret_len={}: got [{}] ({})",
+                    secret_len, visible, visible.chars().count()
+                );
                 assert!(visible.contains(vk_ref));
+            } else {
+                // ref longer → full ref shown as-is
+                assert!(
+                    visible.chars().count() >= secret_len,
+                    "visible should be >= secret_len at secret_len={}: got [{}] ({})",
+                    secret_len, visible, visible.chars().count()
+                );
+                assert_eq!(visible, vk_ref);
             }
         }
     }
