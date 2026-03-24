@@ -339,8 +339,10 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		token := strings.TrimPrefix(authHeader, "Bearer ")
 		if authHeader == "" || token == authHeader {
 			log.Printf("agent: rejected vault_unlock_key from %s: missing agent auth", nodeID)
-		} else if _, authErr := h.authenticateAgentBySecret(token); authErr != nil {
+		} else if authedAgent, authErr := h.authenticateAgentBySecret(token); authErr != nil {
 			log.Printf("agent: rejected vault_unlock_key from %s: invalid agent secret", nodeID)
+		} else if authedAgent.NodeID != nodeID {
+			log.Printf("agent: rejected vault_unlock_key from %s: secret belongs to different agent %s", nodeID, authedAgent.NodeID)
 		} else {
 			kek := h.deps.GetKEK()
 			encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
