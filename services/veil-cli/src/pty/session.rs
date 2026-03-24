@@ -259,38 +259,59 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                         partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
                     }
                 } else {
-                    // No newline — buffer, flush after short wait if no more data
+                    // No newline — buffer, flush after short wait if no more data.
+                    // Use longer wait to collect full secrets that arrive in multiple chunks.
                     partial_buf.extend_from_slice(chunk);
-                    std::thread::sleep(Duration::from_millis(20));
-                    let mut peek = [0u8; 1];
+                    std::thread::sleep(Duration::from_millis(50));
+                    // Drain any additional data that arrived during wait
                     unsafe {
                         let flags = libc::fcntl(master_fd, libc::F_GETFL);
                         libc::fcntl(master_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                        let peek_result = libc::read(master_fd, peek.as_mut_ptr() as _, 1);
+                        let mut drain_buf = [0u8; 4096];
+                        loop {
+                            let dr = libc::read(master_fd, drain_buf.as_mut_ptr() as _, drain_buf.len());
+                            if dr <= 0 { break; }
+                            partial_buf.extend_from_slice(&drain_buf[..dr as usize]);
+                        }
                         libc::fcntl(master_fd, libc::F_SETFL, flags);
-                        if peek_result > 0 {
-                            partial_buf.push(peek[0]);
-                        } else {
-                            // No more data — mask and flush (catches history
-                            // recall, pasted secrets, prompts pass through unchanged)
-                            let ri = input_ref.lock().unwrap().clone();
-                            let flushed = masker::mask_output(
-                                &partial_buf,
-                                &mask.read().unwrap(),
-                                &ve.read().unwrap(),
-                                &patterns,
-                                &client,
-                                &ri,
-                            );
+                    }
+                    // Check if we now have a newline (data arrived during drain)
+                    if let Some(nl) = partial_buf.iter().rposition(|&b| b == b'\n') {
+                        let to_mask = partial_buf[..nl + 1].to_vec();
+                        let remainder = partial_buf[nl + 1..].to_vec();
+                        partial_buf.clear();
+                        partial_buf.extend_from_slice(&remainder);
+                        let ri = input_ref.lock().unwrap().clone();
+                        let masked = masker::mask_output(
+                            &to_mask,
+                            &mask.read().unwrap(),
+                            &ve.read().unwrap(),
+                            &patterns,
+                            &client,
+                            &ri,
+                        );
+                        unsafe {
+                            libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
+                        }
+                    } else {
+                        // No more data — mask and flush
+                        let ri = input_ref.lock().unwrap().clone();
+                        let flushed = masker::mask_output(
+                            &partial_buf,
+                            &mask.read().unwrap(),
+                            &ve.read().unwrap(),
+                            &patterns,
+                            &client,
+                            &ri,
+                        );
+                        unsafe {
                             if flushed != partial_buf {
-                                // Secret was masked — clear line first to
-                                // overwrite any partial text already displayed
                                 let clear = b"\r\x1b[2K";
                                 libc::write(stdout_fd, clear.as_ptr() as _, clear.len());
                             }
                             libc::write(stdout_fd, flushed.as_ptr() as _, flushed.len());
-                            partial_buf.clear();
                         }
+                        partial_buf.clear();
                     }
                 }
             }

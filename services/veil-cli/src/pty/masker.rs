@@ -90,7 +90,8 @@ pub fn mask_output(
     }
 
     // 2. Pattern-detected secrets — auto-register or redact
-    let scan_copy = s.clone();
+    // Scan on the ORIGINAL data (before ANSI codes were injected by step 1)
+    let scan_copy = String::from_utf8_lossy(data).to_string();
     for pat in patterns {
         for caps in pat.regex.captures_iter(&scan_copy) {
             let m = caps
