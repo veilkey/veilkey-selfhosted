@@ -110,6 +110,11 @@ func RunInit() {
 	dbKeyHash := sha256.Sum256(kek)
 	_ = os.Setenv("VEILKEY_DB_KEY", hex.EncodeToString(dbKeyHash[:]))
 
+	// Remove any existing unencrypted DB (from setup mode)
+	_ = os.Remove(dbPath)
+	_ = os.Remove(dbPath + "-shm")
+	_ = os.Remove(dbPath + "-wal")
+
 	database, err := db.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)
