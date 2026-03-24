@@ -89,25 +89,27 @@ pub fn colorize_ve_ref(original: &str, _ve_ref: &str) -> String {
     format!("{}{}{}", GREEN, original, RESET)
 }
 
-/// Replace a secret with a colorized VK ref, padded to match the original width.
-/// If the ref is shorter than the original, pad with spaces.
-/// If the ref is longer than the original, show the full ref (never truncate).
+/// Replace a secret with a colorized VK ref, sized to EXACTLY match original width.
+/// If the ref is shorter, pad with spaces. If longer, truncate the ref.
+/// This is critical — mismatched width breaks readline cursor tracking and
+/// leaves VK:LOC fragments when the terminal redraws (arrow keys, etc).
 pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
     if original_len == 0 {
         return String::new();
     }
     let ref_visible_len = vk_ref.chars().count();
-    let colored = colorize_ref(vk_ref);
     if ref_visible_len <= original_len {
         let pad = original_len - ref_visible_len;
+        let colored = colorize_ref(vk_ref);
         if pad > 0 {
             format!("{}{}", colored, " ".repeat(pad))
         } else {
             colored
         }
     } else {
-        // Ref is longer — show full ref, no truncation
-        colored
+        // Ref is longer — truncate to fit original width exactly
+        let truncated: String = vk_ref.chars().take(original_len).collect();
+        colorize_ref(&truncated)
     }
 }
 
@@ -337,10 +339,11 @@ mod tests {
 
     #[test]
     fn test_pad_ref_longer_than_secret() {
-        // ref 17 chars, secret 10 chars → show full ref (no truncation)
+        // ref 17 chars, secret 10 chars → truncated to exactly 10 chars
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 10);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:6da25530");
+        assert_eq!(visible.chars().count(), 10);
+        assert_eq!(visible, "VK:LOCAL:6");
     }
 
     #[test]
@@ -354,10 +357,11 @@ mod tests {
 
     #[test]
     fn test_pad_very_short_secret() {
-        // secret 3 chars → show full ref (no truncation)
+        // secret 3 chars → ref truncated to exactly 3 chars
         let result = padded_colorize_ref("VK:LOCAL:abc", 3);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:abc");
+        assert_eq!(visible.chars().count(), 3);
+        assert_eq!(visible, "VK:");
     }
 
     #[test]
@@ -370,10 +374,11 @@ mod tests {
 
     #[test]
     fn test_pad_single_char_secret() {
-        // secret 1 char → show full ref (no truncation)
+        // secret 1 char → ref truncated to exactly 1 char
         let result = padded_colorize_ref("VK:LOCAL:abc", 1);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:abc");
+        assert_eq!(visible.chars().count(), 1);
+        assert_eq!(visible, "V");
     }
 
     #[test]
@@ -391,34 +396,41 @@ mod tests {
         assert_eq!(visible.chars().count(), 20);
     }
 
-    // ── padded_colorize_ref: no-truncation guarantees ─────────────
+    // ── padded_colorize_ref: width-preserving truncation ─────────────
 
     #[test]
-    fn test_ref_never_truncated_all_lengths() {
-        // For every secret length 1..30, the full ref must always appear
+    fn test_ref_truncated_to_exact_width_all_lengths() {
+        // For every secret length 1..30, visible width must equal secret_len
         let vk_ref = "VK:LOCAL:6da25530"; // 17 chars
         for secret_len in 1..=30 {
             let result = padded_colorize_ref(vk_ref, secret_len);
             let visible = strip_ansi(&result);
-            assert!(
-                visible.contains(vk_ref),
-                "ref truncated at secret_len={}: got [{}]",
-                secret_len, visible
+            assert_eq!(
+                visible.chars().count(), secret_len,
+                "width mismatch at secret_len={}: got [{}] ({})",
+                secret_len, visible, visible.chars().count()
             );
+            // When secret_len >= ref_len, full ref is present
+            if secret_len >= vk_ref.chars().count() {
+                assert!(visible.contains(vk_ref));
+            }
         }
     }
 
     #[test]
-    fn test_ref_never_truncated_temp_ref() {
+    fn test_ref_truncated_to_exact_width_temp_ref() {
         let vk_ref = "VK:TEMP:abc12345def67890"; // 24 chars
         for secret_len in 1..=30 {
             let result = padded_colorize_ref(vk_ref, secret_len);
             let visible = strip_ansi(&result);
-            assert!(
-                visible.contains(vk_ref),
-                "TEMP ref truncated at secret_len={}: got [{}]",
-                secret_len, visible
+            assert_eq!(
+                visible.chars().count(), secret_len,
+                "TEMP width mismatch at secret_len={}: got [{}] ({})",
+                secret_len, visible, visible.chars().count()
             );
+            if secret_len >= vk_ref.chars().count() {
+                assert!(visible.contains(vk_ref));
+            }
         }
     }
 
@@ -456,16 +468,18 @@ mod tests {
 
     #[test]
     fn test_ref_integrity_in_masked_output_short_secret() {
-        // Real-world case: password shorter than ref
-        let input = "pass=hunter2";
+        // Real-world case: password shorter than ref → ref truncated to password length
+        let input = "pass=hunter2"; // "hunter2" is 7 chars
         let mask_map = vec![("hunter2".to_string(), "VK:LOCAL:6da25530".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert!(!result.contains("hunter2"), "secret leaked");
+        // ref truncated to 7 chars: "VK:LOCA"
         assert!(
-            result.contains("VK:LOCAL:6da25530"),
-            "full ref must appear in output, got: [{}]",
+            result.contains("VK:LOCA"),
+            "truncated ref must appear in output, got: [{}]",
             result
         );
+        assert_eq!(result.len(), input.len(), "width preserved with truncation");
     }
 
     #[test]
@@ -492,9 +506,9 @@ mod tests {
     }
 
     #[test]
-    fn test_multiple_short_secrets_all_refs_intact() {
-        // Multiple secrets shorter than their refs
-        let input = "a=pw1 b=pw2 c=pw3";
+    fn test_multiple_short_secrets_all_refs_truncated() {
+        // Multiple secrets shorter than their refs → refs truncated to secret length
+        let input = "a=pw1 b=pw2 c=pw3"; // each secret is 3 chars
         let mask_map = vec![
             ("pw1".to_string(), "VK:LOCAL:aaaa1111".to_string()),
             ("pw2".to_string(), "VK:LOCAL:bbbb2222".to_string()),
@@ -503,21 +517,23 @@ mod tests {
         let result = simulate_mask(input, &mask_map);
         assert!(!result.contains("pw1") && !result.contains("pw2") && !result.contains("pw3"),
             "secrets leaked");
-        assert!(result.contains("VK:LOCAL:aaaa1111"), "ref1 truncated");
-        assert!(result.contains("VK:LOCAL:bbbb2222"), "ref2 truncated");
-        assert!(result.contains("VK:LOCAL:cccc3333"), "ref3 truncated");
+        // Each 17-char ref truncated to 3 chars: "VK:"
+        assert_eq!(result.matches("VK:").count(), 3, "expected 3 truncated refs, got: [{}]", result);
+        assert_eq!(result.len(), input.len(), "width preserved");
     }
 
     #[test]
     fn test_real_world_password_ghdrhkdgh1() {
-        // Exact scenario from user report: Ghdrhkdgh1@ (11 chars) → VK:LOCAL:6da25530 (17 chars)
+        // Exact scenario: Ghdrhkdgh1@ (11 chars) → VK:LOCAL:6da25530 (17 chars) → truncated to 11
         let input = "Ghdrhkdgh1@";
         let mask_map = vec![("Ghdrhkdgh1@".to_string(), "VK:LOCAL:6da25530".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert!(!result.contains("Ghdrhkdgh1@"), "password leaked");
+        // Truncated to 11 chars: "VK:LOCAL:6d"
+        assert_eq!(result.chars().count(), 11, "width preserved");
         assert!(
-            result.contains("VK:LOCAL:6da25530"),
-            "ref was truncated! got: [{}]",
+            result.contains("VK:LOCAL:6d"),
+            "truncated ref must appear, got: [{}]",
             result
         );
     }
@@ -529,7 +545,8 @@ mod tests {
         let mask_map = vec![("Ghdrhkdgh1@".to_string(), "VK:LOCAL:6da25530".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert!(!result.contains("Ghdrhkdgh1@"), "password leaked in error msg");
-        assert!(result.contains("VK:LOCAL:6da25530"), "ref truncated in error msg");
+        // Truncated to 11 chars: "VK:LOCAL:6d"
+        assert!(result.contains("VK:LOCAL:6d"), "truncated ref must appear in error msg");
         assert!(result.contains("bash: "), "prefix must survive");
         assert!(result.contains(": command not found"), "suffix must survive");
     }
@@ -741,22 +758,13 @@ mod tests {
             let input = format!("prefix:{}:suffix", secret);
             let mask_map = vec![(secret.clone(), ref_str.to_string())];
             let result = simulate_mask(&input, &mask_map);
-            if secret_len >= ref_len {
-                // Secret longer or equal — padded with spaces, width preserved
-                assert_eq!(
-                    result.len(),
-                    input.len(),
-                    "width mismatch for secret_len={}: input=[{}] result=[{}]",
-                    secret_len, input, result
-                );
-            } else {
-                // Secret shorter — full ref shown, output may be wider
-                assert!(
-                    result.len() >= input.len(),
-                    "result should not be shorter for secret_len={}",
-                    secret_len
-                );
-            }
+            // Width always preserved — truncation or padding ensures exact match
+            assert_eq!(
+                result.len(),
+                input.len(),
+                "width mismatch for secret_len={}: input=[{}] result=[{}]",
+                secret_len, input, result
+            );
             assert!(
                 !result.contains(&secret),
                 "secret leaked for len={}",
@@ -925,12 +933,13 @@ mod tests {
     #[test]
     fn test_sec_secret_repeated_many_times() {
         // Secret appearing 10 times — every occurrence must be masked
+        // "LeakMe123" is 9 chars, "VK:LOCAL:rep" is 12 chars → truncated to 9: "VK:LOCAL:"
         let secret = "LeakMe123";
         let input = (0..10).map(|i| format!("f{}={}", i, secret)).collect::<Vec<_>>().join(" ");
         let mask_map = vec![(secret.to_string(), "VK:LOCAL:rep".to_string())];
         let result = simulate_mask(&input, &mask_map);
         assert!(!result.contains(secret), "secret still present");
-        let count = result.matches("VK:LOCAL:rep").count();
+        let count = result.matches("VK:LOCAL:").count();
         assert_eq!(count, 10, "expected 10 replacements, got {}", count);
     }
 
@@ -1042,7 +1051,8 @@ mod tests {
 
         let visible2 = strip_ansi(&out2);
         assert!(!visible2.contains("MySecret"), "secret in chunk2 leaked");
-        assert!(visible2.contains("VK:LOCAL:cross3"), "ref missing in chunk2");
+        // "MySecret" is 8 chars, ref "VK:LOCAL:cross3" truncated to 8: "VK:LOCAL"
+        assert!(visible2.contains("VK:LOCAL"), "truncated ref missing in chunk2");
     }
 
     // ── Encoding evasion (base64, hex) ──────────────────────────────
@@ -1192,6 +1202,7 @@ mod tests {
     #[test]
     fn test_sec_multiline_secret_each_line_masked() {
         // Secret appears on multiple lines of output
+        // "s3cr3t-k3y" is 10 chars, ref "VK:LOCAL:ml1" is 12 chars → truncated to 10: "VK:LOCAL:m"
         let secret = "s3cr3t-k3y";
         let input = "line1: s3cr3t-k3y\nline2: s3cr3t-k3y\nline3: s3cr3t-k3y";
         let mask_map = vec![(secret.to_string(), "VK:LOCAL:ml1".to_string())];
@@ -1201,7 +1212,7 @@ mod tests {
             "secret found on some lines"
         );
         assert_eq!(
-            result.matches("VK:LOCAL:ml1").count(), 3,
+            result.matches("VK:LOCAL:m").count(), 3,
             "expected 3 replacements"
         );
     }
@@ -1281,13 +1292,14 @@ mod tests {
 
     #[test]
     fn cross_chunk_basic_split() {
-        // Secret "password123" split: tail has "password1", new has "23"
+        // Secret "password123" (11 chars) split: tail has "password1", new has "23"
+        // Ref "VK:LOCAL:aaa" (12 chars) → truncated to 11: "VK:LOCAL:aa"
         let map = mk(&[("password123", "VK:LOCAL:aaa")]);
         let result = find_cross_chunk_mask("password1", "23", &map);
         assert!(result.is_some(), "should detect cross-chunk secret");
         let out = result.unwrap().output;
         let visible = strip_ansi(&out);
-        assert!(visible.contains("VK:LOCAL:aaa"), "must contain VK ref");
+        assert!(visible.contains("VK:LOCAL:aa"), "must contain truncated VK ref");
         // Uses ANSI CSI cursor-left + erase-to-end (not backspace)
         assert!(out.contains("\x1b["), "must have ANSI erase sequence");
     }
@@ -1448,6 +1460,7 @@ mod tests {
 
     #[test]
     fn charwise_secret_matched_exactly_once() {
+        // "Ghdrhkdgh1@" (11 chars), ref "VK:LOCAL:6da25530" (17 chars) → truncated to 11: "VK:LOCAL:6d"
         let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
         let (output, count) = simulate_charwise_echo(
             "(VEIL) pve:~ root$ ",
@@ -1456,8 +1469,8 @@ mod tests {
         );
         assert_eq!(count, 1, "secret must match exactly once, got {}", count);
         let visible = strip_ansi(&output);
-        assert!(visible.contains("VK:LOCAL:6da25530"), "must contain VK ref: {}", visible);
-        // Must NOT contain partial VK refs like "VK:LOC"
+        assert!(visible.contains("VK:LOCAL:6d"), "must contain truncated VK ref: {}", visible);
+        // Must NOT contain duplicate VK ref fragments
         let vk_fragments = visible.matches("VK:LOC").count();
         assert_eq!(vk_fragments, 1, "only one VK ref, not partial fragments: {}", visible);
     }
@@ -1501,6 +1514,7 @@ mod tests {
     #[test]
     fn charwise_different_secret_no_interference() {
         // Two secrets in mask_map, type only one
+        // "password123" (11 chars), ref "VK:LOCAL:aaa" (12 chars) → truncated to 11: "VK:LOCAL:aa"
         let map = mk(&[
             ("password123", "VK:LOCAL:aaa"),
             ("Ghdrhkdgh1@", "VK:LOCAL:bbb"),
@@ -1508,8 +1522,8 @@ mod tests {
         let (output, count) = simulate_charwise_echo("$ ", "password123\r", &map);
         assert_eq!(count, 1);
         let visible = strip_ansi(&output);
-        assert!(visible.contains("VK:LOCAL:aaa"));
-        assert!(!visible.contains("VK:LOCAL:bbb"));
+        assert!(visible.contains("VK:LOCAL:aa"), "truncated ref for typed secret");
+        assert!(!visible.contains("VK:LOCAL:bb"), "other secret ref must not appear");
     }
 
     #[test]
@@ -1537,11 +1551,12 @@ mod tests {
     #[test]
     fn charwise_no_prefix_overlap_clean_match() {
         // When secrets don't overlap, exactly one match.
+        // "secretXYZ" (9 chars), ref "VK:LOCAL:only1" (14 chars) → truncated to 9: "VK:LOCAL:"
         let map = mk(&[("secretXYZ", "VK:LOCAL:only1")]);
         let (output, count) = simulate_charwise_echo("$ ", "secretXYZ\r", &map);
         assert_eq!(count, 1);
         let visible = strip_ansi(&output);
-        assert_eq!(visible.matches("VK:LOCAL:only1").count(), 1);
+        assert_eq!(visible.matches("VK:LOCAL:").count(), 1);
     }
 
     #[test]
@@ -1689,6 +1704,7 @@ mod tests {
     #[test]
     fn fast_typing_multiple_secrets_in_mask_map() {
         // 103 secrets (like real veil session), type one of them fast
+        // "Ghdrhkdgh1@" (11 chars), ref "VK:LOCAL:6da25530" (17 chars) → truncated to 11: "VK:LOCAL:6d"
         let mut map: Vec<(String, String)> = (0..102)
             .map(|i| (format!("other_secret_{:03}", i), format!("VK:LOCAL:{:08x}", i)))
             .collect();
@@ -1696,7 +1712,7 @@ mod tests {
         let (output, count) = simulate_chunked_echo("$ ", "Ghdrhkdgh1@\r", 2, &map);
         assert_eq!(count, 1);
         let visible = strip_ansi(&output);
-        assert!(visible.contains("VK:LOCAL:6da25530"));
+        assert!(visible.contains("VK:LOCAL:6d"), "truncated ref must appear");
         assert!(!visible.contains("VK:LOCVK:"), "no partial refs: {}", visible);
     }
 
@@ -1894,13 +1910,14 @@ mod tests {
     #[test]
     fn mask_output_error_line_fully_masked() {
         // The bash error message arrives as one chunk — must be fully masked
+        // "Ghdrhkdgh1@" (11 chars), ref truncated to 11: "VK:LOCAL:6d"
         let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
         let out = simulate_mask_output_chunked(
             "", "bash: Ghdrhkdgh1@: command not found\n", 100, &map,
         );
         let visible = strip_ansi(&out);
         assert!(!visible.contains("Ghdrhkdgh1@"), "error msg must be masked: {}", visible);
-        assert!(visible.contains("VK:LOCAL:6da25530"), "must show VK ref: {}", visible);
+        assert!(visible.contains("VK:LOCAL:6d"), "must show truncated VK ref: {}", visible);
     }
 
     #[test]
@@ -1939,6 +1956,7 @@ mod tests {
     #[test]
     fn cross_chunk_multiple_secrets_overlap_same_boundary() {
         // Two secrets overlap at the same boundary — longest wins
+        // "abcdef" (6 chars), ref "VK:LOCAL:long" (13 chars) → truncated to 6: "VK:LOC"
         let map = mk(&[
             ("abcdef", "VK:LOCAL:long"),
             ("cdef", "VK:LOCAL:short"),
@@ -1946,7 +1964,8 @@ mod tests {
         let r = find_cross_chunk_mask("abcde", "f", &map);
         assert!(r.is_some());
         let visible = strip_ansi(&r.unwrap().output);
-        assert!(visible.contains("VK:LOCAL:long"), "longest must win");
+        // Truncated to 6 chars; "VK:LOC" comes from the long ref (not "VK:LO" from short)
+        assert!(visible.contains("VK:LOC"), "longest must win (truncated)");
     }
 
     #[test]
