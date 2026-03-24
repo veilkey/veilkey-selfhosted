@@ -440,3 +440,43 @@ func TestKeyVersionMismatchHasRetryCap(t *testing.T) {
 		t.Error("must cap retry stage at schedule length")
 	}
 }
+
+// ══ Error message leakage prevention ════════════════════════════
+
+func TestAgentArchiveNoRawError(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_archive.go")
+	c := string(s)
+	if strings.Contains(c, "err.Error()") {
+		t.Error("agent archive must not expose raw error in HTTP response")
+	}
+}
+
+func TestAgentUnregisterNoRawError(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_unregister.go")
+	c := string(s)
+	// respondError with err.Error() leaks internal details
+	for _, line := range strings.Split(c, "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Error("agent unregister must not expose raw error in HTTP response")
+		}
+	}
+}
+
+func TestRegistrationTokenCreateHasMaxBytes(t *testing.T) {
+	s, _ := os.ReadFile("handle_registration_tokens.go")
+	b := extractFn(string(s), "func (s *Server) handleCreateRegistrationToken(")
+	if !strings.Contains(b, "MaxBytesReader") {
+		t.Error("registration token create must have MaxBytesReader")
+	}
+}
+
+func TestSMTPErrorNoCredentials(t *testing.T) {
+	s, _ := os.ReadFile("../mailer/mailer.go")
+	c := string(s)
+	// Error messages must not wrap internal errors (which may contain credentials)
+	for _, line := range strings.Split(c, "\n") {
+		if strings.Contains(line, "fmt.Errorf") && strings.Contains(line, "%w") {
+			t.Errorf("mailer must not wrap errors (may leak SMTP credentials): %s", strings.TrimSpace(line))
+		}
+	}
+}

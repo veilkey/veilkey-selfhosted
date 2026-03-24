@@ -13,7 +13,7 @@ func (h *Handler) handleAgentArchive(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.deps.DB().ArchiveAgent(nodeID); err != nil {
 		log.Printf("agent: archive failed node=%s: %v", nodeID, err)
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "agent not found")
 		return
 	}
 	log.Printf("agent: archived node=%s", nodeID)
@@ -31,7 +31,7 @@ func (h *Handler) handleAgentUnarchive(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := h.deps.DB().UnarchiveAgent(nodeID); err != nil {
 		log.Printf("agent: unarchive failed node=%s: %v", nodeID, err)
-		respondError(w, http.StatusNotFound, err.Error())
+		respondError(w, http.StatusNotFound, "agent not found")
 		return
 	}
 	log.Printf("agent: unarchived node=%s", nodeID)

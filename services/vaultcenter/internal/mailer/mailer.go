@@ -63,10 +63,10 @@ func sendSMTP(from, to, subject, body string) error {
 
 	m := mail.NewMsg()
 	if err := m.From(from); err != nil {
-		return fmt.Errorf("smtp from: %w", err)
+		return fmt.Errorf("invalid sender address")
 	}
 	if err := m.To(to); err != nil {
-		return fmt.Errorf("smtp to: %w", err)
+		return fmt.Errorf("invalid recipient address")
 	}
 	m.Subject(subject)
 	m.SetBodyString(mail.TypeTextPlain, body)
@@ -82,9 +82,12 @@ func sendSMTP(from, to, subject, body string) error {
 		mail.WithTLSPolicy(tlsPolicy),
 	)
 	if err != nil {
-		return fmt.Errorf("smtp client: %w", err)
+		return fmt.Errorf("smtp client initialization failed")
 	}
-	return c.DialAndSend(m)
+	if err := c.DialAndSend(m); err != nil {
+		return fmt.Errorf("smtp send failed")
+	}
+	return nil
 }
 
 // readSecretEnv reads a secret from KEY_FILE (file path) first, falling back to KEY (direct value).
