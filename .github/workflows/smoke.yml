@@ -135,14 +135,18 @@ jobs:
           echo "LocalVault logs (last 20):"
           docker compose logs --tail=20 localvault 2>/dev/null || true
 
-          # Wait for LocalVault agent to register via heartbeat
+          # Wait for LocalVault agent to register AND for its DEK (agent_secret) to be stored.
+          # The heartbeat assigns agent_hash and DEK in separate DB writes; has_dek=true
+          # confirms the DEK is committed so promote will not fail with "agent has no DEK assigned".
           for i in $(seq 1 30); do
             AGENTS=$(curl -sk --max-time 3 https://localhost:11181/api/agents 2>/dev/null || true)
-            if echo "$AGENTS" | grep -q '"agent_hash"'; then
-              echo "Agent registered!"
+            HASH=$(echo "$AGENTS" | grep -oP '"agent_hash":"[^"]+' | head -1 | cut -d'"' -f4)
+            HAS_DEK=$(echo "$AGENTS" | grep -oP '"has_dek":(true|false)' | head -1 | grep -o 'true' || true)
+            echo "  [$i] agent_hash=${HASH:-<empty>} has_dek=${HAS_DEK:-false}"
+            if [ -n "$HASH" ] && [ "$HAS_DEK" = "true" ]; then
+              echo "Agent registered and DEK ready!"
               break
             fi
-            echo "  Waiting for agent registration... [$i] agents=$AGENTS"
             sleep 5
           done
 
@@ -174,12 +178,24 @@ jobs:
             exit 1
           fi
 
-          # Get agent hash
-          AGENT_HASH=$(curl -sk https://localhost:11181/api/agents | grep -oP '"agent_hash":"[^"]+' | head -1 | cut -d'"' -f4)
+          # Confirm agent_secret (DEK) is stored before promote — retry in case of races
+          AGENT_HASH=""
+          for i in $(seq 1 10); do
+            AGENTS=$(curl -sk --max-time 5 https://localhost:11181/api/agents 2>/dev/null || true)
+            HASH=$(echo "$AGENTS" | grep -oP '"agent_hash":"[^"]+' | head -1 | cut -d'"' -f4)
+            HAS_DEK=$(echo "$AGENTS" | grep -oP '"has_dek":(true|false)' | head -1 | grep -o 'true' || true)
+            if [ -n "$HASH" ] && [ "$HAS_DEK" = "true" ]; then
+              AGENT_HASH="$HASH"
+              break
+            fi
+            echo "  Waiting for agent_secret in DB... [$i] agent_hash=${HASH:-<empty>} has_dek=${HAS_DEK:-false}"
+            sleep 3
+          done
           echo "Agent hash: $AGENT_HASH"
 
           if [ -z "$AGENT_HASH" ]; then
-            echo "ERROR: No agents found"
+            echo "ERROR: No agents found or agent_secret not stored after retries"
+            echo "  Agents: $(curl -sk https://localhost:11181/api/agents 2>/dev/null)"
             exit 1
           fi
 
