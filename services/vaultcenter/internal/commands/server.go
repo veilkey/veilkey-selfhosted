@@ -1,8 +1,6 @@
 package commands
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
@@ -15,13 +13,9 @@ import (
 
 	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/cmdutil"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
-// deriveDBKey derives a SQLCipher encryption key from the salt file.
-func deriveDBKey(salt []byte) string {
-	h := sha256.Sum256(salt)
-	return hex.EncodeToString(h[:])
-}
 
 func RunServer() {
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
@@ -47,7 +41,7 @@ func RunServer() {
 	// Derive DB encryption key from salt — no separate VEILKEY_DB_KEY needed
 	// Always derive DB key from salt — ignore VEILKEY_DB_KEY env var
 	{
-		dbKey := deriveDBKey(salt)
+		dbKey := crypto.DeriveDBKey(salt)
 		_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
 	}
 

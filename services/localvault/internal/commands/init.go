@@ -108,6 +108,9 @@ func RunInit() {
 	}
 	kek := crypto.DeriveKEK(password, salt)
 
+	// Set DB encryption key before opening DB — derived from salt
+	_ = os.Setenv("VEILKEY_DB_KEY", crypto.DeriveDBKey(salt))
+
 	database, err := db.New(dbPath)
 	if err != nil {
 		log.Fatalf("Failed to initialize database: %v", err)

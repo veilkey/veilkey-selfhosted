@@ -49,11 +49,11 @@ func TestDBKeyDerivedFromSalt(t *testing.T) {
 		t.Fatalf("failed to read server.go: %v", err)
 	}
 	code := string(src)
-	if !contains(code, "deriveDBKey(salt)") {
-		t.Error("server.go must derive DB key from salt via deriveDBKey()")
+	if !contains(code, "crypto.DeriveDBKey(salt)") {
+		t.Error("server.go must derive DB key from salt via crypto.DeriveDBKey()")
 	}
-	if !contains(code, "sha256.Sum256") {
-		t.Error("server.go must use SHA256 for DB key derivation")
+	if !contains(code, "crypto.DeriveDBKey") {
+		t.Error("server.go must use crypto.DeriveDBKey")
 	}
 }
 

@@ -34,9 +34,9 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)}"
 }
 
 @test "DB key derived from salt in VaultCenter server.go" {
-  grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/vaultcenter/internal/commands/server.go"
+  grep -q 'crypto.DeriveDBKey(salt)' "$REPO_ROOT/services/vaultcenter/internal/commands/server.go"
 }
 
 @test "DB key derived from salt in LocalVault server.go" {
-  grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/localvault/internal/commands/server.go"
+  grep -q 'crypto.DeriveDBKey(salt)' "$REPO_ROOT/services/localvault/internal/commands/server.go"
 }
