@@ -264,21 +264,21 @@ func (m keycenterModel) view(width int) string {
 
 func (m keycenterModel) viewList(width int) string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Temp Refs"))
+	b.WriteString(styleHeader.Render("  " + T("kc.title")))
 	b.WriteString("\n\n")
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.offline {
-		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
+		b.WriteString(styleError.Render("  ⚠ " + T("kc.offline")))
 		b.WriteString("\n\n")
 		b.WriteString(styleDim.Render("  r retry  q quit"))
 		return b.String()
 	}
 	if len(m.refs) == 0 {
-		b.WriteString(styleDim.Render("  No temp refs."))
+		b.WriteString(styleDim.Render("  " + T("kc.empty")))
 		b.WriteString("\n")
 	} else {
 		header := fmt.Sprintf("  %-30s %-20s %-10s %-20s", "Ref", "Name", "Status", "Created")
@@ -309,7 +309,7 @@ func (m keycenterModel) viewList(width int) string {
 
 func (m keycenterModel) viewDetail() string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Ref Detail"))
+	b.WriteString(styleHeader.Render("  " + T("kc.detail")))
 	b.WriteString("\n\n")
 
 	row := func(label, value string) {
@@ -327,7 +327,7 @@ func (m keycenterModel) viewDetail() string {
 	}
 	b.WriteString("\n")
 	if m.revealing {
-		b.WriteString("  " + styleDim.Render("Decrypting..."))
+		b.WriteString("  " + styleDim.Render(T("common.decrypting")))
 	} else if m.revealed != "" {
 		b.WriteString("  " + styleLabel.Render("Value"))
 		b.WriteString(styleReveal.Render(m.revealed))
@@ -346,15 +346,15 @@ func (m keycenterModel) viewPromote(width int) string {
 	b.WriteString("\n\n")
 
 	if m.promoting {
-		b.WriteString("  " + styleDim.Render("Promoting..."))
+		b.WriteString("  " + styleDim.Render(T("common.promoting")))
 		return b.String()
 	}
 	if len(m.vaults) == 0 {
-		b.WriteString(styleDim.Render("  Loading vaults..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading_vaults")))
 		return b.String()
 	}
 
-	b.WriteString(styleDim.Render("  Select target vault:") + "\n\n")
+	b.WriteString(styleDim.Render("  "+T("common.select_vault")) + "\n\n")
 	for i, v := range m.vaults {
 		name := str(v, "display_name")
 		if name == "" {
@@ -376,11 +376,11 @@ func (m keycenterModel) viewPromote(width int) string {
 
 func (m keycenterModel) viewCreate() string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Create Temp Ref"))
+	b.WriteString(styleHeader.Render("  " + T("kc.create")))
 	b.WriteString("\n\n")
-	b.WriteString("  " + styleLabel.Render("Name") + "\n")
+	b.WriteString("  " + styleLabel.Render(T("kc.name")) + "\n")
 	b.WriteString("  " + m.nameInput.View() + "\n\n")
-	b.WriteString("  " + styleLabel.Render("Value") + "\n")
+	b.WriteString("  " + styleLabel.Render(T("kc.value")) + "\n")
 	b.WriteString("  " + m.valueInput.View() + "\n\n")
 	b.WriteString(styleDim.Render("  tab switch  enter submit  esc cancel"))
 	return b.String()

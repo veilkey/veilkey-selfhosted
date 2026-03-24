@@ -212,31 +212,31 @@ func (m loginModel) handleSubmit(c *Client) (loginModel, tea.Cmd) {
 func (m loginModel) view(width int) string {
 	var b strings.Builder
 
-	b.WriteString(styleTitle.Render("🔐 VeilKey VaultCenter"))
+	b.WriteString(styleTitle.Render("🔐 " + T("login.title")))
 	b.WriteString("\n\n")
 
 	if m.step == loginStepCheckStatus {
-		b.WriteString("  " + styleDim.Render("Connecting..."))
+		b.WriteString("  " + styleDim.Render(T("login.connecting")))
 		return b.String()
 	}
 
 	if m.logging {
 		if m.step == loginStepUnlock {
-			b.WriteString("  " + styleDim.Render("Unlocking server..."))
+			b.WriteString("  " + styleDim.Render(T("login.unlocking")))
 		} else {
-			b.WriteString("  " + styleDim.Render("Authenticating..."))
+			b.WriteString("  " + styleDim.Render(T("login.authenticating")))
 		}
 		return b.String()
 	}
 
 	switch m.step {
 	case loginStepUnlock:
-		b.WriteString("  " + styleError.Render("Server is locked") + "\n\n")
-		b.WriteString("  " + styleLabel.Render("Master Key") + "\n")
+		b.WriteString("  " + styleError.Render(T("login.server_locked")) + "\n\n")
+		b.WriteString("  " + styleLabel.Render(T("login.master_key")) + "\n")
 		b.WriteString("  " + m.kekInput.View() + "\n")
 	case loginStepAuth:
 		if m.serverLocked {
-			b.WriteString("  " + styleSuccess.Render("✓ Server unlocked") + "\n\n")
+			b.WriteString("  " + styleSuccess.Render("✓ "+T("login.server_unlocked")) + "\n\n")
 		}
 
 		// Auth method tabs
@@ -250,10 +250,10 @@ func (m loginModel) view(width int) string {
 		b.WriteString("  " + totpTab + " " + pwTab + "\n\n")
 
 		if m.method == authTOTP {
-			b.WriteString("  " + styleLabel.Render("TOTP Code") + "\n")
+			b.WriteString("  " + styleLabel.Render(T("login.totp_code")) + "\n")
 			b.WriteString("  " + m.totpInput.View() + "\n")
 		} else {
-			b.WriteString("  " + styleLabel.Render("Admin Password") + "\n")
+			b.WriteString("  " + styleLabel.Render(T("login.admin_password")) + "\n")
 			b.WriteString("  " + m.pwInput.View() + "\n")
 		}
 	}
@@ -264,9 +264,9 @@ func (m loginModel) view(width int) string {
 
 	b.WriteString("\n\n")
 	if m.step == loginStepAuth {
-		b.WriteString(styleDim.Render("  enter submit  tab switch method  q quit"))
+		b.WriteString(styleDim.Render("  " + T("login.help_auth")))
 	} else {
-		b.WriteString(styleDim.Render("  enter submit  q quit"))
+		b.WriteString(styleDim.Render("  " + T("login.help_unlock")))
 	}
 
 	return b.String()

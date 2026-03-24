@@ -67,19 +67,19 @@ func (m auditModel) update(msg tea.Msg, c *Client) (auditModel, tea.Cmd) {
 
 func (m auditModel) view(width int) string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Audit Events"))
+	b.WriteString(styleHeader.Render("  " + T("audit.title")))
 	b.WriteString("\n\n")
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.offline {
-		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
+		b.WriteString(styleError.Render("  ⚠ " + T("common.offline")))
 		return b.String()
 	}
 	if len(m.events) == 0 {
-		b.WriteString(styleDim.Render("  No audit events."))
+		b.WriteString(styleDim.Render("  " + T("audit.empty")))
 		return b.String()
 	}
 

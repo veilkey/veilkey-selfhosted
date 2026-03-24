@@ -179,6 +179,9 @@ func (m settingsModel) update(msg tea.Msg, c *Client) (settingsModel, tea.Cmd) {
 		}
 
 		switch msg.String() {
+		case "l":
+			// Toggle language — handled by parent Model
+			return m, func() tea.Msg { return langToggleMsg{} }
 		case "tab":
 			m.message = ""
 			switch m.tab {
@@ -282,10 +285,10 @@ func (m settingsModel) view(width int) string {
 		name string
 		t    settingsTab
 	}{
-		{"Status", settingsStatus},
-		{"Security", settingsSecurity},
-		{"Tokens", settingsTokens},
-		{"Configs", settingsConfigs},
+		{T("settings.status"), settingsStatus},
+		{T("settings.security"), settingsSecurity},
+		{T("settings.tokens"), settingsTokens},
+		{T("settings.configs"), settingsConfigs},
 	}
 	var tabParts []string
 	for _, t := range tabs {
@@ -298,10 +301,10 @@ func (m settingsModel) view(width int) string {
 	header := "  " + strings.Join(tabParts, " ") + "\n\n"
 
 	if m.loading {
-		return header + styleDim.Render("  Loading...")
+		return header + styleDim.Render("  "+T("common.loading"))
 	}
 	if m.offline {
-		return header + styleError.Render("  ⚠ Cannot reach VaultCenter")
+		return header + styleError.Render("  ⚠ "+T("common.offline"))
 	}
 
 	var content string
@@ -316,7 +319,7 @@ func (m settingsModel) view(width int) string {
 		content = m.viewConfigs(width)
 	}
 
-	footer := "\n\n" + styleDim.Render("  tab switch section  r refresh")
+	footer := "\n\n" + styleDim.Render("  tab switch section  r refresh  "+T("settings.lang_toggle"))
 	if m.message != "" {
 		footer = "\n\n  " + lipgloss.NewStyle().Foreground(colorGreen).Render(m.message) + footer
 	}
@@ -383,7 +386,7 @@ func (m settingsModel) viewTokens(width int) string {
 	var b strings.Builder
 
 	if m.creatingToken {
-		b.WriteString(styleHeader.Render("  New Registration Token") + "\n\n")
+		b.WriteString(styleHeader.Render("  "+T("settings.new_token")) + "\n\n")
 		b.WriteString("  " + styleLabel.Render("Label") + "\n")
 		b.WriteString("  " + m.tokenInput.View() + "\n\n")
 		b.WriteString(styleDim.Render("  enter create  esc cancel"))
@@ -391,7 +394,7 @@ func (m settingsModel) viewTokens(width int) string {
 	}
 
 	if len(m.tokens) == 0 {
-		b.WriteString(styleDim.Render("  No registration tokens."))
+		b.WriteString(styleDim.Render("  " + T("settings.no_tokens")))
 		b.WriteString("\n\n")
 		b.WriteString(styleDim.Render("  n create token"))
 		return b.String()
@@ -420,7 +423,7 @@ func (m settingsModel) viewConfigs(width int) string {
 	var b strings.Builder
 
 	if len(m.configs) == 0 {
-		b.WriteString(styleDim.Render("  No configs."))
+		b.WriteString(styleDim.Render("  " + T("settings.no_configs")))
 		return b.String()
 	}
 
