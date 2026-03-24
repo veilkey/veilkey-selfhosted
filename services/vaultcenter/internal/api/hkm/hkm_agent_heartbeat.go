@@ -322,6 +322,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 			} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
 				log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
 			} else {
+				resp["vault_unlock_key_stored"] = true
 				log.Printf("agent: vault_unlock_key stored for %s (%s)", nodeID, req.Label)
 			}
 		}
@@ -331,6 +332,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store vault_unlock_key if provided on existing agent (first-time migration)
+	vukStored := false
 	if req.VaultUnlockKey != "" && len(agent.VaultUnlockKeyEnc) == 0 {
 		kek := h.deps.GetKEK()
 		encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
@@ -339,6 +341,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
 			log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
 		} else {
+			vukStored = true
 			log.Printf("agent: vault_unlock_key stored for existing agent %s (%s)", nodeID, agent.Label)
 		}
 	}
@@ -348,6 +351,9 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		"vault_id":      httputil.FormatVaultID(agent.VaultName, agent.VaultHash),
 		"managed_paths": db.DecodeManagedPaths(agent.ManagedPaths),
 		"key_version":   agent.KeyVersion,
+	}
+	if vukStored {
+		resp["vault_unlock_key_stored"] = true
 	}
 	setNodeIdentityAliases(resp, nodeID)
 	setRuntimeHashAliases(resp, agent.AgentHash)

@@ -53,9 +53,11 @@ const ALT_SCREEN_DISABLE: &[u8] = b"\x1b[?1049l";
 /// Check if data contains alt-screen toggle and return new state.
 pub fn detect_alt_screen(data: &[u8], current: bool) -> bool {
     // Last occurrence wins (multiple toggles in one chunk)
-    let enable_pos = data.windows(ALT_SCREEN_ENABLE.len())
+    let enable_pos = data
+        .windows(ALT_SCREEN_ENABLE.len())
         .rposition(|w| w == ALT_SCREEN_ENABLE);
-    let disable_pos = data.windows(ALT_SCREEN_DISABLE.len())
+    let disable_pos = data
+        .windows(ALT_SCREEN_DISABLE.len())
         .rposition(|w| w == ALT_SCREEN_DISABLE);
     match (enable_pos, disable_pos) {
         (Some(e), Some(d)) => e > d, // last one wins
@@ -183,7 +185,12 @@ pub fn mask_output(
     // (not the masked version, so future matching works on plaintext)
     let new_tail = if new_text.len() > PLAIN_TAIL_SIZE {
         let start = new_text.ceil_char_boundary(new_text.len() - PLAIN_TAIL_SIZE);
-        format!("{}{}", &plain_tail[plain_tail.ceil_char_boundary(plain_tail.len().saturating_sub(PLAIN_TAIL_SIZE / 2))..], &new_text[start..])
+        format!(
+            "{}{}",
+            &plain_tail[plain_tail
+                .ceil_char_boundary(plain_tail.len().saturating_sub(PLAIN_TAIL_SIZE / 2))..],
+            &new_text[start..]
+        )
     } else {
         let combined_tail = format!("{}{}", plain_tail, new_text);
         if combined_tail.len() > PLAIN_TAIL_SIZE {
@@ -292,12 +299,16 @@ mod tests {
     fn test_mask_connection_string_password_only() {
         // mysql://user:PASSWORD@host:3306/db
         let input = "mysql://admin:SuperSecret123@db.example.com:3306/mydb";
-        let mask_map = vec![
-            ("SuperSecret123".to_string(), "VK:LOCAL:aaa11111".to_string()),
-        ];
+        let mask_map = vec![(
+            "SuperSecret123".to_string(),
+            "VK:LOCAL:aaa11111".to_string(),
+        )];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len(), "line width must be preserved");
-        assert!(result.contains("@db.example.com:3306/mydb"), "host must be intact");
+        assert!(
+            result.contains("@db.example.com:3306/mydb"),
+            "host must be intact"
+        );
         assert!(result.contains("admin:"), "username must be intact");
         assert!(!result.contains("SuperSecret"), "password must not leak");
     }
@@ -306,9 +317,7 @@ mod tests {
     fn test_mask_connection_string_with_at_in_password() {
         // Password contains @ — the FULL password must be in mask_map
         let input = "postgres://user:p@ss!word@host:5432";
-        let mask_map = vec![
-            ("p@ss!word".to_string(), "VK:LOCAL:bbb22222".to_string()),
-        ];
+        let mask_map = vec![("p@ss!word".to_string(), "VK:LOCAL:bbb22222".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(result.contains("@host:5432"), "host part must survive");
@@ -321,13 +330,19 @@ mod tests {
     fn test_mask_two_secrets_same_line() {
         let input = "API_KEY=secret-api-key-value DB_PASS=db-password-here";
         let mask_map = vec![
-            ("secret-api-key-value".to_string(), "VK:LOCAL:aaa".to_string()),
+            (
+                "secret-api-key-value".to_string(),
+                "VK:LOCAL:aaa".to_string(),
+            ),
             ("db-password-here".to_string(), "VK:LOCAL:bbb".to_string()),
         ];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("secret-api"), "first secret must not leak");
-        assert!(!result.contains("db-password"), "second secret must not leak");
+        assert!(
+            !result.contains("db-password"),
+            "second secret must not leak"
+        );
         assert!(result.contains("API_KEY="), "key names must survive");
         assert!(result.contains("DB_PASS="), "key names must survive");
     }
@@ -335,9 +350,7 @@ mod tests {
     #[test]
     fn test_mask_same_secret_twice() {
         let input = "first=MyPassword second=MyPassword";
-        let mask_map = vec![
-            ("MyPassword".to_string(), "VK:LOCAL:ccc".to_string()),
-        ];
+        let mask_map = vec![("MyPassword".to_string(), "VK:LOCAL:ccc".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         // Both occurrences must be masked
@@ -349,9 +362,7 @@ mod tests {
     #[test]
     fn test_mask_secret_at_line_start() {
         let input = "SuperSecret123 is exposed";
-        let mask_map = vec![
-            ("SuperSecret123".to_string(), "VK:LOCAL:ddd".to_string()),
-        ];
+        let mask_map = vec![("SuperSecret123".to_string(), "VK:LOCAL:ddd".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("SuperSecret"));
@@ -361,9 +372,7 @@ mod tests {
     #[test]
     fn test_mask_secret_at_line_end() {
         let input = "password is SuperSecret123";
-        let mask_map = vec![
-            ("SuperSecret123".to_string(), "VK:LOCAL:eee".to_string()),
-        ];
+        let mask_map = vec![("SuperSecret123".to_string(), "VK:LOCAL:eee".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("SuperSecret"));
@@ -373,9 +382,7 @@ mod tests {
     #[test]
     fn test_mask_secret_is_entire_line() {
         let input = "SuperSecret123";
-        let mask_map = vec![
-            ("SuperSecret123".to_string(), "VK:LOCAL:fff".to_string()),
-        ];
+        let mask_map = vec![("SuperSecret123".to_string(), "VK:LOCAL:fff".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("SuperSecret"));
@@ -394,7 +401,10 @@ mod tests {
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("secret"));
-        assert!(!result.contains("api-key"), "the full match must be used, not partial");
+        assert!(
+            !result.contains("api-key"),
+            "the full match must be used, not partial"
+        );
     }
 
     // ── Special characters in secrets ───────────────────────────────
@@ -402,9 +412,7 @@ mod tests {
     #[test]
     fn test_mask_secret_with_special_chars() {
         let input = "PASS=p@$$w0rd!#%^&*()";
-        let mask_map = vec![
-            ("p@$$w0rd!#%^&*()".to_string(), "VK:LOCAL:spec1".to_string()),
-        ];
+        let mask_map = vec![("p@$$w0rd!#%^&*()".to_string(), "VK:LOCAL:spec1".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("p@$$"));
@@ -414,9 +422,7 @@ mod tests {
     #[test]
     fn test_mask_secret_with_quotes() {
         let input = r#"export SECRET="my-quoted-secret""#;
-        let mask_map = vec![
-            ("my-quoted-secret".to_string(), "VK:LOCAL:quot1".to_string()),
-        ];
+        let mask_map = vec![("my-quoted-secret".to_string(), "VK:LOCAL:quot1".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("my-quoted"));
@@ -441,9 +447,10 @@ mod tests {
     #[test]
     fn test_mask_json_value() {
         let input = r#"{"api_key":"sk-1234567890abcdef","host":"example.com"}"#;
-        let mask_map = vec![
-            ("sk-1234567890abcdef".to_string(), "VK:LOCAL:json1".to_string()),
-        ];
+        let mask_map = vec![(
+            "sk-1234567890abcdef".to_string(),
+            "VK:LOCAL:json1".to_string(),
+        )];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("sk-1234567890"));
@@ -455,9 +462,7 @@ mod tests {
     #[test]
     fn test_mask_env_export_line() {
         let input = "export DATABASE_URL=postgres://admin:hunter2@db:5432/prod";
-        let mask_map = vec![
-            ("hunter2".to_string(), "VK:LOCAL:env1".to_string()),
-        ];
+        let mask_map = vec![("hunter2".to_string(), "VK:LOCAL:env1".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result.len(), input.len());
         assert!(!result.contains("hunter2"));
@@ -470,9 +475,7 @@ mod tests {
     #[test]
     fn test_no_mask_when_no_match() {
         let input = "this line has no secrets at all";
-        let mask_map = vec![
-            ("SuperSecret".to_string(), "VK:LOCAL:nope".to_string()),
-        ];
+        let mask_map = vec![("SuperSecret".to_string(), "VK:LOCAL:nope".to_string())];
         let result = simulate_mask(input, &mask_map);
         assert_eq!(result, input, "unchanged text must pass through");
     }
@@ -489,19 +492,30 @@ mod tests {
     #[test]
     fn test_width_preserved_across_various_ref_lengths() {
         for secret_len in [5, 10, 15, 17, 20, 30, 50, 100] {
-            let secret: String = (0..secret_len).map(|i| (b'a' + (i % 26) as u8) as char).collect();
+            let secret: String = (0..secret_len)
+                .map(|i| (b'a' + (i % 26) as u8) as char)
+                .collect();
             let input = format!("prefix:{}:suffix", secret);
-            let mask_map = vec![
-                (secret.clone(), "VK:LOCAL:6da25530".to_string()),
-            ];
+            let mask_map = vec![(secret.clone(), "VK:LOCAL:6da25530".to_string())];
             let result = simulate_mask(&input, &mask_map);
             assert_eq!(
-                result.len(), input.len(),
+                result.len(),
+                input.len(),
                 "width mismatch for secret_len={}: input=[{}] result=[{}]",
-                secret_len, input, result
+                secret_len,
+                input,
+                result
             );
-            assert!(!result.contains(&secret), "secret leaked for len={}", secret_len);
-            assert!(result.contains(":suffix"), "suffix missing for len={}", secret_len);
+            assert!(
+                !result.contains(&secret),
+                "secret leaked for len={}",
+                secret_len
+            );
+            assert!(
+                result.contains(":suffix"),
+                "suffix missing for len={}",
+                secret_len
+            );
         }
     }
 
@@ -539,4 +553,3 @@ mod tests {
         assert!(detect_alt_screen(data, false), "enable comes last");
     }
 }
-

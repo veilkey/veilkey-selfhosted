@@ -144,8 +144,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 
 	// On successful registration, consume the one-time registration token
 	var hbResp struct {
-		Status      string `json:"status"`
-		AgentSecret string `json:"agent_secret"`
+		Status              string `json:"status"`
+		AgentSecret         string `json:"agent_secret"`
+		VaultUnlockKeyStored bool  `json:"vault_unlock_key_stored"`
 	}
 	if json.Unmarshal(respBody, &hbResp) == nil {
 		// Store agent_secret if provided (first-time registration or upgrade)

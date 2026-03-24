@@ -207,9 +207,10 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     // Track user input (exclude terminal response sequences)
                     if let Ok(s) = std::str::from_utf8(data) {
                         // Filter out escape sequences from input tracking
-                        let filtered: String = s.chars().filter(|&c| {
-                            c >= ' ' || c == '\n' || c == '\r' || c == '\t'
-                        }).collect();
+                        let filtered: String = s
+                            .chars()
+                            .filter(|&c| c >= ' ' || c == '\n' || c == '\r' || c == '\t')
+                            .collect();
                         if !filtered.is_empty() {
                             let mut tracker = input_tracker.lock().unwrap();
                             tracker.push_str(&filtered);
