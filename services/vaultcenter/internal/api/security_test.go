@@ -265,3 +265,101 @@ func TestUpsertAgentHasSaltParam(t *testing.T) {
 		t.Error("UpsertAgent needs salt param")
 	}
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Salt-on-chain: design principle verification
+// VC must be the authoritative source for salt.
+// ══════════════════════════════════════════════════════════════════
+
+// --- Chain TX includes salt ---
+
+func TestChainUpsertPayloadHasSalt(t *testing.T) {
+	// veilkey-chain tx.go must have Salt in UpsertAgentPayload
+	// We verify via the heartbeat code that forwards req.Salt to chain TX
+	s, _ := os.ReadFile("hkm/hkm_agent_heartbeat.go")
+	c := string(s)
+	// req struct must accept salt
+	if !strings.Contains(c, `Salt`) || !strings.Contains(c, `json:"salt`) {
+		t.Error("heartbeat req must accept salt from LV")
+	}
+	// upsertPayload must forward salt to chain
+	if !strings.Contains(c, "Salt:") && !strings.Contains(c, "req.Salt") {
+		t.Error("upsertPayload must forward req.Salt to chain TX")
+	}
+}
+
+// --- Agent DB stores salt ---
+
+func TestAgentDBStoresSaltOnCreate(t *testing.T) {
+	s, _ := os.ReadFile("../db/db_agent.go")
+	b := extractFn(string(s), "func (d *DB) UpsertAgent(")
+	// Must have Salt in Create block
+	createIdx := strings.Index(b, "d.conn.Create")
+	if createIdx < 0 {
+		t.Fatal("UpsertAgent must have Create call")
+	}
+	beforeCreate := b[:createIdx]
+	if !strings.Contains(beforeCreate, "Salt:") {
+		t.Error("UpsertAgent must set Salt on create (new agent)")
+	}
+}
+
+func TestAgentDBUpdatesSaltConditionally(t *testing.T) {
+	s, _ := os.ReadFile("../db/db_agent.go")
+	b := extractFn(string(s), "func (d *DB) UpsertAgent(")
+	// Must only update salt when not empty (preserve existing)
+	if !strings.Contains(b, `if salt != ""`) {
+		t.Error("UpsertAgent must conditionally update salt (only when non-empty)")
+	}
+}
+
+// --- Salt not exposed in JSON API ---
+
+func TestAgentSaltNotInJSON(t *testing.T) {
+	s, _ := os.ReadFile("../db/models.go")
+	// Find the Salt field line
+	for _, line := range strings.Split(string(s), "\n") {
+		if strings.Contains(line, "Salt") && strings.Contains(line, "gorm:") {
+			if !strings.Contains(line, `json:"-"`) {
+				t.Error("Agent.Salt must have json:\"-\" to prevent exposure in API responses")
+			}
+			return
+		}
+	}
+	t.Error("Agent.Salt field not found in models.go")
+}
+
+// --- unlock-key response includes salt ---
+
+func TestUnlockKeyResponseSaltField(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_unlock_key.go")
+	c := string(s)
+	if !strings.Contains(c, `"salt"`) || !strings.Contains(c, "agent.Salt") {
+		t.Error("unlock-key response must include agent.Salt")
+	}
+}
+
+// --- Heartbeat salt is omitempty (backward compat) ---
+
+func TestHeartbeatSaltOmitempty(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_heartbeat.go")
+	for _, line := range strings.Split(string(s), "\n") {
+		if strings.Contains(line, "Salt") && strings.Contains(line, "json:") {
+			if !strings.Contains(line, "omitempty") {
+				t.Error("heartbeat Salt must be omitempty for backward compatibility")
+			}
+			return
+		}
+	}
+	t.Error("Salt field not found in heartbeat req struct")
+}
+
+// --- ChainStoreAdapter forwards salt ---
+
+func TestChainStoreAdapterForwardsSalt(t *testing.T) {
+	s, _ := os.ReadFile("../db/chain_store.go")
+	b := extractFn(string(s), "func (a *ChainStoreAdapter) UpsertAgent(")
+	if !strings.Contains(b, "salt string") && !strings.Contains(b, "salt)") {
+		t.Error("ChainStoreAdapter.UpsertAgent must forward salt to DB")
+	}
+}

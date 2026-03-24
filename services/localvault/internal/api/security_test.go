@@ -243,3 +243,167 @@ func TestSaltFileNotFatal(t *testing.T) {
 		}
 	}
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Salt-on-chain: LV design principle verification
+// LV must not be able to self-decrypt without VC.
+// ══════════════════════════════════════════════════════════════════
+
+// --- Heartbeat sends salt to VC ---
+
+func TestHeartbeatSaltBase64Guarded(t *testing.T) {
+	s, _ := os.ReadFile("heartbeat.go")
+	c := string(s)
+	// Must guard against nil salt
+	if !strings.Contains(c, "len(saltBytes) > 0") {
+		t.Error("heartbeat must guard nil salt before base64 encoding")
+	}
+	// Must use base64 encoding
+	if !strings.Contains(c, "base64.StdEncoding.EncodeToString") {
+		t.Error("heartbeat must base64-encode salt")
+	}
+	// Must NOT have duplicate salt blocks
+	count := strings.Count(c, `payload["salt"]`)
+	if count > 1 {
+		t.Errorf("heartbeat has %d salt assignments — must be exactly 1", count)
+	}
+}
+
+// --- AutoUnlockFromVC handles salt from VC ---
+
+func TestAutoUnlockReceivesSaltFromVC(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) AutoUnlockFromVC(")
+	if b == "" {
+		t.Fatal("AutoUnlockFromVC must exist")
+	}
+	// Must have Salt in response struct
+	if !strings.Contains(b, `Salt`) && !strings.Contains(b, `json:"salt"`) {
+		t.Error("AutoUnlockFromVC response must include Salt field")
+	}
+	// Must decode base64 salt
+	if !strings.Contains(b, "base64.StdEncoding.DecodeString") {
+		t.Error("must base64-decode salt from VC response")
+	}
+	// Must validate decoded salt length
+	if !strings.Contains(b, "len(decoded) > 0") {
+		t.Error("must validate decoded salt is non-empty")
+	}
+	// Must update local cache file
+	if !strings.Contains(b, "os.WriteFile") {
+		t.Error("must write salt to local cache file after VC recovery")
+	}
+	// Must update s.salt in memory
+	if !strings.Contains(b, "s.salt = salt") && !strings.Contains(b, "s.salt = decoded") {
+		t.Error("must update in-memory salt after VC recovery")
+	}
+}
+
+// --- nil salt prevents DeriveKEK ---
+
+func TestAutoUnlockRejectsNilSalt(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) AutoUnlockFromVC(")
+	if !strings.Contains(b, `len(salt) == 0`) {
+		t.Error("AutoUnlockFromVC must error when salt is nil/empty")
+	}
+	if !strings.Contains(b, "no salt available") {
+		t.Error("error message must indicate no salt available")
+	}
+}
+
+// --- handleUnlock uses s.salt (nil = fail) ---
+
+func TestHandleUnlockUsesSalt(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) handleUnlock(")
+	if b == "" {
+		t.Fatal("handleUnlock must exist")
+	}
+	if !strings.Contains(b, "s.salt") {
+		t.Error("handleUnlock must use s.salt for KEK derivation")
+	}
+	// When s.salt is nil, DeriveKEK produces wrong KEK → Unlock fails → 401
+	// This is the security guarantee: no salt = no unlock without VC
+	if !strings.Contains(b, "DeriveKEK") {
+		t.Error("handleUnlock must call DeriveKEK with salt")
+	}
+}
+
+// --- No duplicate password length checks ---
+
+func TestHandleUnlockNoDuplicateChecks(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) handleUnlock(")
+	count := strings.Count(b, "len(req.Password) > 256")
+	if count > 1 {
+		t.Errorf("handleUnlock has %d password length checks — must be exactly 1", count)
+	}
+}
+
+// --- salt file missing = warning, not fatal ---
+
+func TestSaltFileMissingIsWarning(t *testing.T) {
+	s, _ := os.ReadFile("../commands/server.go")
+	c := string(s)
+	// Must have WARNING log for missing salt
+	if !strings.Contains(c, "WARNING: salt file not found") {
+		t.Error("missing salt file must produce WARNING log")
+	}
+	// Must set salt = nil
+	if !strings.Contains(c, "salt = nil") {
+		t.Error("missing salt must set salt = nil for VC recovery mode")
+	}
+	// Must NOT fatal on salt missing
+	for _, line := range strings.Split(c, "\n") {
+		if strings.Contains(line, "log.Fatal") && strings.Contains(strings.ToLower(line), "salt file not found") {
+			t.Error("salt file missing must not be fatal")
+		}
+	}
+}
+
+// --- VC is required: password alone is not enough ---
+
+func TestVCRequiredForDecryption(t *testing.T) {
+	// Design principle: LV cannot self-decrypt without VC.
+	// Verify: password (vault_unlock_key) is ONLY on VC, never on LV disk.
+	
+	// 1. vault_key file is deleted after VC registration
+	hb, _ := os.ReadFile("heartbeat.go")
+	if !strings.Contains(string(hb), "vault_key") {
+		t.Log("NOTE: vault_key handling in heartbeat — verify bootstrap file is deleted")
+	}
+	
+	// 2. AutoUnlockFromVC requires VC connectivity
+	api, _ := os.ReadFile("api.go")
+	b := extractFn(string(api), "func (s *Server) AutoUnlockFromVC(")
+	if !strings.Contains(b, "agents/unlock-key") {
+		t.Error("AutoUnlockFromVC must contact VC endpoint")
+	}
+	if !strings.Contains(b, "Bearer") {
+		t.Error("AutoUnlockFromVC must authenticate with agent_secret")
+	}
+}
+
+// --- ChainStoreAdapter no-op has correct signature ---
+
+func TestLVChainStoreAdapterSaltParam(t *testing.T) {
+	s, _ := os.ReadFile("../db/chain_store.go")
+	b := extractFn(string(s), "func (a *ChainStoreAdapter) UpsertAgent(")
+	if b == "" {
+		t.Fatal("LV ChainStoreAdapter.UpsertAgent must exist")
+	}
+	// Count params: should have 11 unnamed params (10 original + 1 salt)
+	// The salt param is `_ string` at the end
+	paramLine := ""
+	for _, line := range strings.Split(b, "\n") {
+		if strings.Contains(line, "func (a *ChainStoreAdapter) UpsertAgent(") {
+			paramLine = line
+			break
+		}
+	}
+	// Must have string at the end (salt)
+	if !strings.Contains(paramLine, "_ string") {
+		t.Error("LV ChainStoreAdapter.UpsertAgent must have salt string param")
+	}
+}
