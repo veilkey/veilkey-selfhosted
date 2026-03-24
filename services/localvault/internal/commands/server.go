@@ -2,6 +2,7 @@ package commands
 
 import (
 	"crypto/sha256"
+	cryptorand "crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -43,6 +44,9 @@ func RunServer() {
 
 	server, addr, listenPort := mustLoadServer()
 	hubURL := server.LogResolvedVaultcenterURL("startup")
+
+	// Auto-unlock: try vault_key file first (bootstrap), then VC-managed unlock
+	autoUnlock(server, hubURL)
 
 	// CometBFT chain full node deferred — DB required for chain store adapter.
 	// Chain will not start until after unlock when DB is available.
@@ -135,26 +139,28 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	defer initMu.Unlock()
 
 	var req struct {
-		Password       string `json:"password"`
 		VaultcenterURL string `json:"vaultcenter_url"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	req.Password = strings.TrimSpace(req.Password)
 	req.VaultcenterURL = strings.TrimSpace(req.VaultcenterURL)
-
-	if len(req.Password) < 8 {
-		http.Error(w, "password must be at least 8 characters", http.StatusBadRequest)
-		return
-	}
 
 	saltFile := filepath.Join(dataDir, "salt")
 	if _, err := os.Stat(saltFile); err == nil {
 		http.Error(w, "already initialized", http.StatusConflict)
 		return
 	}
+
+	// Auto-generate password for VC-managed unlock
+	passwordBytes := make([]byte, 32)
+	if _, err := cryptorand.Read(passwordBytes); err != nil {
+		log.Printf("install: failed to generate random password: %v", err)
+		http.Error(w, "failed to generate random password", http.StatusInternalServerError)
+		return
+	}
+	password := fmt.Sprintf("%x", passwordBytes)
 
 	salt, err := crypto.GenerateSalt()
 	if err != nil {
@@ -163,7 +169,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		return
 	}
 
-	kek := crypto.DeriveKEK(req.Password, salt)
+	kek := crypto.DeriveKEK(password, salt)
 
 	// Delete the unencrypted setup DB and create a new encrypted one
 	_ = database.Close()
@@ -221,6 +227,12 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		return
 	}
 
+	// Store vault_key for bootstrap auto-unlock (deleted after VC registration)
+	vaultKeyFile := filepath.Join(dataDir, "vault_key")
+	if err := os.WriteFile(vaultKeyFile, []byte(password), 0600); err != nil {
+		log.Printf("install: failed to write vault_key file: %v", err)
+	}
+
 	log.Printf("install: initialization complete, node_id=%s", nodeID)
 
 	w.Header().Set("Content-Type", httputil.ContentTypeJSON)
@@ -235,6 +247,52 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		log.Println("install: exiting for restart in normal mode (exit 1 for systemd)")
 		os.Exit(1)
 	}()
+}
+
+// autoUnlock tries to unlock the server automatically.
+// Priority: 1) vault_key file (bootstrap after init), 2) VC-managed unlock via agent_secret.
+func autoUnlock(server *api.Server, vcURL string) {
+	if !server.IsLocked() {
+		return
+	}
+	dbPath := os.Getenv("VEILKEY_DB_PATH")
+	dataDir := filepath.Dir(dbPath)
+
+	// 1. Try vault_key file (exists between init and first VC registration)
+	vaultKeyFile := filepath.Join(dataDir, "vault_key")
+	if vkData, err := os.ReadFile(vaultKeyFile); err == nil {
+		password := strings.TrimSpace(string(vkData))
+		if password != "" {
+			salt := server.Salt()
+			kek := crypto.DeriveKEK(password, salt)
+			if err := server.Unlock(kek); err == nil {
+				log.Println("Auto-unlock: succeeded via vault_key file (bootstrap mode)")
+				server.SetVaultUnlockKey(password)
+				loadIdentityAfterUnlock(server)
+				return
+			}
+			log.Printf("Auto-unlock: vault_key file invalid: %v", err)
+		}
+	}
+
+	// 2. Try VC-managed unlock (agent_secret file → fetch unlock key from VC)
+	if vcURL != "" {
+		if err := server.AutoUnlockFromVC(vcURL); err == nil {
+			log.Println("Auto-unlock: succeeded via VaultCenter")
+			loadIdentityAfterUnlock(server)
+			// Delete vault_key file if it still exists (migration cleanup)
+			_ = os.Remove(vaultKeyFile)
+			return
+		} else {
+			log.Printf("Auto-unlock: VC-managed unlock failed: %v (will wait for manual unlock)", err)
+		}
+	}
+
+	log.Println("Auto-unlock: no method available. Waiting for POST /api/unlock.")
+}
+
+func loadIdentityAfterUnlock(server *api.Server) {
+	server.LoadIdentity()
 }
 
 func mustLoadServer() (*api.Server, string, int) {

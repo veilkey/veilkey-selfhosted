@@ -2,6 +2,7 @@ package commands
 
 import (
 	"crypto/sha256"
+	cryptorand "crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
@@ -91,18 +92,13 @@ func RunInit() {
 		log.Fatal("Already initialized. Salt file exists: " + saltFile)
 	}
 
-	password := cmdutil.ReadPassword("Enter KEK password: ")
-	stat, _ := os.Stdin.Stat()
-	isPiped := (stat.Mode() & os.ModeCharDevice) == 0
-	if !isPiped {
-		password2 := cmdutil.ReadPassword("Confirm KEK password: ")
-		if password != password2 {
-			log.Fatal("Passwords do not match.")
-		}
+	// Auto-generate password for VC-managed unlock (no user prompt needed).
+	// The password is stored on VaultCenter (encrypted with VC KEK) and fetched on startup.
+	passwordBytes := make([]byte, 32)
+	if _, err := cryptorand.Read(passwordBytes); err != nil {
+		log.Fatalf("Failed to generate random password: %v", err)
 	}
-	if len(password) < 8 {
-		log.Fatal("Password must be at least 8 characters.")
-	}
+	password := hex.EncodeToString(passwordBytes)
 
 	salt, err := crypto.GenerateSalt()
 	if err != nil {
@@ -160,12 +156,19 @@ func RunInit() {
 		log.Fatalf("Failed to save salt: %v", err)
 	}
 
-	fmt.Println("VeilKey agent initialized.")
+	// Store vault_key file for bootstrap (auto-unlock before first VC registration).
+	// This file is deleted after agent_secret is received from VC.
+	vaultKeyFile := filepath.Join(dataDir, "vault_key")
+	if err := os.WriteFile(vaultKeyFile, []byte(password), 0600); err != nil {
+		log.Fatalf("Failed to save vault_key: %v", err)
+	}
+
+	fmt.Println("VeilKey agent initialized (VC-managed unlock).")
 	fmt.Printf("  Node ID: %s\n", nodeID)
 	fmt.Printf("  Salt:    %s\n", saltFile)
 	fmt.Printf("  DB:      %s\n", dbPath)
 	fmt.Println("")
-	fmt.Println("  IMPORTANT: Remember your password. Lost password = unrecoverable data.")
+	fmt.Println("  Password auto-generated. VC will manage unlock on startup.")
 }
 
 func decodeRegistrationToken(token string) (tokenID, vcURL, label string, err error) {

@@ -105,6 +105,7 @@ func (h *Handler) Register(
 	// Agent management (Hub-only decryption)
 	agentAuth := h.requireAgentAuth
 	mux.HandleFunc("POST /api/agents/heartbeat", ready(h.handleAgentHeartbeat))
+	mux.HandleFunc("GET /api/agents/unlock-key", agentAuth(ready(h.handleAgentUnlockKey)))
 	mux.HandleFunc("DELETE /api/agents/by-node/{node_id}", trusted(ready(h.handleAgentUnregisterByNode)))
 	mux.HandleFunc("POST /api/agents/by-node/{node_id}/archive", trusted(ready(h.handleAgentArchive)))
 	mux.HandleFunc("POST /api/agents/by-node/{node_id}/unarchive", trusted(ready(h.handleAgentUnarchive)))

@@ -33,10 +33,26 @@ REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "$BATS_TEST_FILENAME")/../.." && pwd)}"
   [ "$count" -eq 0 ]
 }
 
-@test "DB key derived from salt in VaultCenter server.go" {
-  grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/vaultcenter/internal/commands/server.go"
+@test "DB key derived from KEK in VaultCenter api.go" {
+  grep -q 'deriveDBKeyFromKEK' "$REPO_ROOT/services/vaultcenter/internal/api/api.go"
 }
 
-@test "DB key derived from salt in LocalVault server.go" {
-  grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/localvault/internal/commands/server.go"
+@test "DB key derived from KEK in LocalVault api.go" {
+  grep -q 'deriveDBKeyFromKEK' "$REPO_ROOT/services/localvault/internal/api/api.go"
+}
+
+@test "no legacy deriveDBKey(salt) in VaultCenter server.go" {
+  ! grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/vaultcenter/internal/commands/server.go"
+}
+
+@test "no legacy deriveDBKey(salt) in LocalVault server.go" {
+  ! grep -q 'deriveDBKey(salt)' "$REPO_ROOT/services/localvault/internal/commands/server.go"
+}
+
+@test "LocalVault has autoUnlock function" {
+  grep -q 'func autoUnlock' "$REPO_ROOT/services/localvault/internal/commands/server.go"
+}
+
+@test "VaultCenter has unlock-key endpoint" {
+  grep -q 'unlock-key' "$REPO_ROOT/services/vaultcenter/internal/api/hkm/handler.go"
 }

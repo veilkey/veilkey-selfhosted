@@ -69,6 +69,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		ConfigsCount      int      `json:"configs_count"`
 		Version           int      `json:"version"`
 		RegistrationToken string   `json:"registration_token"`
+		VaultUnlockKey    string   `json:"vault_unlock_key,omitempty"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -313,8 +314,33 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 			log.Printf("agent: failed to generate agent_secret for %s: %v", nodeID, secretErr)
 		}
 
+		// Store vault_unlock_key if provided during registration
+		if req.VaultUnlockKey != "" {
+			encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
+				log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+			} else {
+				log.Printf("agent: vault_unlock_key stored for %s (%s)", nodeID, req.Label)
+			}
+		}
+
 		respondJSON(w, http.StatusOK, resp)
 		return
+	}
+
+	// Store vault_unlock_key if provided on existing agent (first-time migration)
+	if req.VaultUnlockKey != "" && len(agent.VaultUnlockKeyEnc) == 0 {
+		kek := h.deps.GetKEK()
+		encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
+		if encErr != nil {
+			log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
+		} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
+			log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+		} else {
+			log.Printf("agent: vault_unlock_key stored for existing agent %s (%s)", nodeID, agent.Label)
+		}
 	}
 
 	resp := map[string]interface{}{

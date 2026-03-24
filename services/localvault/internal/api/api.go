@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -36,6 +37,7 @@ type NodeIdentity struct {
 type Server struct {
 	db            *db.DB
 	dbPath        string // for deferred DB opening (DB opens during Unlock)
+	dataDir       string // directory containing salt, agent_secret, vault_key files
 	kek           []byte
 	kekMu         sync.RWMutex
 	locked        bool
@@ -45,6 +47,9 @@ type Server struct {
 	identity      *NodeIdentity
 	unlockLimiter *ratelimit.UnlockRateLimiter
 	httpClient    *http.Client
+
+	// vaultUnlockKey is the auto-generated password, held in memory until sent to VC.
+	vaultUnlockKey string
 
 	// agentAuthCache caches the decrypted agent secret to avoid repeated DB+KEK lookups.
 	agentAuthCache   string
@@ -72,7 +77,77 @@ func deriveDBKeyFromKEK(kek []byte) string {
 func (s *Server) SetDBPath(dbPath string, salt []byte) {
 	s.dbPath = dbPath
 	s.salt = salt
+	s.dataDir = filepath.Dir(dbPath)
 }
+
+// SetVaultUnlockKey stores the auto-generated password in memory for sending to VC.
+func (s *Server) SetVaultUnlockKey(key string) {
+	s.vaultUnlockKey = key
+}
+
+// VaultUnlockKey returns the pending vault unlock key (empty after sent to VC).
+func (s *Server) VaultUnlockKey() string {
+	return s.vaultUnlockKey
+}
+
+// ClearVaultUnlockKey clears the in-memory vault unlock key after VC confirms storage.
+func (s *Server) ClearVaultUnlockKey() {
+	s.vaultUnlockKey = ""
+}
+
+// ReadAgentSecretFile reads the agent_secret from the data directory file.
+func (s *Server) ReadAgentSecretFile() string {
+	data, err := os.ReadFile(filepath.Join(s.dataDir, "agent_secret"))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
+// WriteAgentSecretFile writes the agent_secret to a file in the data directory.
+func (s *Server) WriteAgentSecretFile(secret string) error {
+	return os.WriteFile(filepath.Join(s.dataDir, "agent_secret"), []byte(secret), 0600)
+}
+
+// AutoUnlockFromVC contacts VaultCenter to fetch the vault unlock key and auto-unlocks.
+func (s *Server) AutoUnlockFromVC(vcURL string) error {
+	agentSecret := s.ReadAgentSecretFile()
+	if agentSecret == "" {
+		return fmt.Errorf("no agent_secret file")
+	}
+
+	url := strings.TrimRight(vcURL, "/") + "/api/agents/unlock-key"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return fmt.Errorf("build request: %w", err)
+	}
+	req.Header.Set("Authorization", "Bearer "+agentSecret)
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("VC returned status %d", resp.StatusCode)
+	}
+
+	var result struct {
+		UnlockKey string `json:"unlock_key"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return fmt.Errorf("decode response: %w", err)
+	}
+	if result.UnlockKey == "" {
+		return fmt.Errorf("empty unlock_key in response")
+	}
+
+	kek := crypto.DeriveKEK(result.UnlockKey, s.salt)
+	return s.Unlock(kek)
+}
+
+func (s *Server) Salt() []byte { return s.salt }
 
 func (s *Server) SetIdentity(identity *NodeIdentity) {
 	s.identity = identity
@@ -187,6 +262,42 @@ func (s *Server) VaultHash() string {
 		return ""
 	}
 	return s.identity.VaultHash
+}
+
+// LoadIdentity reads node info and config from DB and sets the server identity.
+// Call after Unlock() to ensure heartbeat has valid identity data.
+func (s *Server) LoadIdentity() {
+	info, err := s.db.GetNodeInfo()
+	if err != nil {
+		log.Printf("LoadIdentity: failed to read node info: %v", err)
+		return
+	}
+	vaultHash := s.lookupConfigValue("VEILKEY_VAULT_HASH")
+	vaultName := s.lookupConfigValue("VEILKEY_VAULT_NAME")
+	// Fallback to env vars if DB config is empty (new vault)
+	if vaultName == "" {
+		vaultName = os.Getenv("VEILKEY_VAULT_NAME")
+	}
+	if vaultHash == "" {
+		vaultHash = os.Getenv("VEILKEY_VAULT_HASH")
+	}
+	// Generate vault_hash if still empty (first-time registration)
+	if vaultHash == "" && vaultName != "" {
+		h := sha256.Sum256([]byte(info.NodeID))
+		vaultHash = hex.EncodeToString(h[:8])
+		_ = s.db.SaveConfig("VEILKEY_VAULT_HASH", vaultHash)
+		log.Printf("LoadIdentity: generated vault_hash=%s", vaultHash)
+	}
+	if vaultName != "" {
+		_ = s.db.SaveConfig("VEILKEY_VAULT_NAME", vaultName)
+	}
+	s.SetIdentity(&NodeIdentity{
+		NodeID:    info.NodeID,
+		Version:   info.Version,
+		VaultHash: vaultHash,
+		VaultName: vaultName,
+	})
+	log.Printf("Identity loaded: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
 }
 
 // ── Forwarding methods for cron runner ───────────────────────────────────────

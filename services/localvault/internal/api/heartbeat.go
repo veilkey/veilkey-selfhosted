@@ -47,6 +47,11 @@ func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Du
 }
 
 func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
+	// Skip heartbeat if server is locked (DB not available yet)
+	if s.IsLocked() || s.db == nil {
+		return fmt.Errorf("server is locked, skipping heartbeat")
+	}
+
 	secretsCount := 0
 	version := 0
 	nodeID := ""
@@ -89,6 +94,10 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	// Include registration token for first-time registration
 	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {
 		payload["registration_token"] = regToken.Value
+	}
+	// Include vault_unlock_key for VC-managed unlock (sent once, cleared after VC stores it)
+	if vuk := s.VaultUnlockKey(); vuk != "" {
+		payload["vault_unlock_key"] = vuk
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -148,8 +157,27 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 			} else if err := s.db.UpdateAgentSecret(encrypted, nonce); err != nil {
 				log.Printf("heartbeat: failed to store agent_secret: %v", err)
 			} else {
-				log.Println("heartbeat: agent_secret stored successfully")
+				log.Println("heartbeat: agent_secret stored successfully (DB)")
 				s.invalidateAgentAuthCache()
+			}
+			// Also store to file for auto-unlock on next restart
+			if err := s.WriteAgentSecretFile(hbResp.AgentSecret); err != nil {
+				log.Printf("heartbeat: failed to write agent_secret file: %v", err)
+			} else {
+				log.Println("heartbeat: agent_secret stored to file")
+				// Delete vault_key bootstrap file — no longer needed
+				vaultKeyFile := filepath.Join(s.dataDir, "vault_key")
+				if err := os.Remove(vaultKeyFile); err == nil {
+					log.Println("heartbeat: vault_key bootstrap file deleted")
+				}
+			}
+		}
+		// Clear vault_unlock_key from memory after successful registration
+		// (VC has stored it, no need to resend)
+		if hbResp.Status == "registered" || hbResp.Status == "ok" {
+			if s.VaultUnlockKey() != "" {
+				s.ClearVaultUnlockKey()
+				log.Println("heartbeat: vault_unlock_key cleared (VC has stored it)")
 			}
 		}
 		if hbResp.Status == "registered" {
