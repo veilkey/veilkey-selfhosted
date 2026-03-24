@@ -55,10 +55,18 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 		id = existing.ID
 		ref = existing.Ref
 		action = "updated"
-		if existing.Scope != "" {
+		// Use request scope if provided; otherwise preserve existing scope
+		if req.Scope != "" {
+			if req.Scope == "LOCAL" {
+				scope = refScopeLocal
+				status = refStatusActive
+			} else {
+				scope = db.RefScope(req.Scope)
+			}
+		} else if existing.Scope != "" {
 			scope = existing.Scope
 		}
-		if existing.Status != "" {
+		if req.Scope == "" && existing.Status != "" {
 			status = existing.Status
 		}
 	}

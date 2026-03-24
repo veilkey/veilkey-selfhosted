@@ -363,3 +363,80 @@ func TestChainStoreAdapterForwardsSalt(t *testing.T) {
 		t.Error("ChainStoreAdapter.UpsertAgent must forward salt to DB")
 	}
 }
+
+// ── Bug 1: VC Unlock must double-check locked state under write lock ─────────
+
+func TestUnlockHasDoubleCheckUnderWriteLock(t *testing.T) {
+	src, err := os.ReadFile("api.go")
+	if err != nil {
+		t.Fatalf("failed to read api.go: %v", err)
+	}
+	content := string(src)
+
+	fnBody := extractFn(content, "func (s *Server) Unlock(kek []byte) error {")
+	if fnBody == "" {
+		t.Fatal("Unlock method must exist")
+	}
+
+	// Must acquire write lock
+	if !strings.Contains(fnBody, "s.kekMu.Lock()") {
+		t.Error("Unlock must acquire write lock (s.kekMu.Lock())")
+	}
+
+	// Must double-check locked state after acquiring write lock
+	lockIdx := strings.Index(fnBody, "s.kekMu.Lock()")
+	if lockIdx < 0 {
+		t.Fatal("s.kekMu.Lock() not found")
+	}
+	afterLock := fnBody[lockIdx:]
+	if !strings.Contains(afterLock, "!s.locked") {
+		t.Error("Unlock must check !s.locked after acquiring write lock (double-check pattern)")
+	}
+
+	// Must close database on race (another goroutine unlocked first)
+	if !strings.Contains(afterLock, "database.Close()") {
+		t.Error("Unlock must close database connection if another goroutine already unlocked")
+	}
+}
+
+// ══════════════════════════════════════════════════════════════════
+// Logic bug regression tests
+// ══════════════════════════════════════════════════════════════════
+
+func TestUnlockDoubleCheckUnderWriteLock(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) Unlock(")
+	if !strings.Contains(b, "!s.locked") {
+		t.Error("Unlock must double-check locked state under write lock")
+	}
+	if !strings.Contains(b, "database.Close()") {
+		t.Error("Unlock must close leaked DB on race")
+	}
+}
+
+func TestRevealWindowNotExtendable(t *testing.T) {
+	s, _ := os.ReadFile("admin/admin_auth.go")
+	b := extractFn(string(s), "func (h *Handler) handleAdminRevealAuthorize(")
+	if !strings.Contains(b, "RevealUntil") || !strings.Contains(b, "not extended") {
+		t.Error("reveal window must not be extendable when already active")
+	}
+}
+
+func TestRegression_PromoteRejectsDeletedAgent(t *testing.T) {
+	s, _ := os.ReadFile("handle_keycenter.go")
+	b := extractFn(string(s), "func (s *Server) handleKeycenterPromoteToVault(")
+	if !strings.Contains(b, "DeletedAt") {
+		t.Error("promote must reject deleted agents")
+	}
+}
+
+func TestKeyVersionMismatchHasRetryCap(t *testing.T) {
+	s, _ := os.ReadFile("hkm/agent_state_helpers.go")
+	if !strings.Contains(string(s), "AgentRetrySchedule") {
+		t.Error("retry must have schedule cap")
+	}
+	b := extractFn(string(s), "func advanceRebindPayload(")
+	if !strings.Contains(b, ">= len(") {
+		t.Error("must cap retry stage at schedule length")
+	}
+}

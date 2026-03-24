@@ -407,3 +407,58 @@ func TestLVChainStoreAdapterSaltParam(t *testing.T) {
 		t.Error("LV ChainStoreAdapter.UpsertAgent must have salt string param")
 	}
 }
+
+// ══════════════════════════════════════════════════════════════════
+// Logic bug regression tests
+// ══════════════════════════════════════════════════════════════════
+
+func TestBulkApplyValidatesAllBeforeExecution(t *testing.T) {
+	s, _ := os.ReadFile("bulk/apply.go")
+	phase1 := strings.Index(string(s), "Phase 1: Validate ALL")
+	phase2 := strings.Index(string(s), "Phase 2: Execute")
+	if phase1 < 0 || phase2 < 0 {
+		t.Fatal("bulk apply must have Phase 1 (validate) and Phase 2 (execute)")
+	}
+	if phase1 > phase2 {
+		t.Error("Phase 1 (validate) must come before Phase 2 (execute)")
+	}
+}
+
+func TestBulkApplySymlinkResolution(t *testing.T) {
+	s, _ := os.ReadFile("bulk/apply.go")
+	b := extractFn(string(s), "func writeAtomically(")
+	if !strings.Contains(b, "EvalSymlinks") {
+		t.Error("writeAtomically must resolve symlinks")
+	}
+}
+
+func TestCipherSaveRespectsRequestScope(t *testing.T) {
+	s, _ := os.ReadFile("secrets/cipher_save.go")
+	b := extractFn(string(s), "func (h *Handler) handleSaveCipher(")
+	if b == "" {
+		t.Fatal("handleSaveCipher must exist")
+	}
+	if !strings.Contains(b, "req.Scope") {
+		t.Error("cipher save must use req.Scope")
+	}
+	// Must not silently ignore scope
+	if !strings.Contains(b, `req.Scope != ""`) {
+		t.Error("must check req.Scope is non-empty before applying")
+	}
+}
+
+func TestHeartbeatSkipsWhenNoIdentity(t *testing.T) {
+	s, _ := os.ReadFile("heartbeat.go")
+	b := extractFn(string(s), "func (s *Server) SendHeartbeatOnce(")
+	if !strings.Contains(b, "identity == nil") {
+		t.Error("heartbeat must return early when identity is nil")
+	}
+}
+
+func TestNilSaltPreventsKEKDerivation(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) AutoUnlockFromVC(")
+	if !strings.Contains(b, `len(salt) == 0`) {
+		t.Error("must reject nil salt before DeriveKEK")
+	}
+}

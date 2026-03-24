@@ -361,6 +361,19 @@ func (h *Handler) handleAdminRevealAuthorize(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	now := time.Now().UTC()
+	// Do not extend an already-active reveal window
+	if session.RevealUntil != nil && !now.After(session.RevealUntil.UTC()) {
+		// Window is still active — return existing window info without extending
+		respondJSON(w, http.StatusOK, map[string]any{
+			"authorized":            true,
+			"ref":                   entry.RefCanonical,
+			"reveal_window_seconds": int(time.Until(session.RevealUntil.UTC()).Seconds()),
+			"reveal_until":          session.RevealUntil.UTC().Format(time.RFC3339),
+			"extended":              false,
+			"policy":                "existing reveal window still active; not extended",
+		})
+		return
+	}
 	revealUntil := now.Add(adminRevealWindow)
 	if err := h.deps.DB().UpdateAdminSessionRevealUntil(session.SessionID, &revealUntil); err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to record reveal authorization")

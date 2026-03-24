@@ -556,8 +556,14 @@ func (s *Server) Unlock(kek []byte) error {
 		return fmt.Errorf("invalid password (KEK decryption failed)")
 	}
 
-	// 3. Set DB and unlock
+	// 3. Set DB and unlock — double-check under write lock to prevent DB connection leak
 	s.kekMu.Lock()
+	if !s.locked {
+		// Another goroutine unlocked while we were opening DB — close our connection
+		s.kekMu.Unlock()
+		_ = database.Close()
+		return nil
+	}
 	s.db = database
 	s.kek = kek
 	s.locked = false
@@ -606,11 +612,6 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "password is required")
 		return
 	}
-	if len(req.Password) > 256 {
-		s.respondError(w, http.StatusBadRequest, "password too long")
-		return
-	}
-
 	if len(req.Password) > 256 {
 		s.respondError(w, http.StatusBadRequest, "password too long")
 		return

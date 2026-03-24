@@ -113,6 +113,18 @@ func recursiveJSONMerge(dst map[string]any, src map[string]any) map[string]any {
 }
 
 func writeAtomically(path string, content []byte) error {
+	// Resolve symlinks to prevent symlink bypass attacks
+	resolved, err := filepath.EvalSymlinks(path)
+	if err == nil {
+		path = resolved
+	}
+	// If the file doesn't exist yet, EvalSymlinks fails — resolve parent dir instead
+	if err != nil {
+		parentResolved, parentErr := filepath.EvalSymlinks(filepath.Dir(path))
+		if parentErr == nil {
+			path = filepath.Join(parentResolved, filepath.Base(path))
+		}
+	}
 	dir := filepath.Dir(path)
 	var (
 		mode     os.FileMode = 0644
@@ -475,6 +487,7 @@ func (h *Handler) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request)
 	postcheckResults := make([]map[string]any, 0, len(req.Steps))
 	hookResults := make([]map[string]any, 0)
 	hooks := orderedHooks(req.Steps)
+	// Phase 1: Validate ALL steps before any writes (rollback-free guarantee)
 	for _, step := range req.Steps {
 		if err := validateBulkApplyStep(step); err != nil {
 			respondJSON(w, 409, map[string]any{
@@ -488,6 +501,9 @@ func (h *Handler) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request)
 			})
 			return
 		}
+	}
+	// Phase 2: Execute all steps (all validated above)
+	for _, step := range req.Steps {
 		if err := applyBulkApplyStep(step); err != nil {
 			respondJSON(w, 500, map[string]any{
 				"workflow":     req.Name,

@@ -190,6 +190,10 @@ func (s *Server) handleKeycenterPromoteToVault(w http.ResponseWriter, r *http.Re
 		s.respondError(w, http.StatusNotFound, "vault not found")
 		return
 	}
+	if agent.DeletedAt != nil {
+		s.respondError(w, http.StatusGone, "cannot promote to a deleted agent")
+		return
+	}
 	agentDEK, err := s.DecryptAgentDEK(agent.DEK, agent.DEKNonce)
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to decrypt agent key")

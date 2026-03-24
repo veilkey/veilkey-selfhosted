@@ -276,6 +276,31 @@ func TestSource_TOTPAlgorithmUsesSHA256(t *testing.T) {
 	}
 }
 
+// ── Bug 2: Reveal window must NOT be extended if already active ───────────────
+
+func TestRevealWindowNotExtendable(t *testing.T) {
+	src, err := os.ReadFile("admin_auth.go")
+	if err != nil {
+		t.Fatalf("failed to read admin_auth.go: %v", err)
+	}
+	content := string(src)
+
+	fnBody := extractFnBody(content, "func (h *Handler) handleAdminRevealAuthorize(")
+	if fnBody == "" {
+		t.Fatal("handleAdminRevealAuthorize must exist")
+	}
+
+	// Must check if session already has an active reveal window before extending
+	if !strings.Contains(fnBody, "session.RevealUntil") {
+		t.Error("handleAdminRevealAuthorize must check session.RevealUntil")
+	}
+
+	// Must check if existing window is still active (not expired)
+	if !strings.Contains(fnBody, "RevealUntil != nil") || (!strings.Contains(fnBody, "Before(") && !strings.Contains(fnBody, "After(")) {
+		t.Error("handleAdminRevealAuthorize must check if existing reveal window is still active before extending")
+	}
+}
+
 func TestSource_TOTPURIIncludesAlgorithmSHA256(t *testing.T) {
 	src, err := os.ReadFile("admin_auth.go")
 	if err != nil {
