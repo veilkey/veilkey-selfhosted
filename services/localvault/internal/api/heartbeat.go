@@ -52,6 +52,11 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		return nil
 	}
 
+	identity := s.Identity()
+	if identity == nil {
+		return nil
+	}
+
 	secretsCount := 0
 	version := 0
 	nodeID := ""
@@ -59,13 +64,12 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	if info, err := s.db.GetNodeInfo(); err == nil {
 		nodeID = info.NodeID
 		version = info.Version
-		if s.identity != nil {
-			s.identity.NodeID = info.NodeID
-			s.identity.Version = info.Version
-		}
-	} else if s.identity != nil {
-		nodeID = s.identity.NodeID
-		version = s.identity.Version
+		identity.NodeID = info.NodeID
+		identity.Version = info.Version
+		s.SetIdentity(identity)
+	} else {
+		nodeID = identity.NodeID
+		version = identity.Version
 	}
 	configsCount := 0
 	if !s.IsLocked() {
@@ -80,9 +84,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	payload := map[string]interface{}{
 		"vault_node_uuid": nodeID,
 		"node_id":         nodeID,
-		"vault_hash":      s.identity.VaultHash,
-		"vault_name":      s.identity.VaultName,
-		"vault_id":        formatVaultID(s.identity.VaultName, s.identity.VaultHash),
+		"vault_hash":      identity.VaultHash,
+		"vault_name":      identity.VaultName,
+		"vault_id":        formatVaultID(identity.VaultName, identity.VaultHash),
 		"managed_paths":   resolveManagedPaths(),
 		"key_version":     version,
 		"label":           label,
@@ -95,9 +99,17 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {
 		payload["registration_token"] = regToken.Value
 	}
-	// Include vault_unlock_key for VC-managed unlock (sent once, cleared after VC stores it)
+	// Include vault_unlock_key for VC-managed unlock (sent once, cleared after VC stores it).
+	// Refuse to send over plaintext unless VEILKEY_ALLOW_INSECURE_UNLOCK=true.
 	if vuk := s.VaultUnlockKey(); vuk != "" {
-		payload["vault_unlock_key"] = vuk
+		if !strings.HasPrefix(endpoint, "https://") && os.Getenv("VEILKEY_ALLOW_INSECURE_UNLOCK") != "true" {
+			log.Println("WARNING: vault_unlock_key NOT sent — endpoint is not HTTPS. Set VEILKEY_ALLOW_INSECURE_UNLOCK=true to override.")
+		} else {
+			if !strings.HasPrefix(endpoint, "https://") {
+				log.Println("WARNING: sending vault_unlock_key over insecure connection (VEILKEY_ALLOW_INSECURE_UNLOCK=true)")
+			}
+			payload["vault_unlock_key"] = vuk
+		}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -133,8 +145,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 				if err := s.db.UpdateNodeVersion(payload.ExpectedKeyVersion); err != nil {
 					return fmt.Errorf("heartbeat rotation update failed: %w", err)
 				}
-				if s.identity != nil {
-					s.identity.Version = payload.ExpectedKeyVersion
+				if id := s.Identity(); id != nil {
+					id.Version = payload.ExpectedKeyVersion
+					s.SetIdentity(id)
 				}
 				return ErrRotationRequired
 			}
@@ -172,13 +185,11 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 				}
 			}
 		}
-		// Clear vault_unlock_key from memory after successful registration
-		// (VC has stored it, no need to resend)
-		if hbResp.Status == "registered" || hbResp.Status == "ok" {
-			if s.VaultUnlockKey() != "" {
-				s.ClearVaultUnlockKey()
-				log.Println("heartbeat: vault_unlock_key cleared (VC has stored it)")
-			}
+		// Clear vault_unlock_key from memory only after VC explicitly confirms storage.
+		// Without this check, a VC-side DB error could cause the key to be lost permanently.
+		if hbResp.VaultUnlockKeyStored && s.VaultUnlockKey() != "" {
+			s.ClearVaultUnlockKey()
+			log.Println("heartbeat: vault_unlock_key cleared (VC confirmed storage)")
 		}
 		if hbResp.Status == "registered" {
 			if err := s.db.DeleteConfig("VEILKEY_REGISTRATION_TOKEN"); err != nil {

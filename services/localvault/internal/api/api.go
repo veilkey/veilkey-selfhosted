@@ -156,7 +156,20 @@ func (s *Server) AutoUnlockFromVC(vcURL string) error {
 func (s *Server) Salt() []byte { return s.salt }
 
 func (s *Server) SetIdentity(identity *NodeIdentity) {
+	s.kekMu.Lock()
+	defer s.kekMu.Unlock()
 	s.identity = identity
+}
+
+// Identity returns a copy of the current node identity (thread-safe).
+func (s *Server) Identity() *NodeIdentity {
+	s.kekMu.RLock()
+	defer s.kekMu.RUnlock()
+	if s.identity == nil {
+		return nil
+	}
+	cp := *s.identity
+	return &cp
 }
 
 func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
@@ -194,7 +207,15 @@ func (s *Server) SetSalt(salt []byte) {
 }
 
 func (s *Server) Unlock(kek []byte) error {
-	// 1. Derive DB_KEY from KEK and open database
+	// 1. Early check: already unlocked (race between autoUnlock and handleUnlock)
+	s.kekMu.RLock()
+	alreadyUnlocked := !s.locked
+	s.kekMu.RUnlock()
+	if alreadyUnlocked {
+		return nil
+	}
+
+	// 2. Derive DB_KEY from KEK and open database
 	dbKey := deriveDBKeyFromKEK(kek)
 	_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
 
@@ -203,7 +224,7 @@ func (s *Server) Unlock(kek []byte) error {
 		return fmt.Errorf("invalid password (cannot open database)")
 	}
 
-	// 2. Verify KEK by decrypting DEK
+	// 3. Verify KEK by decrypting DEK
 	info, err := database.GetNodeInfo()
 	if err != nil {
 		_ = database.Close()
@@ -215,8 +236,14 @@ func (s *Server) Unlock(kek []byte) error {
 		return fmt.Errorf("invalid password (KEK decryption failed)")
 	}
 
-	// 3. Set DB and unlock
+	// 4. Set DB and unlock — double-check under write lock to prevent DB connection leak
 	s.kekMu.Lock()
+	if !s.locked {
+		// Another goroutine unlocked while we were opening DB — close our connection
+		s.kekMu.Unlock()
+		_ = database.Close()
+		return nil
+	}
 	s.db = database
 	s.kek = kek
 	s.locked = false
@@ -264,10 +291,11 @@ func (s *Server) HTTPClient() *http.Client { return s.httpClient }
 // ── functions.Deps implementation ─────────────────────────────────────────────
 
 func (s *Server) VaultHash() string {
-	if s.identity == nil {
+	id := s.Identity()
+	if id == nil {
 		return ""
 	}
-	return s.identity.VaultHash
+	return id.VaultHash
 }
 
 // LoadIdentity reads node info and config from DB and sets the server identity.
