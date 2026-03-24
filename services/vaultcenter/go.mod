@@ -113,5 +113,3 @@ require (
 )
 
 replace github.com/mattn/go-sqlite3 v1.14.33 => github.com/mutecomm/go-sqlcipher/v4 v4.4.2
-
-replace github.com/veilkey/veilkey-chain => /root/jeonghan/repository/veilkey-chain

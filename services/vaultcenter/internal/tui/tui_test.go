@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"testing"
 	"time"
@@ -2656,7 +2655,7 @@ func extractTLSConfig(c *Client) *tls.Config {
 }
 
 func TestNewClientDefaultTLSVerify(t *testing.T) {
-	os.Unsetenv("VEILKEY_TLS_INSECURE")
+	t.Setenv("VEILKEY_TLS_INSECURE", "")
 
 	c := NewClient("https://localhost:8443")
 	if c == nil {
@@ -2673,8 +2672,7 @@ func TestNewClientDefaultTLSVerify(t *testing.T) {
 }
 
 func TestNewClientInsecureTLS(t *testing.T) {
-	os.Setenv("VEILKEY_TLS_INSECURE", "1")
-	defer os.Unsetenv("VEILKEY_TLS_INSECURE")
+	t.Setenv("VEILKEY_TLS_INSECURE", "1")
 
 	c := NewClient("https://localhost:8443")
 	if c == nil {
@@ -2707,11 +2705,11 @@ func TestNewClientInsecureEnvValues(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(fmt.Sprintf("env=%q", tt.envVal), func(t *testing.T) {
 			if tt.envVal == "" {
-				os.Unsetenv("VEILKEY_TLS_INSECURE")
+				t.Setenv("VEILKEY_TLS_INSECURE", "")
 			} else {
-				os.Setenv("VEILKEY_TLS_INSECURE", tt.envVal)
+				t.Setenv("VEILKEY_TLS_INSECURE", tt.envVal)
 			}
-			defer os.Unsetenv("VEILKEY_TLS_INSECURE")
+			defer t.Setenv("VEILKEY_TLS_INSECURE", "")
 
 			c := NewClient("https://localhost:8443")
 			tlsConf := extractTLSConfig(c)
@@ -2735,7 +2733,7 @@ func TestClientRequiredEnvVars(t *testing.T) {
 	// certs will fail with x509 certificate errors, causing errMsg propagation
 	// that leaves pages stuck at "Loading...".
 
-	os.Unsetenv("VEILKEY_TLS_INSECURE")
+	t.Setenv("VEILKEY_TLS_INSECURE", "")
 
 	// Creating a client with an unreachable URL must not panic.
 	c := NewClient("https://192.0.2.1:9999") // RFC 5737 TEST-NET, guaranteed unreachable
@@ -2866,31 +2864,3 @@ func TestAllPagesHandleErrMsg(t *testing.T) {
 	})
 }
 
-func TestTmuxEnvInheritance(t *testing.T) {
-	// This test documents a requirement for tmux-based TUI usage:
-	//
-	// When running veilkey-tui inside tmux, environment variables like
-	// VEILKEY_ADDR and VEILKEY_TLS_INSECURE must be inherited by new
-	// tmux windows/panes. tmux does NOT automatically forward env vars
-	// from the parent shell.
-	//
-	// Solution: use `tmux setenv VEILKEY_TLS_INSECURE 1` so that all
-	// new windows/panes inherit the variable. Alternatively, set it in
-	// .bashrc / .zshrc.
-	//
-	// We cannot test tmux integration directly in unit tests, but we
-	// verify that the env-based TLS config works correctly when the
-	// env var IS present (covered by TestNewClientInsecureTLS above).
-
-	// Verify that os.Getenv works as expected (sanity check).
-	key := "VEILKEY_TEST_TMUX_INHERIT"
-	os.Setenv(key, "inherited")
-	defer os.Unsetenv(key)
-
-	if got := os.Getenv(key); got != "inherited" {
-		t.Fatalf("expected 'inherited', got %q", got)
-	}
-}
-
-// Suppress unused import warning
-var _ = time.Now
