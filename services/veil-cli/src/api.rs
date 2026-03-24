@@ -108,13 +108,6 @@ impl VeilKeyClient {
         let body = serde_json::json!({"password": password});
         match self.agent.post(&url).send_json(&body) {
             Ok(resp) => {
-                if resp.status() == 429 {
-                    return Err("too many attempts — try again later".to_string());
-                }
-                if resp.status() != 200 {
-                    return Err("invalid password".to_string());
-                }
-                // Extract session cookie from Set-Cookie header
                 if let Some(set_cookie) = resp.header("set-cookie") {
                     if let Some(cookie_value) = set_cookie.split(';').next() {
                         if let Ok(mut guard) = self.session_cookie.lock() {
@@ -123,6 +116,12 @@ impl VeilKeyClient {
                     }
                 }
                 Ok(())
+            }
+            Err(ureq::Error::Status(429, _)) => {
+                Err("too many attempts — try again later".to_string())
+            }
+            Err(ureq::Error::Status(code, _)) => {
+                Err(format!("login failed (HTTP {})", code))
             }
             Err(_) => Err("cannot reach VeilKey server".to_string()),
         }
@@ -165,10 +164,14 @@ impl VeilKeyClient {
         }
 
         let body = serde_json::json!({ "plaintext": value });
-        let resp = self
+        let mut req = self
             .agent
             .post(&format!("{}/api/encrypt", self.base_url))
-            .set("Content-Type", "application/json")
+            .set("Content-Type", "application/json");
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        let resp = req
             .send_json(&body)
             .map_err(|e| format!("API request failed: {}", e))?;
 

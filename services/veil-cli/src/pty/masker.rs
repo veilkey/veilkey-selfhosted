@@ -98,8 +98,10 @@ pub fn mask_output(
 
     // Pre-scan: detect secrets on combined (tail+new) buffer.
     // This catches secrets split across PTY chunks. Any detected secret
-    // is issued to the API (registered for future mask_map inclusion).
-    // The actual output masking uses only new_text below.
+    // is issued to the API, and if it spans the tail/new_text boundary,
+    // the overlapping portion in new_text is masked to prevent leaking.
+    let tail_len = plain_tail.len();
+    let mut cross_chunk_replacements: Vec<(String, String)> = Vec::new();
     for pat in patterns {
         for caps in pat.regex.captures_iter(&combined) {
             let m = caps
@@ -117,8 +119,18 @@ pub fn mask_output(
                 continue;
             }
             // Issue to API — registers the secret for future mask_map inclusion.
-            // We don't replace here; the output masking below handles replacement.
             let _ = client.issue(secret);
+            // If the match spans the tail/new_text boundary, mask the
+            // overlapping portion that falls within new_text.
+            let match_start = m.start();
+            let match_end = m.start() + secret.len();
+            if match_start < tail_len && match_end > tail_len {
+                let overlap = &combined[tail_len..match_end];
+                if !overlap.is_empty() {
+                    cross_chunk_replacements
+                        .push((overlap.to_string(), " ".repeat(overlap.len())));
+                }
+            }
         }
     }
 
@@ -126,6 +138,12 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
     let mut output_had_replacement = false;
+
+    // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
+    for (leaked, replacement) in &cross_chunk_replacements {
+        output = output.replacen(leaked, replacement, 1);
+        output_had_replacement = true;
+    }
     for (plaintext, vk_ref) in mask_map {
         if !plaintext.is_empty() && output.contains(plaintext.as_str()) {
             output = output.replace(
@@ -153,9 +171,26 @@ pub fn mask_output(
                 continue;
             }
             // Already issued above via combined scan — just replace here
-            if let Ok(ref_canonical) = client.issue(secret) {
-                output = output.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
-                output_had_replacement = true;
+            match client.issue(secret) {
+                Ok(ref_canonical) => {
+                    output = output.replace(
+                        secret,
+                        &padded_colorize_ref(&ref_canonical, secret.len()),
+                    );
+                    output_had_replacement = true;
+                }
+                Err(e) => {
+                    eprintln!(
+                        "[veilkey] issue failed for pattern {}: {} — redacting (fail-closed)",
+                        pat.name, e
+                    );
+                    let redacted = format!("[REDACTED:{}]", pat.name);
+                    output = output.replace(
+                        secret,
+                        &padded_colorize_ref(&redacted, secret.len()),
+                    );
+                    output_had_replacement = true;
+                }
             }
         }
     }
