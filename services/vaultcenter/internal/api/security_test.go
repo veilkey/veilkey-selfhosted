@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -72,5 +73,151 @@ func TestRemoteIP_XForwardedForLoopback(t *testing.T) {
 func TestMaxJSONBodyConst(t *testing.T) {
 	if maxJSONBody != 1<<20 {
 		t.Errorf("maxJSONBody = %d, want %d", maxJSONBody, 1<<20)
+	}
+}
+
+// ── Source analysis: bulk/templates.go — allowlist enforcement ────────────────
+
+func TestSource_BulkApplyTemplates_AllowedFormatsWhitelist(t *testing.T) {
+	src, err := os.ReadFile("bulk/files.go")
+	if err != nil {
+		t.Fatalf("failed to read bulk/files.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "allowedBulkApplyFormatsFile") {
+		t.Error("bulk apply templates must define an allowlist of permitted formats")
+	}
+	for _, format := range []string{`"env"`, `"json"`, `"json_merge"`, `"raw"`} {
+		if !strings.Contains(content, format) {
+			t.Errorf("allowed formats must include: %s", format)
+		}
+	}
+}
+
+func TestSource_BulkApplyTemplates_ValidatesFormat(t *testing.T) {
+	src, err := os.ReadFile("bulk/files.go")
+	if err != nil {
+		t.Fatalf("failed to read bulk/files.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, `allowedBulkApplyFormatsFile[format]`) {
+		t.Error("template normalization must validate format against allowlist")
+	}
+}
+
+func TestSource_BulkApplyTemplates_SensitiveValueMasking(t *testing.T) {
+	src, err := os.ReadFile("bulk/templates.go")
+	if err != nil {
+		t.Fatalf("failed to read bulk/templates.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "func isSensitiveBulkApplyValue(") {
+		t.Error("templates must define isSensitiveBulkApplyValue for masking")
+	}
+	if !strings.Contains(content, "func maskBulkApplyValue(") {
+		t.Error("templates must define maskBulkApplyValue for preview masking")
+	}
+	for _, keyword := range []string{"PASSWORD", "SECRET", "TOKEN", "CREDENTIAL", "PRIVATE"} {
+		if !strings.Contains(content, keyword) {
+			t.Errorf("isSensitiveBulkApplyValue must check for keyword: %s", keyword)
+		}
+	}
+}
+
+func TestSource_BulkApplyTemplates_WriteRoutesRequireTrustedIP(t *testing.T) {
+	src, err := os.ReadFile("bulk/handler.go")
+	if err != nil {
+		t.Fatalf("failed to read bulk/handler.go: %v", err)
+	}
+	content := string(src)
+
+	writeRoutes := []string{
+		"POST /api/vaults/{vault}/bulk-apply/templates",
+		"PUT /api/vaults/{vault}/bulk-apply/templates/{name}",
+		"DELETE /api/vaults/{vault}/bulk-apply/templates/{name}",
+	}
+	for _, route := range writeRoutes {
+		found := false
+		for _, line := range strings.Split(content, "\n") {
+			if strings.Contains(line, route) {
+				found = true
+				if !strings.Contains(line, "requireTrustedIP") {
+					t.Errorf("write route %s must be wrapped with requireTrustedIP", route)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("write route not registered: %s", route)
+		}
+	}
+}
+
+// ── Source analysis: models.go — ApprovalTokenChallenge lifecycle fields ──────
+
+func TestSource_ApprovalTokenChallenge_LifecycleFields(t *testing.T) {
+	src, err := os.ReadFile("../db/models.go")
+	if err != nil {
+		t.Fatalf("failed to read models.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "type ApprovalTokenChallenge struct") {
+		t.Fatal("ApprovalTokenChallenge model must exist")
+	}
+
+	fields := []string{
+		"Token",
+		"Kind",
+		"Status",
+		"CreatedAt",
+		"UpdatedAt",
+		"UsedAt",
+	}
+	for _, field := range fields {
+		if !strings.Contains(content, field) {
+			t.Errorf("ApprovalTokenChallenge must have lifecycle field: %s", field)
+		}
+	}
+}
+
+func TestSource_ApprovalTokenChallenge_HasPromptFields(t *testing.T) {
+	src, err := os.ReadFile("../db/models.go")
+	if err != nil {
+		t.Fatalf("failed to read models.go: %v", err)
+	}
+	content := string(src)
+
+	for _, field := range []string{"Title", "Prompt", "InputLabel", "SubmitLabel"} {
+		if !strings.Contains(content, field) {
+			t.Errorf("ApprovalTokenChallenge must have prompt field: %s", field)
+		}
+	}
+}
+
+func TestSource_ApprovalTokenChallenge_HasEncryptedPayload(t *testing.T) {
+	src, err := os.ReadFile("../db/models.go")
+	if err != nil {
+		t.Fatalf("failed to read models.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "Ciphertext") || !strings.Contains(content, "Nonce") {
+		t.Error("ApprovalTokenChallenge must have Ciphertext and Nonce fields for encrypted payload")
+	}
+}
+
+func TestSource_ApprovalTokenChallenge_DefaultStatusPending(t *testing.T) {
+	src, err := os.ReadFile("../db/models.go")
+	if err != nil {
+		t.Fatalf("failed to read models.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, `default:pending`) {
+		t.Error("ApprovalTokenChallenge.Status must default to 'pending'")
 	}
 }

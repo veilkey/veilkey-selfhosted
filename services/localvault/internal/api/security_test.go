@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
@@ -97,5 +98,105 @@ func TestHandleUnlock_PasswordTooLong(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "password too long") {
 		t.Errorf("expected 'password too long' message, got %s", rec.Body.String())
+	}
+}
+
+// ── Heartbeat: vault_unlock_key requires agent auth ──────────────────────────
+
+func TestSourceSecurity_Heartbeat_VaultUnlockKey_RequiresAuth(t *testing.T) {
+	src, err := os.ReadFile("heartbeat.go")
+	if err != nil {
+		t.Fatalf("failed to read heartbeat.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "agentAuthHeader()") {
+		t.Error("heartbeat must use agentAuthHeader() for authenticated communication with VaultCenter")
+	}
+}
+
+func TestSourceSecurity_Heartbeat_StoresAgentSecretEncrypted(t *testing.T) {
+	src, err := os.ReadFile("heartbeat.go")
+	if err != nil {
+		t.Fatalf("failed to read heartbeat.go: %v", err)
+	}
+	content := string(src)
+
+	if !strings.Contains(content, "crypto.Encrypt(kek") {
+		t.Error("heartbeat must encrypt agent_secret with KEK before storing locally")
+	}
+}
+
+// ── Admin diagnostics: no full env dump, only specific keys ──────────────────
+
+func TestSourceSecurity_AdminDiagnostics_NoFullEnvDump(t *testing.T) {
+	src, err := os.ReadFile("admin_api.go")
+	if err != nil {
+		t.Fatalf("failed to read admin_api.go: %v", err)
+	}
+	content := string(src)
+
+	// Must NOT dump all env vars (os.Environ)
+	if strings.Contains(content, "os.Environ()") {
+		t.Error("admin diagnostics must NOT dump all environment variables (os.Environ)")
+	}
+
+	// Should only expose specific safe keys
+	allowedEnvKeys := []string{
+		"VEILKEY_VERSION",
+		"VEILKEY_DB_PATH",
+		"VEILKEY_ADDR",
+		"VEILKEY_VAULT_NAME",
+	}
+	for _, key := range allowedEnvKeys {
+		if !strings.Contains(content, key) {
+			t.Errorf("admin diagnostics should expose safe key: %s", key)
+		}
+	}
+
+	// Must NOT expose sensitive env vars
+	sensitiveKeys := []string{
+		"VEILKEY_DB_KEY",
+		"VEILKEY_KEK",
+		"VEILKEY_ADMIN_PASSWORD",
+	}
+	for _, key := range sensitiveKeys {
+		if strings.Contains(content, key) {
+			t.Errorf("admin diagnostics must NOT expose sensitive key: %s", key)
+		}
+	}
+}
+
+func TestSourceSecurity_AdminDiagnostics_RequiresTrustedIP(t *testing.T) {
+	src, err := os.ReadFile("admin_api.go")
+	if err != nil {
+		t.Fatalf("failed to read admin_api.go: %v", err)
+	}
+	content := string(src)
+
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "diagnostics") && strings.Contains(line, "HandleFunc") {
+			if !strings.Contains(line, "trusted(") {
+				t.Error("diagnostics endpoint must require trusted IP middleware")
+			}
+			break
+		}
+	}
+}
+
+func TestSourceSecurity_AdminDiagnostics_RequiresUnlocked(t *testing.T) {
+	src, err := os.ReadFile("admin_api.go")
+	if err != nil {
+		t.Fatalf("failed to read admin_api.go: %v", err)
+	}
+	content := string(src)
+
+	for _, line := range strings.Split(content, "\n") {
+		if strings.Contains(line, "diagnostics") && strings.Contains(line, "HandleFunc") {
+			if !strings.Contains(line, "ready(") {
+				t.Error("diagnostics endpoint must require server unlocked (ready) middleware")
+			}
+			break
+		}
 	}
 }
