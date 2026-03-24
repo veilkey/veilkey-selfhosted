@@ -39,8 +39,10 @@ type vaultsModel struct {
 	searchInput textinput.Model
 	searchQuery string
 
-	// Secret create
+	// Secret create/edit
 	creatingSecret bool
+	editingSecret  bool
+	editSecretName string
 	createName     textinput.Model
 	createValue    textinput.Model
 	createFocus    int
@@ -120,6 +122,16 @@ func createSecretCmd(c *Client, runtimeHash, name, value string) tea.Cmd {
 			return errMsg{err}
 		}
 		return secretCreatedMsg{}
+	}
+}
+
+func updateSecretCmd(c *Client, runtimeHash, name, value string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := c.UpdateVaultSecret(runtimeHash, name, value)
+		if err != nil {
+			return errMsg{err}
+		}
+		return secretCreatedMsg{} // reuse: triggers secrets reload
 	}
 }
 
@@ -302,8 +314,10 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 				rh := str(m.detailVault, "vault_runtime_hash")
 				return m, deleteSecretCmd(c, rh, name)
 			case "e":
+				m.editingSecret = true
+				m.editSecretName = str(m.secretDetail, "name")
 				m.creatingSecret = true
-				m.createName.SetValue(str(m.secretDetail, "name"))
+				m.createName.SetValue(m.editSecretName)
 				m.createValue.SetValue("")
 				m.createFocus = 1
 				m.createName.Blur()
@@ -572,14 +586,24 @@ func (m vaultsModel) viewSecrets(width int) string {
 
 func (m vaultsModel) viewSecretCreate() string {
 	var b strings.Builder
-	name := str(m.detailVault, "vault_name")
-	b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — New Secret", name)))
+	vaultName := str(m.detailVault, "vault_name")
+	if m.editingSecret {
+		b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — Edit: %s", vaultName, m.editSecretName)))
+	} else {
+		b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — New Secret", vaultName)))
+	}
 	b.WriteString("\n\n")
-	b.WriteString("  " + styleLabel.Render("Name") + "\n")
-	b.WriteString("  " + m.createName.View() + "\n\n")
+	if !m.editingSecret {
+		b.WriteString("  " + styleLabel.Render("Name") + "\n")
+		b.WriteString("  " + m.createName.View() + "\n\n")
+	}
 	b.WriteString("  " + styleLabel.Render("Value") + "\n")
 	b.WriteString("  " + m.createValue.View() + "\n\n")
-	b.WriteString(styleDim.Render("  tab switch  enter create  esc cancel"))
+	if m.editingSecret {
+		b.WriteString(styleDim.Render("  enter update  esc cancel"))
+	} else {
+		b.WriteString(styleDim.Render("  tab switch  enter create  esc cancel"))
+	}
 	return b.String()
 }
 
@@ -852,9 +876,14 @@ func (m vaultsModel) updateCreateSecret(msg tea.KeyMsg, c *Client) (vaultsModel,
 			return m, nil
 		}
 		runtimeHash := str(m.detailVault, "vault_runtime_hash")
+		if m.editingSecret {
+			m.editingSecret = false
+			return m, updateSecretCmd(c, runtimeHash, m.editSecretName, value)
+		}
 		return m, createSecretCmd(c, runtimeHash, name, value)
 	case "esc":
 		m.creatingSecret = false
+		m.editingSecret = false
 	default:
 		var cmd tea.Cmd
 		if m.createFocus == 0 {

@@ -73,7 +73,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activePage == pageLogin || !m.isEditing() {
 				return m, tea.Quit
 			}
-		case "1", "2", "3", "4", "5":
+		case "1", "2", "3", "4", "5", "6":
 			if m.activePage != pageLogin && !m.isEditing() {
 				idx := int(msg.String()[0] - '1')
 				if idx < len(pages) {
