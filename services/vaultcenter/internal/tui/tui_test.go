@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Domain: truncate must never produce broken UTF-8
@@ -87,6 +89,79 @@ func TestSwitchPageResetsModel(t *testing.T) {
 	m, _ = m.switchPage(pageKeycenter)
 	if m.err != nil {
 		t.Fatal("switchPage must clear m.err")
+	}
+}
+
+// BUG-1: updateCreate must forward regular key input to the focused textinput
+func TestUpdateCreate_ForwardsRegularKeyInput(t *testing.T) {
+	m := newKeycenterModel()
+	m.subview = kcCreate
+	m.creating = true
+	m.focusIdx = 0
+	m.nameInput.Focus()
+
+	// Send a regular character key — should be forwarded to the focused textinput
+	keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}
+	m2, _ := m.updateCreate(keyMsg, nil)
+
+	if m2.nameInput.Value() != "a" {
+		t.Errorf("expected nameInput to contain 'a', got %q", m2.nameInput.Value())
+	}
+
+	// Now test with focus on valueInput
+	m.focusIdx = 1
+	m.nameInput.Blur()
+	m.valueInput.Focus()
+
+	keyMsg = tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}
+	m3, _ := m.updateCreate(keyMsg, nil)
+
+	if m3.valueInput.Value() != "x" {
+		t.Errorf("expected valueInput to contain 'x', got %q", m3.valueInput.Value())
+	}
+}
+
+// BUG-3: plugins must set loaded=true on error so "Loading..." disappears
+func TestPlugins_LoadedTrueOnError(t *testing.T) {
+	m := newPluginsModel()
+	if m.loaded {
+		t.Fatal("expected loaded=false initially")
+	}
+
+	m2, _ := m.update(errMsg{fmt.Errorf("connection refused")}, nil)
+
+	if !m2.loaded {
+		t.Error("expected loaded=true after errMsg")
+	}
+	if m2.err == "" {
+		t.Error("expected err to be set after errMsg")
+	}
+}
+
+// BUG-2: vaults errMsg must reset all loading states
+func TestVaults_ErrMsgResetsAllLoadingStates(t *testing.T) {
+	m := newVaultsModel()
+	m.secretsLoading = true
+	m.metaLoading = true
+	m.revealing = true
+	m.loading = true
+
+	m2, _ := m.update(errMsg{fmt.Errorf("timeout")}, nil)
+
+	if m2.secretsLoading {
+		t.Error("expected secretsLoading=false after errMsg")
+	}
+	if m2.metaLoading {
+		t.Error("expected metaLoading=false after errMsg")
+	}
+	if m2.revealing {
+		t.Error("expected revealing=false after errMsg")
+	}
+	if m2.loading {
+		t.Error("expected loading=false after errMsg")
+	}
+	if !m2.offline {
+		t.Error("expected offline=true after errMsg")
 	}
 }
 

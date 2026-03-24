@@ -26,7 +26,6 @@ type pluginItem struct {
 
 type pluginsListMsg struct {
 	plugins []pluginItem
-	err     error
 }
 
 func newPluginsModel() pluginsModel {
@@ -37,7 +36,7 @@ func fetchPluginsCmd(c *Client) tea.Cmd {
 	return func() tea.Msg {
 		result, err := c.getJSON("/api/plugins")
 		if err != nil {
-			return pluginsListMsg{err: err}
+			return errMsg{err}
 		}
 		// Parse plugins from result
 		raw, _ := json.Marshal(result["plugins"])
@@ -49,16 +48,13 @@ func fetchPluginsCmd(c *Client) tea.Cmd {
 
 func (m pluginsModel) update(msg tea.Msg, c *Client) (pluginsModel, tea.Cmd) {
 	switch msg := msg.(type) {
-	case loginSuccessMsg:
-		return m, fetchPluginsCmd(c)
+	case errMsg:
+		m.err = msg.err.Error()
+		m.loaded = true
 	case pluginsListMsg:
-		if msg.err != nil {
-			m.err = msg.err.Error()
-		} else {
-			m.plugins = msg.plugins
-			m.loaded = true
-			m.err = ""
-		}
+		m.plugins = msg.plugins
+		m.loaded = true
+		m.err = ""
 	case tea.KeyMsg:
 		if msg.String() == "r" {
 			return m, fetchPluginsCmd(c)

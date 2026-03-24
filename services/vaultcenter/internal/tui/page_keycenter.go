@@ -237,6 +237,14 @@ func (m keycenterModel) updateCreate(msg tea.KeyMsg, c *Client) (keycenterModel,
 	case "esc":
 		m.subview = kcList
 		m.creating = false
+	default:
+		var cmd tea.Cmd
+		if m.focusIdx == 0 {
+			m.nameInput, cmd = m.nameInput.Update(msg)
+		} else {
+			m.valueInput, cmd = m.valueInput.Update(msg)
+		}
+		return m, cmd
 	}
 	return m, nil
 }

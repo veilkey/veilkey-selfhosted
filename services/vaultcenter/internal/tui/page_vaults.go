@@ -284,6 +284,9 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 	case errMsg:
 		m.loading = false
 		m.offline = true
+		m.secretsLoading = false
+		m.metaLoading = false
+		m.revealing = false
 		return m, nil
 
 	case tea.KeyMsg:
@@ -367,7 +370,7 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 		case vaultTabAgents:
 			return m.updateAgents(msg, c)
 		case vaultTabCatalog:
-			return m.updateCatalog(msg)
+			return m.updateCatalog(msg, c)
 		}
 	}
 	return m, nil
@@ -455,7 +458,7 @@ func (m vaultsModel) updateAgents(msg tea.KeyMsg, c *Client) (vaultsModel, tea.C
 	return m, nil
 }
 
-func (m vaultsModel) updateCatalog(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
+func (m vaultsModel) updateCatalog(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
 		if m.catalogCursor < len(m.filteredCatalog)-1 {
@@ -469,6 +472,9 @@ func (m vaultsModel) updateCatalog(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
 		m.catalogSearching = true
 		m.catalogSearch.SetValue(m.catalogQuery)
 		m.catalogSearch.Focus()
+	case "r":
+		m.loading = true
+		return m, loadCatalogCmd(c)
 	}
 	return m, nil
 }

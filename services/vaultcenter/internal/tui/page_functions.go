@@ -120,7 +120,7 @@ func (m functionsModel) update(msg tea.Msg, c *Client) (functionsModel, tea.Cmd)
 		case fnTabList:
 			return m.updateList(msg, c)
 		case fnTabBindings:
-			return m.updateBindings(msg)
+			return m.updateBindings(msg, c)
 		}
 	}
 	return m, nil
@@ -164,7 +164,7 @@ func (m functionsModel) updateDetail(msg tea.KeyMsg, c *Client) (functionsModel,
 	return m, nil
 }
 
-func (m functionsModel) updateBindings(msg tea.KeyMsg) (functionsModel, tea.Cmd) {
+func (m functionsModel) updateBindings(msg tea.KeyMsg, c *Client) (functionsModel, tea.Cmd) {
 	switch msg.String() {
 	case "j", "down":
 		if m.bindingCursor < len(m.bindings)-1 {
@@ -174,6 +174,9 @@ func (m functionsModel) updateBindings(msg tea.KeyMsg) (functionsModel, tea.Cmd)
 		if m.bindingCursor > 0 {
 			m.bindingCursor--
 		}
+	case "r":
+		m.loading = true
+		return m, loadBindingsCmd(c)
 	}
 	return m, nil
 }
@@ -275,6 +278,10 @@ func (m functionsModel) viewBindings(width int) string {
 
 	if m.loading {
 		b.WriteString(styleDim.Render("  Loading..."))
+		return b.String()
+	}
+	if m.offline {
+		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
 		return b.String()
 	}
 	if len(m.bindings) == 0 {
