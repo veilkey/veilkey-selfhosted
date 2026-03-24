@@ -192,6 +192,8 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let recent_input = Arc::new(Mutex::new(String::new()));
 
             // stdin → PTY master (input thread)
+            // Terminal response sequences (DSR, OSC) are passed through to PTY
+            // but excluded from recent_input to avoid false masking skips.
             let master_wr = master_fd;
             let input_tracker = recent_input.clone();
             std::thread::spawn(move || {
@@ -201,18 +203,26 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     if n <= 0 {
                         break;
                     }
-                    if let Ok(s) = std::str::from_utf8(&buf[..n as usize]) {
-                        let mut tracker = input_tracker.lock().unwrap();
-                        tracker.push_str(s);
-                        if tracker.len() > 4096 {
-                            // Find a char boundary at or after the trim point
-                            let start = tracker.len() - 4096;
-                            let start = tracker.ceil_char_boundary(start);
-                            *tracker = tracker[start..].to_string();
+                    let data = &buf[..n as usize];
+                    // Track user input (exclude terminal response sequences)
+                    if let Ok(s) = std::str::from_utf8(data) {
+                        // Filter out escape sequences from input tracking
+                        let filtered: String = s.chars().filter(|&c| {
+                            c >= ' ' || c == '\n' || c == '\r' || c == '\t'
+                        }).collect();
+                        if !filtered.is_empty() {
+                            let mut tracker = input_tracker.lock().unwrap();
+                            tracker.push_str(&filtered);
+                            if tracker.len() > 4096 {
+                                let start = tracker.len() - 4096;
+                                let start = tracker.ceil_char_boundary(start);
+                                *tracker = tracker[start..].to_string();
+                            }
                         }
                     }
+                    // Always forward raw data to PTY (including escape sequences)
                     unsafe {
-                        libc::write(master_wr, buf.as_ptr() as _, n as _);
+                        libc::write(master_wr, data.as_ptr() as _, n as _);
                     }
                 }
             });
@@ -226,6 +236,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let input_ref = recent_input.clone();
             let stdout_fd = io::stdout().as_raw_fd();
             let mut plain_tail = String::new();
+            let mut in_alt_screen = false;
 
             let mut buf = [0u8; 32768];
             loop {
@@ -234,6 +245,17 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     break;
                 }
                 let chunk = &buf[..n as usize];
+
+                // Track alt-screen state (vim, less, htop, etc.)
+                in_alt_screen = masker::detect_alt_screen(chunk, in_alt_screen);
+
+                if in_alt_screen {
+                    // Alt-screen active — pass through unmasked (TUI apps break with masking)
+                    unsafe {
+                        libc::write(stdout_fd, chunk.as_ptr() as _, chunk.len());
+                    }
+                    continue;
+                }
 
                 let ri = input_ref.lock().unwrap().clone();
                 let (masked, new_tail) = masker::mask_output(

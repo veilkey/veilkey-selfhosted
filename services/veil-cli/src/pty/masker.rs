@@ -46,6 +46,25 @@ pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
     }
 }
 
+// Alt-screen detection sequences (vim, less, htop, etc.)
+const ALT_SCREEN_ENABLE: &[u8] = b"\x1b[?1049h";
+const ALT_SCREEN_DISABLE: &[u8] = b"\x1b[?1049l";
+
+/// Check if data contains alt-screen toggle and return new state.
+pub fn detect_alt_screen(data: &[u8], current: bool) -> bool {
+    // Last occurrence wins (multiple toggles in one chunk)
+    let enable_pos = data.windows(ALT_SCREEN_ENABLE.len())
+        .rposition(|w| w == ALT_SCREEN_ENABLE);
+    let disable_pos = data.windows(ALT_SCREEN_DISABLE.len())
+        .rposition(|w| w == ALT_SCREEN_DISABLE);
+    match (enable_pos, disable_pos) {
+        (Some(e), Some(d)) => e > d, // last one wins
+        (Some(_), None) => true,
+        (None, Some(_)) => false,
+        (None, None) => current,
+    }
+}
+
 /// Plain tail size — last N bytes of output kept for cross-chunk secret detection.
 /// Inspired by secretty's plainTail approach: secrets split across PTY read() calls
 /// are caught by matching against tail+new_data combined.
@@ -484,6 +503,40 @@ mod tests {
             assert!(!result.contains(&secret), "secret leaked for len={}", secret_len);
             assert!(result.contains(":suffix"), "suffix missing for len={}", secret_len);
         }
+    }
+
+    // ── Alt-screen detection ────────────────────────────────────────
+
+    #[test]
+    fn test_alt_screen_enable() {
+        let data = b"some text\x1b[?1049hmore text";
+        assert!(detect_alt_screen(data, false));
+    }
+
+    #[test]
+    fn test_alt_screen_disable() {
+        let data = b"some text\x1b[?1049lmore text";
+        assert!(!detect_alt_screen(data, true));
+    }
+
+    #[test]
+    fn test_alt_screen_no_change() {
+        let data = b"regular output with no escape";
+        assert!(!detect_alt_screen(data, false));
+        assert!(detect_alt_screen(data, true));
+    }
+
+    #[test]
+    fn test_alt_screen_enable_then_disable() {
+        // Both in same chunk — last one wins
+        let data = b"\x1b[?1049hstuff\x1b[?1049l";
+        assert!(!detect_alt_screen(data, false), "disable comes last");
+    }
+
+    #[test]
+    fn test_alt_screen_disable_then_enable() {
+        let data = b"\x1b[?1049lstuff\x1b[?1049h";
+        assert!(detect_alt_screen(data, false), "enable comes last");
     }
 }
 
