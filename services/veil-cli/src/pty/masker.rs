@@ -7,6 +7,50 @@ const RED: &str = "\x1b[31m";
 const GREEN: &str = "\x1b[92m";
 const RESET: &str = "\x1b[0m";
 
+/// Result of cross-chunk mask_map boundary scan.
+#[derive(Debug, PartialEq)]
+pub(crate) struct CrossChunkMatch {
+    /// Backspace erase sequence + VK ref replacement + remaining new_text
+    pub output: String,
+}
+
+/// Check if any mask_map secret spans the tail/new_text boundary.
+/// Only searches the boundary region to avoid matching stale secrets in old tail.
+/// Returns Some(replacement output) if a cross-chunk match is found.
+pub(crate) fn find_cross_chunk_mask(
+    plain_tail: &str,
+    new_text: &str,
+    mask_map: &[(String, String)],
+) -> Option<CrossChunkMatch> {
+    let combined = format!("{}{}", plain_tail, new_text);
+    let tail_len = plain_tail.len();
+    for (plaintext, vk_ref) in mask_map {
+        if plaintext.is_empty() || plaintext.len() < 3 {
+            continue;
+        }
+        let raw_start = tail_len.saturating_sub(plaintext.len() - 1);
+        let search_start = combined.floor_char_boundary(raw_start);
+        let boundary = &combined[search_start..];
+        if let Some(rel_pos) = boundary.find(plaintext.as_str()) {
+            let pos = search_start + rel_pos;
+            let end = pos + plaintext.len();
+            if pos < tail_len && end > tail_len {
+                let tail_part = &combined[pos..tail_len];
+                let new_part = &combined[tail_len..end];
+                let tail_chars = tail_part.chars().count();
+                let erase: String = "\x08 \x08".repeat(tail_chars);
+                let replacement = padded_colorize_ref(vk_ref, plaintext.len());
+                if new_text.starts_with(new_part) {
+                    return Some(CrossChunkMatch {
+                        output: format!("{}{}{}", erase, replacement, &new_text[new_part.len()..]),
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
 pub fn colorize_ref(vk_ref: &str) -> String {
     if vk_ref.contains(":LOCAL:") {
         format!("{}{}{}{}", BOLD, CYAN, vk_ref, RESET)
@@ -143,29 +187,9 @@ pub fn mask_output(
     }
 
     // Cross-chunk mask_map: secrets echoed char-by-char span tail + new_text.
-    // Only search the boundary region to avoid matching stale secrets in old tail.
-    let tail_len = plain_tail.len();
-    for (plaintext, vk_ref) in mask_map.iter() {
-        if plaintext.is_empty() || plaintext.len() < 3 {
-            continue;
-        }
-        let search_start = tail_len.saturating_sub(plaintext.len() - 1);
-        let boundary = &combined[search_start..];
-        if let Some(rel_pos) = boundary.find(plaintext.as_str()) {
-            let pos = search_start + rel_pos;
-            let end = pos + plaintext.len();
-            if pos < tail_len && end > tail_len {
-                let tail_part = &combined[pos..tail_len];
-                let new_part = &combined[tail_len..end];
-                let tail_chars = tail_part.chars().count();
-                let erase: String = "\x08 \x08".repeat(tail_chars);
-                let replacement = padded_colorize_ref(vk_ref, plaintext.len());
-                if output.starts_with(new_part) {
-                    output = format!("{}{}{}", erase, replacement, &output[new_part.len()..]);
-                    output_had_replacement = true;
-                }
-            }
-        }
+    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+        output = m.output;
+        output_had_replacement = true;
     }
 
     // Standard mask_map: secrets fully within new_text
@@ -1228,5 +1252,141 @@ mod tests {
         let input = format!("data={}", secret);
         let result = simulate_mask(&input, &mask_map);
         assert!(!result.contains(&secret[..50]), "long secret prefix leaked");
+    }
+
+    // ── Cross-chunk mask_map (backspace erase) ──────────────────────
+
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(s, r)| (s.to_string(), r.to_string())).collect()
+    }
+
+    #[test]
+    fn cross_chunk_basic_split() {
+        // Secret "password123" split: tail has "password1", new has "23"
+        let map = mk(&[("password123", "VK:LOCAL:aaa")]);
+        let result = find_cross_chunk_mask("password1", "23", &map);
+        assert!(result.is_some(), "should detect cross-chunk secret");
+        let out = result.unwrap().output;
+        let visible = strip_ansi(&out);
+        assert!(visible.contains("VK:LOCAL:aaa"), "must contain VK ref");
+        assert!(out.contains("\x08"), "must have backspace to erase tail chars");
+    }
+
+    #[test]
+    fn cross_chunk_last_char() {
+        // Only last char is in new_text
+        let map = mk(&[("secret!", "VK:LOCAL:bbb")]);
+        let result = find_cross_chunk_mask("secret", "!", &map);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn cross_chunk_first_char_in_tail() {
+        // Only first char is in tail
+        let map = mk(&[("abcdef", "VK:LOCAL:ccc")]);
+        let result = find_cross_chunk_mask("a", "bcdef", &map);
+        assert!(result.is_some());
+    }
+
+    #[test]
+    fn cross_chunk_no_match() {
+        let map = mk(&[("nomatch", "VK:LOCAL:ddd")]);
+        let result = find_cross_chunk_mask("hello world", "foo", &map);
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn cross_chunk_fully_in_tail_ignored() {
+        // Secret is entirely in tail (stale) — must NOT match
+        let map = mk(&[("stale", "VK:LOCAL:eee")]);
+        let result = find_cross_chunk_mask("old stale data here", "newdata", &map);
+        assert!(result.is_none(), "stale secret in tail must be ignored");
+    }
+
+    #[test]
+    fn cross_chunk_fully_in_new_ignored() {
+        // Secret is entirely in new_text — handled by standard mask, not cross-chunk
+        let map = mk(&[("secret", "VK:LOCAL:fff")]);
+        let result = find_cross_chunk_mask("no match here", "has secret in it", &map);
+        assert!(result.is_none(), "fully-in-new should be handled by standard mask");
+    }
+
+    #[test]
+    fn cross_chunk_repeated_invocations() {
+        // Simulates typing the same secret multiple times.
+        // After first replacement, tail contains the secret from bash error.
+        // Second invocation must still match at the boundary, not the stale one.
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+
+        // 1st: tail = prompt, new = last char + enter
+        let result1 = find_cross_chunk_mask(
+            "(VEIL) pve:~ root$ Ghdrhkdg",
+            "h1@\r",
+            &map,
+        );
+        assert!(result1.is_some(), "1st invocation must match");
+
+        // 2nd: tail has stale secret from previous bash error output
+        let result2 = find_cross_chunk_mask(
+            "bash: Ghdrhkdgh1@: 명령어를 찾을 수 없음\n(VEIL) pve:~ root$ Ghdrhkdg",
+            "h1@\r",
+            &map,
+        );
+        assert!(result2.is_some(), "2nd invocation must match at boundary, not stale");
+
+        // 3rd: same pattern
+        let result3 = find_cross_chunk_mask(
+            "을 수 없음\nbash: Ghdrhkdgh1@: 명령어를 찾을 수 없음\n(VEIL) pve:~ root$ Ghdrhkdg",
+            "h1@\r",
+            &map,
+        );
+        assert!(result3.is_some(), "3rd invocation must still match");
+    }
+
+    #[test]
+    fn cross_chunk_utf8_boundary_no_panic() {
+        // Tail ends with multibyte char (한글). search_start must not
+        // land inside a multibyte char — would panic on &combined[search_start..].
+        let map = mk(&[("secret123", "VK:LOCAL:ggg")]);
+        // 한글 "명" is 3 bytes. Tail ends mid-Korean text.
+        let tail = "bash: 명령어를 찾을 수 없음\n(VEIL) root$ secre";
+        let new = "t123";
+        // Must not panic
+        let result = find_cross_chunk_mask(tail, new, &map);
+        assert!(result.is_some(), "should match across utf8 tail");
+    }
+
+    #[test]
+    fn cross_chunk_short_secret_skipped() {
+        // Secrets < 3 chars are skipped to avoid false positives
+        let map = mk(&[("ab", "VK:LOCAL:hhh")]);
+        let result = find_cross_chunk_mask("a", "b", &map);
+        assert!(result.is_none(), "short secrets must be skipped");
+    }
+
+    #[test]
+    fn cross_chunk_empty_tail() {
+        let map = mk(&[("secret", "VK:LOCAL:iii")]);
+        let result = find_cross_chunk_mask("", "secret", &map);
+        assert!(result.is_none(), "no cross-chunk possible with empty tail");
+    }
+
+    #[test]
+    fn cross_chunk_empty_new() {
+        let map = mk(&[("secret", "VK:LOCAL:jjj")]);
+        let result = find_cross_chunk_mask("secret", "", &map);
+        assert!(result.is_none(), "no cross-chunk possible with empty new");
+    }
+
+    #[test]
+    fn cross_chunk_backspace_count_matches_tail_chars() {
+        // Verify the number of backspace sequences matches the chars in tail portion
+        let map = mk(&[("abcdefgh", "VK:LOCAL:kkk")]);
+        let result = find_cross_chunk_mask("abcde", "fgh", &map);
+        assert!(result.is_some());
+        let out = result.unwrap().output;
+        // 5 chars in tail → 5 backspace-space-backspace sequences
+        let bs_count = out.matches("\x08 \x08").count();
+        assert_eq!(bs_count, 5, "must erase exactly 5 tail chars");
     }
 }
