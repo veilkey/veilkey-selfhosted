@@ -146,4 +146,148 @@ mod tests {
         let plain = Tokenizer::strip_ansi(input);
         assert_eq!(plain, b"KEY=sk-abc123");
     }
+
+    // ── Edge cases ────────────────────────────────────────────────
+
+    #[test]
+    fn test_tokenize_empty_input() {
+        let segs = Tokenizer::tokenize(b"");
+        assert!(segs.is_empty());
+    }
+
+    #[test]
+    fn test_tokenize_only_escape_sequences() {
+        let segs = Tokenizer::tokenize(b"\x1b[31m\x1b[0m");
+        assert_eq!(segs.len(), 2);
+        assert!(segs.iter().all(|s| s.kind == SegmentKind::Escape));
+    }
+
+    #[test]
+    fn test_tokenize_osc_with_bel_terminator() {
+        // OSC: \x1b] ... \x07 (BEL)
+        let input = b"\x1b]0;My Title\x07rest";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].kind, SegmentKind::Escape);
+        assert_eq!(segs[0].data, b"\x1b]0;My Title\x07");
+        assert_eq!(segs[1].kind, SegmentKind::Text);
+        assert_eq!(segs[1].data, b"rest");
+    }
+
+    #[test]
+    fn test_tokenize_osc_with_st_terminator() {
+        // OSC: \x1b] ... \x1b\\  (ST)
+        let input = b"\x1b]0;Title\x1b\\rest";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].kind, SegmentKind::Escape);
+        assert_eq!(segs[1].kind, SegmentKind::Text);
+        assert_eq!(segs[1].data, b"rest");
+    }
+
+    #[test]
+    fn test_tokenize_two_byte_escape() {
+        // \x1bM (reverse line feed) is a two-byte escape
+        let input = b"before\x1bMafter";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 3);
+        assert_eq!(segs[0].kind, SegmentKind::Text);
+        assert_eq!(segs[0].data, b"before");
+        assert_eq!(segs[1].kind, SegmentKind::Escape);
+        assert_eq!(segs[1].data, b"\x1bM");
+        assert_eq!(segs[2].kind, SegmentKind::Text);
+        assert_eq!(segs[2].data, b"after");
+    }
+
+    #[test]
+    fn test_tokenize_incomplete_escape_at_end() {
+        // ESC at end of input with no following byte
+        let input = b"text\x1b";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].kind, SegmentKind::Text);
+        assert_eq!(segs[0].data, b"text");
+        assert_eq!(segs[1].kind, SegmentKind::Escape);
+        assert_eq!(segs[1].data, b"\x1b");
+    }
+
+    #[test]
+    fn test_tokenize_incomplete_csi_at_end() {
+        // CSI start \x1b[ but no final byte
+        let input = b"text\x1b[31";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].kind, SegmentKind::Text);
+        assert_eq!(segs[1].kind, SegmentKind::Escape);
+        // The incomplete CSI is still captured as an escape segment
+        assert_eq!(segs[1].data, b"\x1b[31");
+    }
+
+    #[test]
+    fn test_tokenize_long_csi_params() {
+        // CSI with many params: \x1b[38;2;255;128;0m
+        let input = b"\x1b[38;2;255;128;0mcolorful\x1b[0m";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 3);
+        assert_eq!(segs[0].kind, SegmentKind::Escape);
+        assert_eq!(segs[1].kind, SegmentKind::Text);
+        assert_eq!(segs[1].data, b"colorful");
+    }
+
+    #[test]
+    fn test_strip_ansi_empty() {
+        assert!(Tokenizer::strip_ansi(b"").is_empty());
+    }
+
+    #[test]
+    fn test_strip_ansi_no_escapes() {
+        let plain = Tokenizer::strip_ansi(b"plain text");
+        assert_eq!(plain, b"plain text");
+    }
+
+    #[test]
+    fn test_strip_ansi_only_escapes() {
+        let plain = Tokenizer::strip_ansi(b"\x1b[31m\x1b[0m");
+        assert!(plain.is_empty());
+    }
+
+    #[test]
+    fn test_tokenize_consecutive_escapes_no_text_between() {
+        // Multiple escapes with no text in between
+        let input = b"\x1b[1m\x1b[31m\x1b[4m";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 3);
+        assert!(segs.iter().all(|s| s.kind == SegmentKind::Escape));
+    }
+
+    #[test]
+    fn test_tokenize_very_long_sequence() {
+        // Very long CSI parameter string
+        let mut input = Vec::new();
+        input.extend_from_slice(b"\x1b[");
+        for _ in 0..500 {
+            input.push(b'0');
+        }
+        input.push(b'm'); // final byte
+        input.extend_from_slice(b"text");
+
+        let segs = Tokenizer::tokenize(&input);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].kind, SegmentKind::Escape);
+        assert_eq!(segs[1].kind, SegmentKind::Text);
+        assert_eq!(segs[1].data, b"text");
+    }
+
+    #[test]
+    fn test_tokenize_binary_data_with_escape() {
+        // Binary data mixed with ANSI
+        let input = b"\x00\x01\x02\x1b[31m\xff\xfe";
+        let segs = Tokenizer::tokenize(input);
+        assert_eq!(segs.len(), 3);
+        assert_eq!(segs[0].kind, SegmentKind::Text);
+        assert_eq!(segs[0].data, b"\x00\x01\x02");
+        assert_eq!(segs[1].kind, SegmentKind::Escape);
+        assert_eq!(segs[2].kind, SegmentKind::Text);
+        assert_eq!(segs[2].data, b"\xff\xfe");
+    }
 }

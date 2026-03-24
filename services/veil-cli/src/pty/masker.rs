@@ -208,6 +208,12 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
+    // Cross-chunk mask_map: secrets typed char-by-char span tail + new_text.
+    // Same-width refs ensure cursor position stays correct after erase.
+    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+        output = m.output;
+    }
+
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
