@@ -72,6 +72,8 @@ func (s *Server) HandlePatchVaultcenterURL(w http.ResponseWriter, r *http.Reques
 	var req struct {
 		VaultcenterURL string `json:"vaultcenter_url"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return

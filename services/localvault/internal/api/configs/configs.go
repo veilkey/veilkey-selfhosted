@@ -74,6 +74,7 @@ func (h *Handler) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		Key   string  `json:"key"`
 		Value *string `json:"value"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return
@@ -110,6 +111,7 @@ func (h *Handler) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		Configs map[string]string `json:"configs"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return

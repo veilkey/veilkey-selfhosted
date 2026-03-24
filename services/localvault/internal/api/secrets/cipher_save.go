@@ -19,6 +19,7 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 		Version    int    `json:"version"`
 		Scope      string `json:"scope"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return

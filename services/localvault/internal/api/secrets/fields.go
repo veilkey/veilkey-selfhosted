@@ -33,6 +33,7 @@ func (h *Handler) handleSaveSecretFields(w http.ResponseWriter, r *http.Request)
 			Nonce      []byte `json:"nonce"`
 		} `json:"fields"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
 		return

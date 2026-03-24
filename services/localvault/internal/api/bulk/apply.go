@@ -204,6 +204,7 @@ func validateBulkApplyStep(step bulkApplyStep) error {
 }
 
 func (h *Handler) handleBulkApplyPrecheck(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req bulkApplyWorkflowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, 400, "invalid request body")
@@ -470,6 +471,7 @@ func runPostcheck(step bulkApplyStep, name string) (map[string]any, error) {
 }
 
 func (h *Handler) handleBulkApplyExecute(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req bulkApplyWorkflowRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		respondError(w, 400, "invalid request body")

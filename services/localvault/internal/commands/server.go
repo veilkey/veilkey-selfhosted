@@ -140,6 +140,7 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	var req struct {
 		VaultcenterURL string `json:"vaultcenter_url"`
 	}
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request body", http.StatusBadRequest)
 		return

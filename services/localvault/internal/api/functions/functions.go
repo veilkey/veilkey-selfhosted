@@ -85,6 +85,7 @@ func (h *Handler) handleFunctions(w http.ResponseWriter, r *http.Request) {
 			"count":     len(functions),
 		})
 	case http.MethodPost:
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 		var req db.Function
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			respondError(w, http.StatusBadRequest, "invalid json body")
