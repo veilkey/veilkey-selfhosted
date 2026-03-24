@@ -73,7 +73,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.activePage == pageLogin || !m.isEditing() {
 				return m, tea.Quit
 			}
-		case "1", "2", "3", "4", "5":
+		case "1", "2", "3", "4", "5", "6":
 			if m.activePage != pageLogin && !m.isEditing() {
 				idx := int(msg.String()[0] - '1')
 				if idx < len(pages) {
@@ -225,7 +225,7 @@ func (m Model) isEditing() bool {
 		return m.keycenter.creating || m.keycenter.subview == kcPromote
 	}
 	if m.activePage == pageVaults {
-		return m.vaults.creatingSecret || m.vaults.searching || m.vaults.catalogSearching
+		return m.vaults.creatingSecret || m.vaults.searching || m.vaults.catalogSearching || m.vaults.confirmDelete
 	}
 	if m.activePage == pageSettings {
 		return m.settings.creatingToken

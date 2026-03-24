@@ -24,8 +24,8 @@ import (
 
 const (
 	adminSessionCookieName         = "vk_session"
-	adminSessionTTLDefault         = 2 * time.Hour
-	adminSessionIdleTimeoutDefault = 30 * time.Minute
+	adminSessionTTLDefault         = 8 * time.Hour
+	adminSessionIdleTimeoutDefault = 1 * time.Hour
 	adminRevealWindow              = 5 * time.Minute
 	adminTOTPPeriodSeconds         = 30
 	adminTOTPDigits                = 6

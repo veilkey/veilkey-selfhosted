@@ -6,7 +6,32 @@ use std::io;
 use std::os::fd::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+
+/// Read from fd, retrying on EINTR. Returns bytes read, or <= 0 on EOF/error.
+unsafe fn read_eintr(fd: RawFd, buf: &mut [u8]) -> isize {
+    loop {
+        let n = libc::read(fd, buf.as_mut_ptr() as _, buf.len());
+        if n == -1 && *libc::__errno_location() == libc::EINTR {
+            continue;
+        }
+        return n;
+    }
+}
+
+/// Write all bytes to fd, handling partial writes and EINTR.
+unsafe fn write_all_fd(fd: RawFd, buf: &[u8]) {
+    let mut offset = 0;
+    while offset < buf.len() {
+        let n = libc::write(fd, buf[offset..].as_ptr() as _, buf.len() - offset);
+        if n == -1 {
+            if *libc::__errno_location() == libc::EINTR {
+                continue;
+            }
+            break;
+        }
+        offset += n as usize;
+    }
+}
 
 /// Result of processing stdin input for the secret guard.
 #[derive(Debug, PartialEq)]

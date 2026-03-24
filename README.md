@@ -6,7 +6,7 @@
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
     <a href="https://www.npmjs.com/package/veilkey-cli"><img src="https://img.shields.io/npm/v/veilkey-cli?color=cb3837" alt="npm"></a>
-    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT"></a>
+    <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2563eb.svg" alt="AGPL-3.0"></a>
   </p>
 </div>
 
@@ -221,7 +221,7 @@ Both provide: secret management, vault browsing, audit logs, TOTP login, and ser
 
 ### Database Encryption
 
-All databases are encrypted with SQLCipher. The encryption key is automatically derived from the salt file — no manual configuration needed.
+All databases are encrypted with SQLCipher. The encryption key is derived from the master password (KEK) — database can only be opened after unlock.
 
 Direct `sqlite3` access is blocked. Admin password can only be changed via API with the owner password.
 
@@ -280,7 +280,7 @@ See [`CONTRIBUTING.md`](./CONTRIBUTING.md).
 
 ## License
 
-MIT License. See [`LICENSE`](./LICENSE).
+AGPL-3.0 License. See [`LICENSE`](./LICENSE).
 
 ---
 
@@ -321,12 +321,7 @@ that I wanted to propose this approach.
 
 Going forward, AI should be able to manage our information safely.
 
-I keep going back and forth on whether to keep this MIT or switch to AGPL-3.
-
-In two months, I'll be bankrupt.
-
-So here's the deal:
-if this repo hits **10,000 stars by April 1st**, I'll keep it MIT.
+This project is licensed under AGPL-3.0.
 
 If something's missing or broken, let me know.
 I'll fix it.

@@ -83,7 +83,7 @@ func (s *Server) SetupAPIRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/ui/config", s.requireUnlocked(s.handlePatchUIConfig))
 	mux.HandleFunc("GET /api/system/update", s.requireUnlocked(s.handleGetSystemUpdate))
 	mux.HandleFunc("POST /api/system/update", s.requireTrustedIP(s.requireUnlocked(s.handleRunSystemUpdate)))
-	mux.HandleFunc("GET /api/otp-policy", s.handleOTPPolicy)
+	mux.HandleFunc("GET /api/otp-policy", s.requireTrustedIP(s.handleOTPPolicy))
 	mux.HandleFunc("GET /ui", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", http.StatusMovedPermanently)
 	})

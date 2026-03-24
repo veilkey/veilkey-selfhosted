@@ -254,6 +254,19 @@ func (d *DB) UpdateAgentSecretHash(nodeID, secretHash string, encSecret, encNonc
 	return nil
 }
 
+func (d *DB) UpdateVaultUnlockKey(nodeID string, enc, nonce []byte) error {
+	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).
+		Select("VaultUnlockKeyEnc", "VaultUnlockKeyNonce").
+		Updates(&Agent{VaultUnlockKeyEnc: enc, VaultUnlockKeyNonce: nonce})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("agent %s not found", nodeID)
+	}
+	return nil
+}
+
 func (d *DB) DeleteAgentByNodeID(nodeID string) error {
 	now := time.Now().UTC()
 	result := d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("deleted_at", &now)
