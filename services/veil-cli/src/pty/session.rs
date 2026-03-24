@@ -203,7 +203,9 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
             if has_termios {
                 // Save termios and install panic hook before entering raw mode
-                unsafe { PANIC_TERMIOS = old_termios; }
+                unsafe {
+                    PANIC_TERMIOS = old_termios;
+                }
                 PANIC_STDIN_FD.store(stdin_fd, Ordering::Release);
                 PANIC_HAS_TERMIOS.store(true, Ordering::Release);
 
@@ -212,7 +214,9 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     if PANIC_HAS_TERMIOS.load(Ordering::Acquire) {
                         let fd = PANIC_STDIN_FD.load(Ordering::Acquire);
                         if fd >= 0 {
-                            unsafe { libc::tcsetattr(fd, libc::TCSANOW, &raw const PANIC_TERMIOS); }
+                            unsafe {
+                                libc::tcsetattr(fd, libc::TCSANOW, &raw const PANIC_TERMIOS);
+                            }
                         }
                     }
                     prev_hook(info);

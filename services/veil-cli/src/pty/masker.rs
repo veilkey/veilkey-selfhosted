@@ -127,8 +127,7 @@ pub fn mask_output(
             if match_start < tail_len && match_end > tail_len {
                 let overlap = &combined[tail_len..match_end];
                 if !overlap.is_empty() {
-                    cross_chunk_replacements
-                        .push((overlap.to_string(), " ".repeat(overlap.len())));
+                    cross_chunk_replacements.push((overlap.to_string(), " ".repeat(overlap.len())));
                 }
             }
         }
@@ -173,10 +172,8 @@ pub fn mask_output(
             // Already issued above via combined scan — just replace here
             match client.issue(secret) {
                 Ok(ref_canonical) => {
-                    output = output.replace(
-                        secret,
-                        &padded_colorize_ref(&ref_canonical, secret.len()),
-                    );
+                    output =
+                        output.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
                     output_had_replacement = true;
                 }
                 Err(e) => {
@@ -185,10 +182,7 @@ pub fn mask_output(
                         pat.name, e
                     );
                     let redacted = format!("[REDACTED:{}]", pat.name);
-                    output = output.replace(
-                        secret,
-                        &padded_colorize_ref(&redacted, secret.len()),
-                    );
+                    output = output.replace(secret, &padded_colorize_ref(&redacted, secret.len()));
                     output_had_replacement = true;
                 }
             }

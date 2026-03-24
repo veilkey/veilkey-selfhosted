@@ -120,9 +120,7 @@ impl VeilKeyClient {
             Err(ureq::Error::Status(429, _)) => {
                 Err("too many attempts — try again later".to_string())
             }
-            Err(ureq::Error::Status(code, _)) => {
-                Err(format!("login failed (HTTP {})", code))
-            }
+            Err(ureq::Error::Status(code, _)) => Err(format!("login failed (HTTP {})", code)),
             Err(_) => Err("cannot reach VeilKey server".to_string()),
         }
     }
