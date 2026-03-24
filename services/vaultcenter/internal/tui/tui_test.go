@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"crypto/tls"
 	"fmt"
+	"net/http"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -2636,6 +2639,256 @@ func TestClampCursor(t *testing.T) {
 	// Empty list
 	if c := clampCursor(3, 0); c != 0 {
 		t.Fatalf("expected 0, got %d", c)
+	}
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+// TLS / Env / Error State Tests
+// ════════════════════════════════════════════════════════════════════════════════
+
+// extractTLSConfig extracts the TLS config from a Client's http.Transport.
+func extractTLSConfig(c *Client) *tls.Config {
+	transport, ok := c.http.Transport.(*http.Transport)
+	if !ok {
+		return nil
+	}
+	return transport.TLSClientConfig
+}
+
+func TestNewClientDefaultTLSVerify(t *testing.T) {
+	os.Unsetenv("VEILKEY_TLS_INSECURE")
+
+	c := NewClient("https://localhost:8443")
+	if c == nil {
+		t.Fatal("NewClient returned nil")
+	}
+
+	tlsConf := extractTLSConfig(c)
+	if tlsConf == nil {
+		t.Fatal("TLS config is nil")
+	}
+	if tlsConf.InsecureSkipVerify {
+		t.Fatal("InsecureSkipVerify should be false when VEILKEY_TLS_INSECURE is unset")
+	}
+}
+
+func TestNewClientInsecureTLS(t *testing.T) {
+	os.Setenv("VEILKEY_TLS_INSECURE", "1")
+	defer os.Unsetenv("VEILKEY_TLS_INSECURE")
+
+	c := NewClient("https://localhost:8443")
+	if c == nil {
+		t.Fatal("NewClient returned nil")
+	}
+
+	tlsConf := extractTLSConfig(c)
+	if tlsConf == nil {
+		t.Fatal("TLS config is nil")
+	}
+	if !tlsConf.InsecureSkipVerify {
+		t.Fatal("InsecureSkipVerify should be true when VEILKEY_TLS_INSECURE=1")
+	}
+}
+
+func TestNewClientInsecureEnvValues(t *testing.T) {
+	tests := []struct {
+		envVal   string
+		wantSkip bool
+		desc     string
+	}{
+		{"1", true, "only '1' enables insecure mode"},
+		{"0", false, "'0' keeps verification enabled"},
+		{"", false, "empty string keeps verification enabled"},
+		{"true", false, "'true' does NOT enable insecure mode — only '1' works"},
+		{"yes", false, "'yes' does NOT enable insecure mode — only '1' works"},
+		{"TRUE", false, "'TRUE' does NOT enable insecure mode — only '1' works"},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("env=%q", tt.envVal), func(t *testing.T) {
+			if tt.envVal == "" {
+				os.Unsetenv("VEILKEY_TLS_INSECURE")
+			} else {
+				os.Setenv("VEILKEY_TLS_INSECURE", tt.envVal)
+			}
+			defer os.Unsetenv("VEILKEY_TLS_INSECURE")
+
+			c := NewClient("https://localhost:8443")
+			tlsConf := extractTLSConfig(c)
+			if tlsConf == nil {
+				t.Fatal("TLS config is nil")
+			}
+			if tlsConf.InsecureSkipVerify != tt.wantSkip {
+				t.Fatalf("%s: InsecureSkipVerify=%v, want %v",
+					tt.desc, tlsConf.InsecureSkipVerify, tt.wantSkip)
+			}
+		})
+	}
+}
+
+func TestClientRequiredEnvVars(t *testing.T) {
+	// Document: for self-signed certificates, users MUST set:
+	//   VEILKEY_ADDR=https://<host>:<port>
+	//   VEILKEY_TLS_INSECURE=1
+	//
+	// Without VEILKEY_TLS_INSECURE=1, connections to servers with self-signed
+	// certs will fail with x509 certificate errors, causing errMsg propagation
+	// that leaves pages stuck at "Loading...".
+
+	os.Unsetenv("VEILKEY_TLS_INSECURE")
+
+	// Creating a client with an unreachable URL must not panic.
+	c := NewClient("https://192.0.2.1:9999") // RFC 5737 TEST-NET, guaranteed unreachable
+	if c == nil {
+		t.Fatal("NewClient must not return nil even with unreachable URL")
+	}
+
+	// The client should exist and have a valid transport.
+	tlsConf := extractTLSConfig(c)
+	if tlsConf == nil {
+		t.Fatal("transport TLS config must not be nil")
+	}
+}
+
+func TestVaultsLoadErrorSetsOffline(t *testing.T) {
+	m := newVaultsModel()
+	m.loading = true
+	m.secretsLoading = true
+
+	m2, cmd := m.update(errMsg{err: fmt.Errorf("connection refused")}, nil)
+	if m2.loading {
+		t.Fatal("loading must be false after errMsg")
+	}
+	if !m2.offline {
+		t.Fatal("offline must be true after errMsg")
+	}
+	if m2.secretsLoading {
+		t.Fatal("secretsLoading must be reset to false after errMsg — otherwise secrets page stays at Loading")
+	}
+	if m2.metaLoading {
+		t.Fatal("metaLoading must be reset to false after errMsg")
+	}
+	if m2.revealing {
+		t.Fatal("revealing must be reset to false after errMsg")
+	}
+	if cmd != nil {
+		t.Fatal("no follow-up command expected after errMsg")
+	}
+}
+
+func TestPluginsLoadErrorSetsLoaded(t *testing.T) {
+	m := newPluginsModel()
+	// Initially loaded=false, simulating "Loading..." state.
+	if m.loaded {
+		t.Fatal("initial state should have loaded=false")
+	}
+
+	m2, cmd := m.update(errMsg{err: fmt.Errorf("connection refused")}, nil)
+	if !m2.loaded {
+		t.Fatal("loaded must be true after errMsg — otherwise page stays at Loading")
+	}
+	if m2.err == "" {
+		t.Fatal("err should be set after errMsg")
+	}
+	if cmd != nil {
+		t.Fatal("no follow-up command expected after errMsg")
+	}
+}
+
+func TestAllPagesHandleErrMsg(t *testing.T) {
+	errMsgVal := errMsg{err: fmt.Errorf("TLS handshake failed: x509 certificate signed by unknown authority")}
+
+	t.Run("vaults", func(t *testing.T) {
+		m := newVaultsModel()
+		m.loading = true
+		m2, _ := m.update(errMsgVal, nil)
+		if m2.loading {
+			t.Fatal("vaults: loading should be false")
+		}
+		if !m2.offline {
+			t.Fatal("vaults: offline should be true")
+		}
+	})
+
+	t.Run("keycenter", func(t *testing.T) {
+		m := newKeycenterModel()
+		m2, _ := m.update(errMsgVal, nil)
+		if m2.loading {
+			t.Fatal("keycenter: loading should be false")
+		}
+		if !m2.offline {
+			t.Fatal("keycenter: offline should be true")
+		}
+	})
+
+	t.Run("functions", func(t *testing.T) {
+		m := newFunctionsModel()
+		m2, _ := m.update(errMsgVal, nil)
+		if m2.loading {
+			t.Fatal("functions: loading should be false")
+		}
+		if !m2.offline {
+			t.Fatal("functions: offline should be true")
+		}
+	})
+
+	t.Run("settings", func(t *testing.T) {
+		m := newSettingsModel()
+		m2, _ := m.update(errMsgVal, nil)
+		if m2.loading {
+			t.Fatal("settings: loading should be false")
+		}
+		if !m2.offline {
+			t.Fatal("settings: offline should be true")
+		}
+	})
+
+	t.Run("audit", func(t *testing.T) {
+		m := newAuditModel()
+		m2, _ := m.update(errMsgVal, nil)
+		if m2.loading {
+			t.Fatal("audit: loading should be false")
+		}
+		if !m2.offline {
+			t.Fatal("audit: offline should be true")
+		}
+	})
+
+	t.Run("plugins", func(t *testing.T) {
+		m := newPluginsModel()
+		m2, _ := m.update(errMsgVal, nil)
+		if !m2.loaded {
+			t.Fatal("plugins: loaded should be true after errMsg")
+		}
+		if m2.err == "" {
+			t.Fatal("plugins: err should be set")
+		}
+	})
+}
+
+func TestTmuxEnvInheritance(t *testing.T) {
+	// This test documents a requirement for tmux-based TUI usage:
+	//
+	// When running veilkey-tui inside tmux, environment variables like
+	// VEILKEY_ADDR and VEILKEY_TLS_INSECURE must be inherited by new
+	// tmux windows/panes. tmux does NOT automatically forward env vars
+	// from the parent shell.
+	//
+	// Solution: use `tmux setenv VEILKEY_TLS_INSECURE 1` so that all
+	// new windows/panes inherit the variable. Alternatively, set it in
+	// .bashrc / .zshrc.
+	//
+	// We cannot test tmux integration directly in unit tests, but we
+	// verify that the env-based TLS config works correctly when the
+	// env var IS present (covered by TestNewClientInsecureTLS above).
+
+	// Verify that os.Getenv works as expected (sanity check).
+	key := "VEILKEY_TEST_TMUX_INHERIT"
+	os.Setenv(key, "inherited")
+	defer os.Unsetenv(key)
+
+	if got := os.Getenv(key); got != "inherited" {
+		t.Fatalf("expected 'inherited', got %q", got)
 	}
 }
 

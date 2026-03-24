@@ -329,7 +329,8 @@ func mustLoadServer() (*api.Server, string, int) {
 
 	salt, err := os.ReadFile(saltFile)
 	if err != nil {
-		log.Fatal("Salt file not found. Run with 'init --root' first.")
+		log.Printf("WARNING: salt file not found (%s), will attempt recovery from VaultCenter", saltFile)
+		salt = nil
 	}
 
 	addr := os.Getenv("VEILKEY_ADDR")

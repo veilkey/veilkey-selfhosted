@@ -30,8 +30,8 @@ func (a *ChainStoreAdapter) DeleteRef(canonical string) error {
 	return a.DB.DeleteRef(canonical)
 }
 
-func (a *ChainStoreAdapter) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, secretsCount, configsCount, version, keyVersion int) error {
-	return a.DB.UpsertAgent(nodeID, label, vaultHash, vaultName, ip, port, secretsCount, configsCount, version, keyVersion)
+func (a *ChainStoreAdapter) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, secretsCount, configsCount, version, keyVersion int, salt string) error {
+	return a.DB.UpsertAgent(nodeID, label, vaultHash, vaultName, ip, port, secretsCount, configsCount, version, keyVersion, salt)
 }
 
 func (a *ChainStoreAdapter) UpdateAgentState(nodeID string, updates *chain.AgentStateUpdate) error {

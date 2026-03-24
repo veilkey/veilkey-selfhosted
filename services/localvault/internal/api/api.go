@@ -3,6 +3,7 @@ package api
 import (
 	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -142,6 +143,7 @@ func (s *Server) AutoUnlockFromVC(vcURL string) error {
 
 	var result struct {
 		UnlockKey string `json:"unlock_key"`
+		Salt      string `json:"salt"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
 		return fmt.Errorf("decode response: %w", err)
@@ -150,7 +152,23 @@ func (s *Server) AutoUnlockFromVC(vcURL string) error {
 		return fmt.Errorf("empty unlock_key in response")
 	}
 
-	kek := crypto.DeriveKEK(result.UnlockKey, s.salt)
+	salt := s.salt
+	if result.Salt != "" {
+		if decoded, err := base64.StdEncoding.DecodeString(result.Salt); err == nil && len(decoded) > 0 {
+			salt = decoded
+			saltFile := filepath.Join(s.dataDir, "salt")
+			if writeErr := os.WriteFile(saltFile, salt, 0600); writeErr != nil {
+				log.Printf("AutoUnlockFromVC: failed to cache salt file: %v", writeErr)
+			} else {
+				s.salt = salt
+				log.Println("AutoUnlockFromVC: salt restored from VaultCenter")
+			}
+		}
+	}
+	if len(salt) == 0 {
+		return fmt.Errorf("no salt available (local file missing and VaultCenter did not provide one)")
+	}
+	kek := crypto.DeriveKEK(result.UnlockKey, salt)
 	return s.Unlock(kek)
 }
 

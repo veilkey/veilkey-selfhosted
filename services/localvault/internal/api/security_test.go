@@ -200,3 +200,46 @@ func TestSourceSecurity_AdminDiagnostics_RequiresUnlocked(t *testing.T) {
 		}
 	}
 }
+
+func extractFn(code, sig string) string {
+	i := strings.Index(code, sig)
+	if i < 0 { return "" }
+	r := code[i:]
+	n := strings.Index(r[1:], "\nfunc ")
+	if n < 0 { return r }
+	return r[:n+1]
+}
+
+// ══ Salt on chain ═══════════════════════════════════════════════
+
+func TestHeartbeatSendsSalt(t *testing.T) {
+	s, _ := os.ReadFile("heartbeat.go")
+	c := string(s)
+	if !strings.Contains(c, "base64") {
+		t.Error("heartbeat must send salt as base64")
+	}
+	if !strings.Contains(c, "len(saltBytes) > 0") {
+		t.Error("must skip nil salt")
+	}
+}
+
+func TestAutoUnlockReceivesSalt(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) AutoUnlockFromVC(")
+	if !strings.Contains(b, "result.Salt") {
+		t.Error("must handle salt in response")
+	}
+	if !strings.Contains(b, `len(salt) == 0`) {
+		t.Error("must error when no salt")
+	}
+}
+
+func TestSaltFileNotFatal(t *testing.T) {
+	s, _ := os.ReadFile("../commands/server.go")
+	for _, line := range strings.Split(string(s), "\n") {
+		lower := strings.ToLower(line)
+		if strings.Contains(line, "log.Fatal") && strings.Contains(lower, "salt") {
+			t.Error("salt file missing must be warning not fatal")
+		}
+	}
+}

@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -94,6 +95,9 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 		"secrets_count":   secretsCount,
 		"configs_count":   configsCount,
 		"version":         version,
+	}
+	if saltBytes := s.Salt(); len(saltBytes) > 0 {
+		payload["salt"] = base64.StdEncoding.EncodeToString(saltBytes)
 	}
 	// Include registration token for first-time registration
 	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {

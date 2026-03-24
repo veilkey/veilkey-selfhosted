@@ -221,3 +221,47 @@ func TestSource_ApprovalTokenChallenge_DefaultStatusPending(t *testing.T) {
 		t.Error("ApprovalTokenChallenge.Status must default to 'pending'")
 	}
 }
+
+func extractFn(code, sig string) string {
+	i := strings.Index(code, sig)
+	if i < 0 { return "" }
+	r := code[i:]
+	n := strings.Index(r[1:], "\nfunc ")
+	if n < 0 { return r }
+	return r[:n+1]
+}
+
+// ══ Salt on chain ═══════════════════════════════════════════════
+
+func TestAgentModelHasSaltField(t *testing.T) {
+	s, _ := os.ReadFile("../db/models.go")
+	if !strings.Contains(string(s), `gorm:"column:salt"`) {
+		t.Error("Agent model must have Salt field")
+	}
+}
+
+func TestHeartbeatAcceptsSalt(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_heartbeat.go")
+	c := string(s)
+	if !strings.Contains(c, `json:"salt`) {
+		t.Error("heartbeat req must have Salt field")
+	}
+	if !strings.Contains(c, "req.Salt") {
+		t.Error("upsertPayload must include req.Salt")
+	}
+}
+
+func TestUnlockKeyResponseIncludesSalt(t *testing.T) {
+	s, _ := os.ReadFile("hkm/hkm_agent_unlock_key.go")
+	if !strings.Contains(string(s), `"salt"`) {
+		t.Error("unlock-key response must include salt")
+	}
+}
+
+func TestUpsertAgentHasSaltParam(t *testing.T) {
+	s, _ := os.ReadFile("../db/db_agent.go")
+	b := extractFn(string(s), "func (d *DB) UpsertAgent(")
+	if !strings.Contains(b, "salt string") {
+		t.Error("UpsertAgent needs salt param")
+	}
+}

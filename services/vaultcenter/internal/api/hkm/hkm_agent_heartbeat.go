@@ -70,6 +70,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		Version           int      `json:"version"`
 		RegistrationToken string   `json:"registration_token"`
 		VaultUnlockKey    string   `json:"vault_unlock_key,omitempty"`
+		Salt              string   `json:"salt,omitempty"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -240,6 +241,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		ConfigsCount: req.ConfigsCount,
 		Version:      req.Version,
 		KeyVersion:   req.KeyVersion,
+		Salt:         req.Salt,
 	}
 	// Both new and existing agents use Commit to avoid read-after-write race.
 	if _, err := h.deps.SubmitTx(r.Context(), chain.TxUpsertAgent, upsertPayload); err != nil {

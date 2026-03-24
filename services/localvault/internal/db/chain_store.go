@@ -36,7 +36,7 @@ func (a *ChainStoreAdapter) DeleteRef(_ string) error {
 }
 
 // UpsertAgent is a no-op on localvault.
-func (a *ChainStoreAdapter) UpsertAgent(_, _, _, _, _ string, _, _, _, _, _ int) error {
+func (a *ChainStoreAdapter) UpsertAgent(_, _, _, _, _ string, _, _, _, _, _ int, _ string) error {
 	return nil
 }
 

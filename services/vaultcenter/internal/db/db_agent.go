@@ -28,7 +28,7 @@ func generateNextAgentHash() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, secretsCount, configsCount, version, keyVersion int) error {
+func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, secretsCount, configsCount, version, keyVersion int, salt string) error {
 	if port == 0 {
 		port = agentapi.DefaultPort
 	}
@@ -52,6 +52,7 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 			SecretsCount: secretsCount,
 			ConfigsCount: configsCount,
 			Version:      version,
+			Salt:         salt,
 		}
 		if err := d.conn.Create(&agent).Error; err != nil {
 			return err
@@ -70,6 +71,9 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 	existing.SecretsCount = secretsCount
 	existing.ConfigsCount = configsCount
 	existing.Version = version
+	if salt != "" {
+		existing.Salt = salt
+	}
 	if err := d.conn.Save(&existing).Error; err != nil {
 		return err
 	}

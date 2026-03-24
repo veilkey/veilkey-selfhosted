@@ -90,5 +90,6 @@ func (h *Handler) handleAgentUnlockKey(w http.ResponseWriter, r *http.Request) {
 	log.Printf("agent: vault_unlock_key served for %s (%s)", agent.NodeID, agent.Label)
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"unlock_key": string(unlockKey),
+		"salt":       agent.Salt,
 	})
 }
