@@ -6,6 +6,7 @@ use std::io;
 use std::os::fd::{AsRawFd, RawFd};
 use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
+use std::time::Duration;
 
 /// Result of processing stdin input for the secret guard.
 #[derive(Debug, PartialEq)]
@@ -395,7 +396,31 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                 if n <= 0 {
                     break;
                 }
-                let chunk = &buf[..n as usize];
+                let mut total = n as usize;
+
+                // Output coalesce: 5ms drain loop to collect char-by-char echo
+                // into larger chunks, improving cross-chunk secret detection.
+                std::thread::sleep(Duration::from_millis(5));
+                loop {
+                    let mut pfd = libc::pollfd {
+                        fd: master_fd,
+                        events: libc::POLLIN,
+                        revents: 0,
+                    };
+                    let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
+                    if ready <= 0 || total >= buf.len() {
+                        break;
+                    }
+                    let extra = unsafe {
+                        read_eintr(master_fd, &mut buf[total..])
+                    };
+                    if extra <= 0 {
+                        break;
+                    }
+                    total += extra as usize;
+                }
+
+                let chunk = &buf[..total];
 
                 // Track alt-screen state (vim, less, htop, etc.)
                 in_alt_screen = masker::detect_alt_screen(chunk, in_alt_screen);

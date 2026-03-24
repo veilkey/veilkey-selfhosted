@@ -3,6 +3,7 @@ package api
 import (
 	"embed"
 	"io/fs"
+	"log"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -16,7 +17,7 @@ var embeddedAssets embed.FS
 func (s *Server) assetHandler() http.Handler {
 	sub, err := fs.Sub(embeddedAssets, "assets")
 	if err != nil {
-		panic(err)
+		log.Fatalf("embedded assets: %v", err)
 	}
 	legacy := http.StripPrefix("/assets/", http.FileServer(http.FS(sub)))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -401,8 +401,20 @@ func runPostcheck(step bulkApplyStep, name string) (map[string]any, error) {
 			result["message"] = err.Error()
 			return result, err
 		}
-		serviceSettings, _ := payload["ServiceSettings"].(map[string]any)
-		sqlSettings, _ := payload["SqlSettings"].(map[string]any)
+		serviceSettings, ok := payload["ServiceSettings"].(map[string]any)
+		if !ok {
+			err := fmt.Errorf("ServiceSettings section missing or invalid")
+			result["status"] = "failed"
+			result["message"] = err.Error()
+			return result, err
+		}
+		sqlSettings, ok := payload["SqlSettings"].(map[string]any)
+		if !ok {
+			err := fmt.Errorf("SqlSettings section missing or invalid")
+			result["status"] = "failed"
+			result["message"] = err.Error()
+			return result, err
+		}
 		if strings.TrimSpace(fmt.Sprint(serviceSettings["SiteURL"])) == "" {
 			err := fmt.Errorf("ServiceSettings.SiteURL is required")
 			result["status"] = "failed"

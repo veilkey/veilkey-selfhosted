@@ -29,8 +29,8 @@ func (h *Handler) Register(
 ) {
 	trusted := requireTrustedIP
 
-	mux.HandleFunc("GET /api/configs", h.handleListConfigs)
-	mux.HandleFunc("GET /api/configs/{key}", h.handleGetConfig)
+	mux.HandleFunc("GET /api/configs", trusted(h.handleListConfigs))
+	mux.HandleFunc("GET /api/configs/{key}", trusted(h.handleGetConfig))
 	mux.HandleFunc("POST /api/configs", trusted(h.handleSaveConfig))
 	mux.HandleFunc("PUT /api/configs/bulk", trusted(h.handleSaveConfigsBulk))
 	mux.HandleFunc("DELETE /api/configs/{key}", trusted(h.handleDeleteConfig))

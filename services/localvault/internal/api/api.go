@@ -248,11 +248,16 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	var req struct {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
 		s.respondError(w, http.StatusBadRequest, "password is required")
+		return
+	}
+	if len(req.Password) > 256 {
+		s.respondError(w, http.StatusBadRequest, "password too long")
 		return
 	}
 
@@ -282,7 +287,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		clientIP := strings.Split(r.RemoteAddr, ":")[0]
+		clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 		allowed := s.trustedIPs[clientIP]
 		if !allowed {
 			ip := net.ParseIP(clientIP)
@@ -307,8 +312,7 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) requireAgentSecret(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.IsLocked() {
-			// Can't validate when locked
-			next(w, r)
+			s.respondError(w, http.StatusServiceUnavailable, "server is locked")
 			return
 		}
 		info, err := s.db.GetNodeInfo()
@@ -380,11 +384,11 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("GET /api/node-info", s.requireUnlocked(s.handleStatus))
 
 	// Lifecycle (reencrypt + status transitions — spans VK and VE)
-	mux.HandleFunc("POST /api/reencrypt", s.requireUnlocked(s.handleReencrypt))
-	mux.HandleFunc("POST /api/activate", s.requireUnlocked(s.handleActivate))
-	mux.HandleFunc("POST /api/archive", s.requireUnlocked(s.handleArchive))
-	mux.HandleFunc("POST /api/block", s.requireUnlocked(s.handleBlock))
-	mux.HandleFunc("POST /api/revoke", s.requireUnlocked(s.handleRevoke))
+	mux.HandleFunc("POST /api/reencrypt", s.requireTrustedIP(s.requireUnlocked(s.handleReencrypt)))
+	mux.HandleFunc("POST /api/activate", s.requireTrustedIP(s.requireUnlocked(s.handleActivate)))
+	mux.HandleFunc("POST /api/archive", s.requireTrustedIP(s.requireUnlocked(s.handleArchive)))
+	mux.HandleFunc("POST /api/block", s.requireTrustedIP(s.requireUnlocked(s.handleBlock)))
+	mux.HandleFunc("POST /api/revoke", s.requireTrustedIP(s.requireUnlocked(s.handleRevoke)))
 
 	// Domain subpackage routes
 	s.secretsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP, s.requireAgentSecret)
@@ -401,6 +405,7 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		next.ServeHTTP(w, r)
 	})
 }
