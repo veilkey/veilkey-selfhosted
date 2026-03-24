@@ -4,9 +4,34 @@ use nix::unistd::{execvp, fork, ForkResult};
 use std::ffi::CString;
 use std::io;
 use std::os::fd::{AsRawFd, RawFd};
-use std::sync::atomic::{AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
-use std::time::Duration;
+
+/// Read from fd, retrying on EINTR. Returns bytes read, or <= 0 on EOF/error.
+unsafe fn read_eintr(fd: RawFd, buf: &mut [u8]) -> isize {
+    loop {
+        let n = libc::read(fd, buf.as_mut_ptr() as _, buf.len());
+        if n == -1 && *libc::__errno_location() == libc::EINTR {
+            continue;
+        }
+        return n;
+    }
+}
+
+/// Write all bytes to fd, handling partial writes and EINTR.
+unsafe fn write_all_fd(fd: RawFd, buf: &[u8]) {
+    let mut offset = 0;
+    while offset < buf.len() {
+        let n = libc::write(fd, buf[offset..].as_ptr() as _, buf.len() - offset);
+        if n == -1 {
+            if *libc::__errno_location() == libc::EINTR {
+                continue;
+            }
+            break;
+        }
+        offset += n as usize;
+    }
+}
 
 use crate::api::VeilKeyClient;
 use crate::config::{load_config, CompiledPattern};
@@ -16,6 +41,10 @@ use super::masker;
 use super::sync as mask_sync;
 
 static MASTER_FD: AtomicI32 = AtomicI32::new(-1);
+/// Panic hook state for terminal restoration.
+static PANIC_STDIN_FD: AtomicI32 = AtomicI32::new(-1);
+static PANIC_HAS_TERMIOS: AtomicBool = AtomicBool::new(false);
+static mut PANIC_TERMIOS: libc::termios = unsafe { std::mem::zeroed() };
 
 extern "C" fn handle_sigwinch(_: libc::c_int) {
     let fd = MASTER_FD.load(Ordering::Relaxed);
@@ -173,6 +202,26 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             }
 
             if has_termios {
+                // Save termios and install panic hook before entering raw mode
+                unsafe {
+                    PANIC_TERMIOS = old_termios;
+                }
+                PANIC_STDIN_FD.store(stdin_fd, Ordering::Release);
+                PANIC_HAS_TERMIOS.store(true, Ordering::Release);
+
+                let prev_hook = std::panic::take_hook();
+                std::panic::set_hook(Box::new(move |info| {
+                    if PANIC_HAS_TERMIOS.load(Ordering::Acquire) {
+                        let fd = PANIC_STDIN_FD.load(Ordering::Acquire);
+                        if fd >= 0 {
+                            unsafe {
+                                libc::tcsetattr(fd, libc::TCSANOW, &raw const PANIC_TERMIOS);
+                            }
+                        }
+                    }
+                    prev_hook(info);
+                }));
+
                 unsafe {
                     let mut raw = old_termios;
                     libc::cfmakeraw(&mut raw);
@@ -192,122 +241,86 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let recent_input = Arc::new(Mutex::new(String::new()));
 
             // stdin → PTY master (input thread)
+            // Terminal response sequences (DSR, OSC) are passed through to PTY
+            // but excluded from recent_input to avoid false masking skips.
             let master_wr = master_fd;
             let input_tracker = recent_input.clone();
             std::thread::spawn(move || {
                 let mut buf = [0u8; 4096];
                 loop {
-                    let n = unsafe { libc::read(stdin_fd, buf.as_mut_ptr() as _, buf.len()) };
+                    let n = unsafe { read_eintr(stdin_fd, &mut buf) };
                     if n <= 0 {
                         break;
                     }
-                    if let Ok(s) = std::str::from_utf8(&buf[..n as usize]) {
-                        let mut tracker = input_tracker.lock().unwrap();
-                        tracker.push_str(s);
-                        if tracker.len() > 4096 {
-                            // Find a char boundary at or after the trim point
-                            let start = tracker.len() - 4096;
-                            let start = tracker.ceil_char_boundary(start);
-                            *tracker = tracker[start..].to_string();
+                    let data = &buf[..n as usize];
+                    // Track user input (exclude terminal response sequences)
+                    if let Ok(s) = std::str::from_utf8(data) {
+                        // Filter out escape sequences from input tracking
+                        let filtered: String = s
+                            .chars()
+                            .filter(|&c| c >= ' ' || c == '\n' || c == '\r' || c == '\t')
+                            .collect();
+                        if !filtered.is_empty() {
+                            let mut tracker = input_tracker.lock().unwrap();
+                            tracker.push_str(&filtered);
+                            if tracker.len() > 4096 {
+                                let start = tracker.len() - 4096;
+                                let start = tracker.ceil_char_boundary(start);
+                                *tracker = tracker[start..].to_string();
+                            }
                         }
                     }
+                    // Always forward raw data to PTY (including escape sequences)
                     unsafe {
-                        libc::write(master_wr, buf.as_ptr() as _, n as _);
+                        write_all_fd(master_wr, data);
                     }
                 }
             });
 
             // PTY master → stdout (output thread with masking)
+            // Uses a plain_tail buffer (8KB lookback) to catch secrets split across
+            // PTY read() chunks. Inspired by secretty's plainTail approach:
+            // each chunk is masked with tail+chunk combined for detection.
             let mask = mask_map.clone();
             let ve = ve_map.clone();
             let input_ref = recent_input.clone();
             let stdout_fd = io::stdout().as_raw_fd();
-            let mut partial_buf: Vec<u8> = Vec::new();
+            let mut plain_tail = String::new();
+            let mut in_alt_screen = false;
 
             let mut buf = [0u8; 32768];
             loop {
-                let n = unsafe { libc::read(master_fd, buf.as_mut_ptr() as _, buf.len()) };
+                let n = unsafe { read_eintr(master_fd, &mut buf) };
                 if n <= 0 {
                     break;
                 }
-                let n = n as usize;
-                let chunk = &buf[..n];
+                let chunk = &buf[..n as usize];
 
-                if let Some(last_nl) = chunk.iter().rposition(|&b| b == b'\n') {
-                    // Newline found — flush partial + chunk through masker
-                    let mut to_mask = Vec::new();
-                    to_mask.extend_from_slice(&partial_buf);
-                    to_mask.extend_from_slice(&chunk[..last_nl + 1]);
-                    partial_buf.clear();
+                // Track alt-screen state (vim, less, htop, etc.)
+                in_alt_screen = masker::detect_alt_screen(chunk, in_alt_screen);
 
-                    let ri = input_ref.lock().unwrap().clone();
-                    let masked = masker::mask_output(
-                        &to_mask,
-                        &mask.read().unwrap(),
-                        &ve.read().unwrap(),
-                        &patterns,
-                        &client,
-                        &ri,
-                    );
-
+                if in_alt_screen {
+                    // Alt-screen active — pass through unmasked (TUI apps break with masking)
                     unsafe {
-                        libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
+                        write_all_fd(stdout_fd, chunk);
                     }
-
-                    // Remainder → buffer
-                    if last_nl + 1 < n {
-                        partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
-                    }
-                } else {
-                    // No newline — buffer, flush after short wait if no more data
-                    partial_buf.extend_from_slice(chunk);
-                    std::thread::sleep(Duration::from_millis(20));
-                    let mut peek = [0u8; 1];
-                    unsafe {
-                        let flags = libc::fcntl(master_fd, libc::F_GETFL);
-                        libc::fcntl(master_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                        let peek_result = libc::read(master_fd, peek.as_mut_ptr() as _, 1);
-                        libc::fcntl(master_fd, libc::F_SETFL, flags);
-                        if peek_result > 0 {
-                            partial_buf.push(peek[0]);
-                        } else {
-                            // No more data — mask and flush (catches history
-                            // recall, pasted secrets, prompts pass through unchanged)
-                            let ri = input_ref.lock().unwrap().clone();
-                            let flushed = masker::mask_output(
-                                &partial_buf,
-                                &mask.read().unwrap(),
-                                &ve.read().unwrap(),
-                                &patterns,
-                                &client,
-                                &ri,
-                            );
-                            if flushed != partial_buf {
-                                // Secret was masked — clear line first to
-                                // overwrite any partial text already displayed
-                                let clear = b"\r\x1b[2K";
-                                libc::write(stdout_fd, clear.as_ptr() as _, clear.len());
-                            }
-                            libc::write(stdout_fd, flushed.as_ptr() as _, flushed.len());
-                            partial_buf.clear();
-                        }
-                    }
+                    continue;
                 }
-            }
 
-            // Flush remaining
-            if !partial_buf.is_empty() {
                 let ri = input_ref.lock().unwrap().clone();
-                let masked = masker::mask_output(
-                    &partial_buf,
+                let (masked, new_tail) = masker::mask_output(
+                    chunk,
                     &mask.read().unwrap(),
                     &ve.read().unwrap(),
                     &patterns,
                     &client,
                     &ri,
+                    &plain_tail,
                 );
+                plain_tail = new_tail;
+
                 unsafe {
-                    libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
+                    write_all_fd(stdout_fd, &masked);
                 }
             }
 
