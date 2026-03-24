@@ -213,10 +213,9 @@ func (h *Handler) resolvePlaceholders(vault, text string) string {
 			continue
 		}
 		kind := strings.ToLower(parts[0])
-		switch kind {
-		case "vk":
+		if kind == "vk" {
 			kind = "secret"
-		case "ve":
+		} else if kind == "ve" {
 			kind = "config"
 		}
 		resolved, ok := h.sync.ResolveTemplateValue(vault, kind, parts[1])
