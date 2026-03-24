@@ -696,14 +696,13 @@ func (s *Server) SetupRoutes() http.Handler {
 	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)
 	s.adminHandler.Register(mux, s.requireReadyForOps, s.requireTrustedIP)
-	// tracked-ref cleanup routes delegate to the hkm handler (registered after IsHKM check below)
-	if s.IsHKM() {
-		s.hkmHandler.Register(mux, s.requireTrustedIP, s.requireReadyForOps, s.requireAdminAuth)
-		s.bulkHandler.Register(mux, s.requireTrustedIP)
-		s.pluginHandler.Register(mux, s.requireTrustedIP)
-		// Admin tracked-ref cleanup routes require an active hkm handler.
-		mux.HandleFunc("POST /api/admin/tracked-refs/cleanup", s.requireReadyForOps(s.adminHandler.RequireAdminSession(s.hkmHandler.HandleTrackedRefCleanup)))
-	}
+	// HKM routes always registered — requireReadyForOps returns 503 until unlock.
+	// Previously gated by IsHKM() which was false at startup (identity nil before
+	// DB opens on unlock), causing permanent 404 for /api/agents/* routes.
+	s.hkmHandler.Register(mux, s.requireTrustedIP, s.requireReadyForOps, s.requireAdminAuth)
+	s.bulkHandler.Register(mux, s.requireTrustedIP)
+	s.pluginHandler.Register(mux, s.requireTrustedIP)
+	mux.HandleFunc("POST /api/admin/tracked-refs/cleanup", s.requireReadyForOps(s.adminHandler.RequireAdminSession(s.hkmHandler.HandleTrackedRefCleanup)))
 
 	return securityHeadersMiddleware(logMiddleware(TxActorMiddleware(mux)))
 }
