@@ -462,3 +462,84 @@ func TestNilSaltPreventsKEKDerivation(t *testing.T) {
 		t.Error("must reject nil salt before DeriveKEK")
 	}
 }
+
+// ══ MaxBytesReader on all JSON decoders ═════════════════════════
+
+func TestAllLVJSONDecodersHaveMaxBytes(t *testing.T) {
+	files := []struct {
+		path string
+		desc string
+	}{
+		{"lifecycle.go", "lifecycle handlers"},
+		{"install_wizard.go", "install wizard"},
+		{"api.go", "api handlers"},
+	}
+	for _, f := range files {
+		src, err := os.ReadFile(f.path)
+		if err != nil {
+			t.Logf("skip %s: %v", f.path, err)
+			continue
+		}
+		code := string(src)
+		lines := strings.Split(code, "\n")
+		for i, line := range lines {
+			if strings.Contains(line, "json.NewDecoder(r.Body)") {
+				// Check preceding 3 lines for MaxBytesReader
+				found := false
+				for j := max(0, i-6); j < i; j++ {
+					if strings.Contains(lines[j], "MaxBytesReader") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("%s:%d: json.NewDecoder without MaxBytesReader", f.path, i+1)
+				}
+			}
+		}
+	}
+}
+
+func TestSubpackageJSONDecodersHaveMaxBytes(t *testing.T) {
+	subpkgs := []struct {
+		path string
+		desc string
+	}{
+		{"secrets/cipher_save.go", "cipher save"},
+		{"secrets/secrets.go", "secrets resolve"},
+		{"secrets/fields.go", "secret fields"},
+		{"configs/configs.go", "config CRUD"},
+		{"bulk/apply.go", "bulk apply"},
+		{"functions/functions.go", "functions"},
+	}
+	for _, f := range subpkgs {
+		src, err := os.ReadFile(f.path)
+		if err != nil {
+			t.Logf("skip %s: %v", f.path, err)
+			continue
+		}
+		code := string(src)
+		lines := strings.Split(code, "\n")
+		for i, line := range lines {
+			if strings.Contains(line, "json.NewDecoder(r.Body)") {
+				found := false
+				for j := max(0, i-6); j < i; j++ {
+					if strings.Contains(lines[j], "MaxBytesReader") {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Errorf("%s:%d: json.NewDecoder without MaxBytesReader", f.path, i+1)
+				}
+			}
+		}
+	}
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}

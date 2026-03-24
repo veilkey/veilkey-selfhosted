@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,4 +41,28 @@ func TestProtocolTypes(t *testing.T) {
 	if hook.Depends[0] != "systemd:reload" { t.Errorf("depends = %v", hook.Depends) }
 	m := PluginManifest{APIVersion: "veilkey.io/v1", Kind: "Plugin", Name: "x", WasmFile: "x.wasm"}
 	if m.Kind != "Plugin" { t.Errorf("kind = %q", m.Kind) }
+}
+
+// ══ Error sanitization ══════════════════════════════════════════
+
+func TestPluginHandlerNoRawErrors(t *testing.T) {
+	src, err := os.ReadFile("handler.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := string(src)
+	for i, line := range strings.Split(code, "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("handler.go:%d: respondError must not expose raw err.Error()", i+1)
+		}
+	}
+}
+
+func TestPluginHandlerLogsErrors(t *testing.T) {
+	src, _ := os.ReadFile("handler.go")
+	code := string(src)
+	// Must import log package for server-side error logging
+	if !strings.Contains(code, `"log"`) {
+		t.Error("handler.go must import log package for error logging")
+	}
 }

@@ -480,3 +480,41 @@ func TestSMTPErrorNoCredentials(t *testing.T) {
 		}
 	}
 }
+
+// ══ Error sanitization regression ═══════════════════════════════
+
+func TestNoRawErrorsInPluginHandler(t *testing.T) {
+	src, _ := os.ReadFile("../../plugin/handler.go")
+	if src == nil {
+		t.Skip("plugin handler not accessible")
+	}
+	for i, line := range strings.Split(string(src), "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("plugin/handler.go:%d leaks raw error", i+1)
+		}
+	}
+}
+
+func TestNoRawErrorsInPasskey(t *testing.T) {
+	src, _ := os.ReadFile("admin/passkey.go")
+	if src == nil {
+		t.Skip("passkey not accessible")
+	}
+	for i, line := range strings.Split(string(src), "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("passkey.go:%d leaks raw error", i+1)
+		}
+	}
+}
+
+func TestNoRawErrorsInFunctionRun(t *testing.T) {
+	src, _ := os.ReadFile("hkm/hkm_global_function_run.go")
+	if src == nil {
+		t.Skip("function run not accessible")
+	}
+	for i, line := range strings.Split(string(src), "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("function_run.go:%d leaks raw error", i+1)
+		}
+	}
+}

@@ -328,3 +328,17 @@ func extractFnBody(code, sig string) string {
 	}
 	return rest[:next+1]
 }
+
+// ══ Error sanitization ══════════════════════════════════════════
+
+func TestPasskeyNoRawErrors(t *testing.T) {
+	src, err := os.ReadFile("passkey.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, line := range strings.Split(string(src), "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("passkey.go:%d: respondError must not expose raw err.Error()", i+1)
+		}
+	}
+}

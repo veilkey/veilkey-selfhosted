@@ -57,3 +57,12 @@ func TestLimitedWriterExists(t *testing.T) {
 		t.Error("limitedWriter must handle overflow gracefully")
 	}
 }
+
+func TestFunctionRunNoRawErrors(t *testing.T) {
+	src, _ := os.ReadFile("hkm_global_function_run.go")
+	for i, line := range strings.Split(string(src), "\n") {
+		if strings.Contains(line, "respondError") && strings.Contains(line, "err.Error()") {
+			t.Errorf("line %d: respondError must not expose raw err.Error()", i+1)
+		}
+	}
+}
