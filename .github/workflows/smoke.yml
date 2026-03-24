@@ -95,21 +95,20 @@ jobs:
 
       - name: Init and unlock LocalVault
         run: |
-          # Wait for localvault to be reachable
+          # Wait for localvault to be reachable (setup mode)
           for i in $(seq 1 30); do
             LV_STATUS=$(curl -sk --max-time 5 https://localhost:11180/health 2>/dev/null || true)
             echo "  [$i] LocalVault: $LV_STATUS"
             if echo "$LV_STATUS" | grep -q '"status"'; then break; fi
             sleep 3
           done
+          # Init via CLI (password auto-generated, no stdin needed)
           docker compose exec -T localvault sh -c \
-            'echo "smoke-test-password" | veilkey-localvault init --root --center https://vaultcenter:10181'
+            'veilkey-localvault init --root --center https://vaultcenter:10181'
           docker compose restart localvault
           sleep 5
+          # LocalVault should auto-unlock via vault_key file (bootstrap mode)
           for i in $(seq 1 20); do
-            curl -sk --max-time 5 -X POST https://localhost:11180/api/unlock \
-              -H 'Content-Type: application/json' \
-              -d '{"password":"smoke-test-password"}' 2>/dev/null || true
             HEALTH=$(curl -sk --max-time 5 https://localhost:11180/health 2>/dev/null || true)
             echo "  [$i] Health: $HEALTH"
             if echo "$HEALTH" | grep -q '"status":"ok"'; then break; fi
