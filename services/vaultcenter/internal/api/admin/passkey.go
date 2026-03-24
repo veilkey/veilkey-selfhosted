@@ -188,7 +188,7 @@ func (h *Handler) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Req
 	}
 	authData, err := parseAttestationObject(attestationBytes)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid attestationObject: "+err.Error())
+		respondError(w, http.StatusBadRequest, "invalid attestation data")
 		return
 	}
 
@@ -235,14 +235,14 @@ func (h *Handler) handlePasskeyRegisterFinish(w http.ResponseWriter, r *http.Req
 	// Parse COSE key
 	pubKey, err := parseCOSEES256Key(coseKeyBytes)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "invalid COSE key: "+err.Error())
+		respondError(w, http.StatusBadRequest, "invalid COSE key format")
 		return
 	}
 
 	// Serialize public key for storage (uncompressed point: 0x04 + X + Y)
 	ecdhKey, err := pubKey.ECDH()
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "failed to convert public key: "+err.Error())
+		respondError(w, http.StatusBadRequest, "invalid public key format")
 		return
 	}
 	pubKeyBytes := ecdhKey.Bytes()

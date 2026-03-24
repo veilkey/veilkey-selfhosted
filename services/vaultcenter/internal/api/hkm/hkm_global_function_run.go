@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -253,13 +254,15 @@ func (h *Handler) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request
 
 	rendered, err := h.renderGlobalFunctionCommand(fn)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "command render failed: "+err.Error())
+		log.Printf("function run render: %v", err)
+		respondError(w, http.StatusBadRequest, "command render failed")
 		return
 	}
 
 	env, appliedEnvKeys, err := h.buildGlobalFunctionRunEnv(req)
 	if err != nil {
-		respondError(w, http.StatusBadRequest, "env build failed: "+err.Error())
+		log.Printf("function run env: %v", err)
+		respondError(w, http.StatusBadRequest, "env build failed")
 		return
 	}
 

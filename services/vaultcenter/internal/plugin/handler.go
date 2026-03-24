@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -45,53 +46,101 @@ func (h *Handler) Register(mux *http.ServeMux, requireTrustedIP func(http.Handle
 
 func (h *Handler) handleList(w http.ResponseWriter, _ *http.Request) {
 	plugins, err := h.registry.List()
-	if err != nil { respondError(w, http.StatusInternalServerError, err.Error()); return }
+	if err != nil {
+		log.Printf("plugin list: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list plugins")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]any{"count": len(plugins), "plugins": plugins})
 }
 
 func (h *Handler) handleInstall(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(64 << 20); err != nil { respondError(w, http.StatusBadRequest, "multipart required: "+err.Error()); return }
+	if err := r.ParseMultipartForm(64 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "multipart form required")
+		return
+	}
 	manifestStr := r.FormValue("manifest")
-	if manifestStr == "" { respondError(w, http.StatusBadRequest, "manifest field required"); return }
+	if manifestStr == "" {
+		respondError(w, http.StatusBadRequest, "manifest field required")
+		return
+	}
 	var manifest PluginManifest
-	if err := json.Unmarshal([]byte(manifestStr), &manifest); err != nil { respondError(w, http.StatusBadRequest, "invalid manifest JSON: "+err.Error()); return }
-	if strings.TrimSpace(manifest.Name) == "" { respondError(w, http.StatusBadRequest, "manifest.name is required"); return }
+	if err := json.Unmarshal([]byte(manifestStr), &manifest); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid manifest JSON")
+		return
+	}
+	if strings.TrimSpace(manifest.Name) == "" {
+		respondError(w, http.StatusBadRequest, "manifest.name is required")
+		return
+	}
 	file, _, err := r.FormFile("wasm")
-	if err != nil { respondError(w, http.StatusBadRequest, "wasm file required: "+err.Error()); return }
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "wasm file required")
+		return
+	}
 	defer file.Close()
 	wasmBytes, err := io.ReadAll(file)
-	if err != nil { respondError(w, http.StatusInternalServerError, "read wasm: "+err.Error()); return }
-	if err := h.registry.Install(manifest.Name, wasmBytes, &manifest); err != nil { respondError(w, http.StatusInternalServerError, err.Error()); return }
+	if err != nil {
+		log.Printf("plugin install read wasm: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to read wasm file")
+		return
+	}
+	if err := h.registry.Install(manifest.Name, wasmBytes, &manifest); err != nil {
+		log.Printf("plugin install: %v", err)
+		respondError(w, http.StatusInternalServerError, "plugin installation failed")
+		return
+	}
 	respondJSON(w, http.StatusCreated, map[string]string{"status": "installed", "name": manifest.Name})
 }
 
 func (h *Handler) handleGet(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	plugins, err := h.registry.List()
-	if err != nil { respondError(w, http.StatusInternalServerError, err.Error()); return }
+	if err != nil {
+		log.Printf("plugin get: %v", err)
+		respondError(w, http.StatusInternalServerError, "failed to list plugins")
+		return
+	}
 	for _, p := range plugins {
-		if p.Name == name { respondJSON(w, http.StatusOK, p); return }
+		if p.Name == name {
+			respondJSON(w, http.StatusOK, p)
+			return
+		}
 	}
 	respondError(w, http.StatusNotFound, fmt.Sprintf("plugin %q not found", name))
 }
 
 func (h *Handler) handleRemove(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if inst, ok := h.registry.Get(name); ok { _ = inst.Destroy(r.Context()) }
-	if err := h.registry.Remove(r.Context(), name); err != nil { respondError(w, http.StatusNotFound, err.Error()); return }
+	if inst, ok := h.registry.Get(name); ok {
+		_ = inst.Destroy(r.Context())
+	}
+	if err := h.registry.Remove(r.Context(), name); err != nil {
+		log.Printf("plugin remove %s: %v", name, err)
+		respondError(w, http.StatusNotFound, "plugin not found")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "removed", "name": name})
 }
 
 func (h *Handler) handleLoad(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	inst, err := h.registry.Load(r.Context(), name)
-	if err != nil { respondError(w, http.StatusInternalServerError, err.Error()); return }
+	if err != nil {
+		log.Printf("plugin load %s: %v", name, err)
+		respondError(w, http.StatusInternalServerError, "failed to load plugin")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]any{"status": "loaded", "info": inst.Info()})
 }
 
 func (h *Handler) handleUnload(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
-	if err := h.registry.Unload(r.Context(), name); err != nil { respondError(w, http.StatusInternalServerError, err.Error()); return }
+	if err := h.registry.Unload(r.Context(), name); err != nil {
+		log.Printf("plugin unload %s: %v", name, err)
+		respondError(w, http.StatusInternalServerError, "failed to unload plugin")
+		return
+	}
 	respondJSON(w, http.StatusOK, map[string]string{"status": "unloaded", "name": name})
 }
 
@@ -99,12 +148,22 @@ func (h *Handler) handlePluginAPI(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	rest := r.PathValue("rest")
 	inst, ok := h.registry.Get(name)
-	if !ok { respondError(w, http.StatusNotFound, fmt.Sprintf("plugin %q not loaded", name)); return }
+	if !ok {
+		respondError(w, http.StatusNotFound, fmt.Sprintf("plugin %q not loaded", name))
+		return
+	}
 	body, _ := io.ReadAll(r.Body)
 	input := map[string]any{"method": r.Method, "path": "/" + rest, "body": string(body), "query": r.URL.Query()}
 	result, err := inst.Render(r.Context(), "api_request", input)
-	if err != nil { respondError(w, http.StatusInternalServerError, "plugin error: "+err.Error()); return }
-	if result.Error != "" { respondError(w, http.StatusBadRequest, result.Error); return }
+	if err != nil {
+		log.Printf("plugin api %s: %v", name, err)
+		respondError(w, http.StatusInternalServerError, "plugin execution failed")
+		return
+	}
+	if result.Error != "" {
+		respondError(w, http.StatusBadRequest, result.Error)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write([]byte(result.Output))
@@ -128,7 +187,7 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 		Input  map[string]any `json:"input"`
 	}
 	if err := json.Unmarshal(body, &input); err != nil {
-		respondError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
+		respondError(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
 	if input.Action == "" {
@@ -138,11 +197,12 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	rendered, err := inst.Render(ctx, input.Action, input.Input)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "render: "+err.Error())
+		log.Printf("plugin sync render %s/%s: %v", name, input.Action, err)
+		respondError(w, http.StatusInternalServerError, "render failed")
 		return
 	}
 	if rendered.Error != "" {
-		respondError(w, http.StatusBadRequest, "render: "+rendered.Error)
+		respondError(w, http.StatusBadRequest, "render validation failed")
 		return
 	}
 	output := h.resolvePlaceholders(vault, rendered.Output)
@@ -153,7 +213,7 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 	valid, _ := inst.Validate(ctx, paths[0], output)
 	if valid != nil && !valid.OK {
-		respondError(w, http.StatusBadRequest, "validate: "+valid.Error)
+		respondError(w, http.StatusBadRequest, "validation failed")
 		return
 	}
 	hooks, _ := inst.Hooks(ctx)
@@ -163,7 +223,8 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 	agentURL, err := h.sync.FindAgentURL(vault)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "vault not reachable: "+err.Error())
+		log.Printf("plugin sync agent %s: %v", vault, err)
+		respondError(w, http.StatusBadGateway, "vault not reachable")
 		return
 	}
 	step := map[string]any{"name": "plugin-sync", "format": "raw", "target_path": paths[0], "content": output}
@@ -175,13 +236,14 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := h.sync.HTTPClient().Do(req)
 	if err != nil {
-		respondError(w, http.StatusBadGateway, "push failed: "+err.Error())
+		log.Printf("plugin sync push %s: %v", vault, err)
+		respondError(w, http.StatusBadGateway, "push to vault failed")
 		return
 	}
 	defer resp.Body.Close()
 	respBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode >= 300 {
-		respondError(w, resp.StatusCode, "agent: "+string(respBody))
+		respondError(w, resp.StatusCode, "agent rejected sync request")
 		return
 	}
 	var result map[string]any
