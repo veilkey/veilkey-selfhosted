@@ -416,6 +416,8 @@ fn resolve_candidates(token: &str) -> Vec<String> {
 mod tests {
     use super::enrich_mask_map;
 
+    // ── Retain filter ───────────────────────────────────────────────
+
     #[test]
     fn test_enrich_preserves_normal_entries() {
         let mut map = vec![
@@ -423,19 +425,17 @@ mod tests {
             ("my-secret-password".to_string(), "VK:LOCAL:abc12345".to_string()),
         ];
         enrich_mask_map(&mut map);
-        // Both original plaintexts must survive
-        assert!(map.iter().any(|(p, _)| p == "hkdgh1@dbhost"), "hkdgh1@dbhost must not be removed");
-        assert!(map.iter().any(|(p, _)| p == "my-secret-password"), "my-secret-password must not be removed");
+        assert!(map.iter().any(|(p, _)| p == "hkdgh1@dbhost"));
+        assert!(map.iter().any(|(p, _)| p == "my-secret-password"));
     }
 
     #[test]
     fn test_enrich_removes_self_corruption() {
-        // If plaintext appears in its own ref, it must be removed
         let mut map = vec![
             ("6da25530".to_string(), "VK:LOCAL:6da25530".to_string()),
         ];
         enrich_mask_map(&mut map);
-        assert!(!map.iter().any(|(p, _)| p == "6da25530"), "plaintext matching own ref must be removed");
+        assert!(!map.iter().any(|(p, _)| p == "6da25530"));
     }
 
     #[test]
@@ -444,34 +444,88 @@ mod tests {
             ("LOCAL".to_string(), "VK:LOCAL:abc".to_string()),
             ("TEMP".to_string(), "VK:TEMP:def".to_string()),
             ("VK".to_string(), "VK:LOCAL:ghi".to_string()),
+            ("HOST".to_string(), "VK:HOST:jkl".to_string()),
+            ("VE".to_string(), "VE:LOCAL:mno".to_string()),
         ];
         enrich_mask_map(&mut map);
-        assert!(map.is_empty(), "ref keyword plaintexts must be removed");
+        assert!(map.is_empty(), "all ref keyword plaintexts must be removed");
+    }
+
+    #[test]
+    fn test_enrich_removes_ref_keywords_case_insensitive() {
+        let mut map = vec![
+            ("local".to_string(), "VK:LOCAL:abc".to_string()),
+            ("temp".to_string(), "VK:TEMP:def".to_string()),
+            ("Local".to_string(), "VK:LOCAL:ghi".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.is_empty());
     }
 
     #[test]
     fn test_enrich_does_not_remove_unrelated_entries() {
-        // Regression: old filter removed entries where plaintext was substring of ANY ref
         let mut map = vec![
             ("pass".to_string(), "VK:LOCAL:aaa11111".to_string()),
             ("passport-key".to_string(), "VK:LOCAL:bbb22222".to_string()),
         ];
         enrich_mask_map(&mut map);
-        assert!(map.iter().any(|(p, _)| p == "pass"), "pass must NOT be removed by unrelated ref");
-        assert!(map.iter().any(|(p, _)| p == "passport-key"), "passport-key must survive");
+        assert!(map.iter().any(|(p, _)| p == "pass"));
+        assert!(map.iter().any(|(p, _)| p == "passport-key"));
     }
+
+    #[test]
+    fn test_enrich_preserves_secret_containing_ref_substring() {
+        // "abc12345" contains "abc" which is in ref "VK:LOCAL:abc12345"
+        // but "hunter2-password" does NOT appear in its own ref
+        let mut map = vec![
+            ("hunter2-password".to_string(), "VK:LOCAL:abc12345".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.iter().any(|(p, _)| p == "hunter2-password"));
+    }
+
+    #[test]
+    fn test_enrich_removes_very_short_plaintexts() {
+        let mut map = vec![
+            ("ab".to_string(), "VK:LOCAL:xxx".to_string()),
+            ("x".to_string(), "VK:LOCAL:yyy".to_string()),
+            ("abc".to_string(), "VK:LOCAL:zzz".to_string()), // 3 chars — kept
+        ];
+        enrich_mask_map(&mut map);
+        assert!(!map.iter().any(|(p, _)| p == "ab"), "2-char plaintext removed");
+        assert!(!map.iter().any(|(p, _)| p == "x"), "1-char plaintext removed");
+        assert!(map.iter().any(|(p, _)| p == "abc"), "3-char plaintext kept");
+    }
+
+    // ── Sorting ─────────────────────────────────────────────────────
 
     #[test]
     fn test_enrich_sorted_longest_first() {
         let mut map = vec![
             ("short".to_string(), "VK:LOCAL:aaa".to_string()),
             ("a-much-longer-secret".to_string(), "VK:LOCAL:bbb".to_string()),
+            ("medium-secret".to_string(), "VK:LOCAL:ccc".to_string()),
         ];
         enrich_mask_map(&mut map);
-        let plaintexts: Vec<&str> = map.iter().map(|(p, _)| p.as_str()).collect();
-        // First entry should be the longest
-        assert!(plaintexts[0].len() >= plaintexts.last().unwrap().len());
+        let lens: Vec<usize> = map.iter().map(|(p, _)| p.len()).collect();
+        for w in lens.windows(2) {
+            assert!(w[0] >= w[1], "not sorted longest-first: {:?}", lens);
+        }
     }
+
+    #[test]
+    fn test_enrich_sorted_with_encoded_variants() {
+        let mut map = vec![
+            ("my-api-key-value".to_string(), "VK:LOCAL:xyz".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        let lens: Vec<usize> = map.iter().map(|(p, _)| p.len()).collect();
+        for w in lens.windows(2) {
+            assert!(w[0] >= w[1], "encoded variants broke sort order: {:?}", lens);
+        }
+    }
+
+    // ── Encoded variants ────────────────────────────────────────────
 
     #[test]
     fn test_enrich_adds_encoded_variants() {
@@ -479,10 +533,88 @@ mod tests {
             ("my-api-key-value".to_string(), "VK:LOCAL:xyz".to_string()),
         ];
         enrich_mask_map(&mut map);
-        // Should have base64 and hex variants (plaintext >= 8 chars)
-        assert!(map.len() > 1, "encoded variants should be added for secrets >= 8 chars");
-        // Check hex variant exists
+        assert!(map.len() > 1, "must add encoded variants for secrets >= 8 chars");
+
         let hex: String = "my-api-key-value".bytes().map(|b| format!("{:02x}", b)).collect();
-        assert!(map.iter().any(|(p, _)| p == &hex), "hex variant must be present");
+        assert!(map.iter().any(|(p, _)| p == &hex), "hex variant missing");
+
+        let b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            "my-api-key-value".as_bytes(),
+        );
+        assert!(map.iter().any(|(p, _)| p == &b64), "base64 variant missing");
+    }
+
+    #[test]
+    fn test_enrich_no_encoded_for_short_secrets() {
+        let mut map = vec![
+            ("short".to_string(), "VK:LOCAL:aaa".to_string()),
+        ];
+        let original_count = map.len();
+        enrich_mask_map(&mut map);
+        // "short" is 5 chars < 8 — no encoded variants added
+        assert_eq!(map.len(), original_count, "no variants for short secrets");
+    }
+
+    #[test]
+    fn test_enrich_no_duplicate_encoded() {
+        // Same plaintext with two refs — encoded variants should only appear once
+        let mut map = vec![
+            ("my-secret-key-value".to_string(), "VK:LOCAL:aaa".to_string()),
+            ("my-secret-key-value".to_string(), "VK:LOCAL:bbb".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        let hex: String = "my-secret-key-value".bytes().map(|b| format!("{:02x}", b)).collect();
+        let hex_count = map.iter().filter(|(p, _)| p == &hex).count();
+        assert_eq!(hex_count, 1, "hex variant must appear exactly once");
+    }
+
+    // ── Real-world patterns ─────────────────────────────────────────
+
+    #[test]
+    fn test_enrich_connection_string_password() {
+        let mut map = vec![
+            ("p@ssw0rd!123".to_string(), "VK:LOCAL:conn1".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.iter().any(|(p, _)| p == "p@ssw0rd!123"), "special char password must survive");
+    }
+
+    #[test]
+    fn test_enrich_aws_key_pattern() {
+        let mut map = vec![
+            ("AKIAIOSFODNN7EXAMPLE".to_string(), "VK:LOCAL:aws1".to_string()),
+            ("wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY".to_string(), "VK:LOCAL:aws2".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.iter().any(|(p, _)| p == "AKIAIOSFODNN7EXAMPLE"));
+        assert!(map.iter().any(|(p, _)| p == "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"));
+    }
+
+    #[test]
+    fn test_enrich_github_token() {
+        let token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef12";
+        let mut map = vec![
+            (token.to_string(), "VK:LOCAL:gh1".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.iter().any(|(p, _)| p == token));
+    }
+
+    #[test]
+    fn test_enrich_many_secrets_performance() {
+        // 100 secrets — should not blow up
+        let mut map: Vec<(String, String)> = (0..100)
+            .map(|i| (format!("secret-value-{:04}-padding", i), format!("VK:LOCAL:{:08x}", i)))
+            .collect();
+        enrich_mask_map(&mut map);
+        // All originals survive (none match their own ref)
+        assert!(map.iter().any(|(p, _)| p == "secret-value-0000-padding"));
+        assert!(map.iter().any(|(p, _)| p == "secret-value-0099-padding"));
+        // Sorted longest-first
+        let lens: Vec<usize> = map.iter().map(|(p, _)| p.len()).collect();
+        for w in lens.windows(2) {
+            assert!(w[0] >= w[1]);
+        }
     }
 }
