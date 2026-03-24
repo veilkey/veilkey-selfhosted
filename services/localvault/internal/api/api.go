@@ -431,11 +431,6 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if len(req.Password) > 256 {
-		s.respondError(w, http.StatusBadRequest, "password too long")
-		return
-	}
-
 	kek := crypto.DeriveKEK(req.Password, s.salt)
 	if err := s.Unlock(kek); err != nil {
 		log.Printf("Unlock failed from %s: %v", r.RemoteAddr, err)
