@@ -18,12 +18,13 @@ type SyncDeps interface {
 }
 
 type Handler struct {
-	registry *Registry
-	sync     SyncDeps
+	registry       *Registry
+	sync           SyncDeps
+	domainRegistry *DomainRegistry
 }
 
 func NewHandler(registry *Registry, syncDeps ...SyncDeps) *Handler {
-	h := &Handler{registry: registry}
+	h := &Handler{registry: registry, domainRegistry: NewDomainRegistry()}
 	if len(syncDeps) > 0 {
 		h.sync = syncDeps[0]
 	}
@@ -38,6 +39,7 @@ func (h *Handler) Register(mux *http.ServeMux, requireTrustedIP func(http.Handle
 	mux.HandleFunc("POST /api/plugins/{name}/load", requireTrustedIP(h.handleLoad))
 	mux.HandleFunc("POST /api/plugins/{name}/unload", requireTrustedIP(h.handleUnload))
 	mux.HandleFunc("POST /api/vaults/{vault}/plugins/{name}/sync", requireTrustedIP(h.handleSync))
+	mux.HandleFunc("POST /api/plugins/traefik-sync/domain-check", requireTrustedIP(h.handleDomainCheck))
 	mux.HandleFunc("GET /api/plugins/{name}/api/{rest...}", h.handlePluginAPI)
 	mux.HandleFunc("POST /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))
 	mux.HandleFunc("PUT /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))
@@ -248,10 +250,69 @@ func (h *Handler) handleSync(w http.ResponseWriter, r *http.Request) {
 	}
 	var result map[string]any
 	_ = json.Unmarshal(respBody, &result)
+
+	// Register domains from traefik-sync after successful sync.
+	if name == "traefik-sync" {
+		h.registerDomainsFromSync(vault, input.Input)
+	}
+
 	respondJSON(w, http.StatusOK, map[string]any{
 		"status": "synced", "plugin": name, "vault": vault,
 		"target_path": paths[0], "hook": hookName, "result": result,
 	})
+}
+
+func (h *Handler) handleDomainCheck(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Domain string `json:"domain"`
+		Vault  string `json:"vault"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	if req.Domain == "" || req.Vault == "" {
+		respondError(w, http.StatusBadRequest, "domain and vault are required")
+		return
+	}
+	conflict, ok := h.domainRegistry.Check(req.Domain, req.Vault)
+	if !ok {
+		respondJSON(w, http.StatusConflict, map[string]string{
+			"error":          "domain already registered",
+			"domain":         req.Domain,
+			"conflict_vault": conflict,
+		})
+		return
+	}
+	respondJSON(w, http.StatusOK, map[string]string{
+		"status": "available",
+		"domain": req.Domain,
+	})
+}
+
+// registerDomainsFromSync extracts domains from traefik-sync input and registers them.
+func (h *Handler) registerDomainsFromSync(vault string, input map[string]any) {
+	routesRaw, ok := input["routes"]
+	if !ok {
+		return
+	}
+	routeBytes, err := json.Marshal(routesRaw)
+	if err != nil {
+		return
+	}
+	var routes []struct {
+		Domain string `json:"domain"`
+	}
+	if err := json.Unmarshal(routeBytes, &routes); err != nil {
+		return
+	}
+	// Clear old domains for this vault before re-registering.
+	h.domainRegistry.RemoveByVault(vault)
+	for _, r := range routes {
+		if r.Domain != "" {
+			h.domainRegistry.Register(r.Domain, vault)
+		}
+	}
 }
 
 func (h *Handler) resolvePlaceholders(vault, text string) string {
