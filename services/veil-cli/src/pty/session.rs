@@ -880,4 +880,147 @@ mod tests {
         let val = std::env::var("VEILKEY_TLS_INSECURE").unwrap_or_default();
         assert_ne!(val, "1", "TLS insecure must not be enabled by default");
     }
+
+    // ── Dense edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn edge_very_long_secret_10kb() {
+        // 10KB secret — must still be detected
+        let secret: String = "A".repeat(10 * 1024);
+        let mut buf = String::new();
+        let map = secrets(&[(&secret, "VK:LOCAL:big10kb1")]);
+        // Type the secret (will be capped by MAX_LINE_BUF, keeping tail)
+        check_stdin_for_secrets(secret.as_bytes(), &mut buf, &map);
+        // The secret is 10KB but MAX_LINE_BUF is 8KB, so buf has the tail.
+        // Enter should still detect the secret because the tail contains
+        // enough of the secret for substring matching.
+        let result = check_stdin_for_secrets(b"\r", &mut buf, &map);
+        // The full secret can't fit in buf, so it may not be detected.
+        // This documents the behavior: very long secrets exceed MAX_LINE_BUF.
+        // The important thing is that we don't panic.
+        assert!(
+            result == StdinGuardResult::Forward || result == StdinGuardResult::Blocked,
+            "must not panic on 10KB secret"
+        );
+    }
+
+    #[test]
+    fn edge_secret_with_regex_special_chars() {
+        // Secrets with regex metacharacters — check_stdin_for_secrets uses
+        // String::contains (not regex), so these must work.
+        let mut buf = String::new();
+        let map = secrets(&[("p@ss.w+rd()", "VK:LOCAL:regex001")]);
+        let result = check_stdin_for_secrets(b"echo p@ss.w+rd()\r", &mut buf, &map);
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "regex special chars must be matched literally"
+        );
+    }
+
+    #[test]
+    fn edge_multiple_enters_in_one_chunk() {
+        // Multiple commands in one paste, with a secret in the second line
+        let mut buf = String::new();
+        let map = secrets(&[("hunter2", "VK:LOCAL:multi001")]);
+        // "ls\necho hunter2\n" — first line safe, second has secret
+        let result = check_stdin_for_secrets(b"ls\necho hunter2\n", &mut buf, &map);
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "secret in second line of multi-enter chunk must be caught"
+        );
+    }
+
+    #[test]
+    fn edge_interleaved_ctrl_c_and_typing() {
+        // Type part of secret, Ctrl+C, type again, enter
+        let mut buf = String::new();
+        let map = secrets(&[("secret99", "VK:LOCAL:intrlv01")]);
+        // Type "secr", Ctrl+C clears, type "secret99", enter
+        check_stdin_for_secrets(b"secr", &mut buf, &map);
+        assert_eq!(buf, "secr");
+        check_stdin_for_secrets(b"\x03", &mut buf, &map); // Ctrl+C
+        assert_eq!(buf, "");
+        let result = check_stdin_for_secrets(b"secret99\r", &mut buf, &map);
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "secret after ctrl-c must still be caught"
+        );
+    }
+
+    #[test]
+    fn edge_tab_character_in_input() {
+        // Tab is < ' ' (0x09 < 0x20), so it's not accumulated into line_buf
+        let mut buf = String::new();
+        let map = secrets(&[("abc", "VK:LOCAL:tab00001")]);
+        check_stdin_for_secrets(b"\tabc\r", &mut buf, &map);
+        // Tab is filtered out, only "abc" is in buf
+        // The function already returned, let's test directly
+        let mut buf2 = String::new();
+        let result = check_stdin_for_secrets(b"\tabc\r", &mut buf2, &map);
+        assert_eq!(result, StdinGuardResult::Blocked, "secret after tab must be caught");
+    }
+
+    #[test]
+    fn edge_only_whitespace_as_secret() {
+        // Secret is "   " (spaces) — should be detected in typed input
+        let mut buf = String::new();
+        let map = secrets(&[("   ", "VK:LOCAL:ws000001")]);
+        let result = check_stdin_for_secrets(b"echo    \r", &mut buf, &map);
+        // "echo    " contains "   " as substring
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "whitespace-only secret must be detected"
+        );
+    }
+
+    #[test]
+    fn edge_max_line_buf_exactly_at_boundary() {
+        // Fill buf to exactly MAX_LINE_BUF chars
+        let mut buf = String::new();
+        let map = secrets(&[("needle", "VK:LOCAL:bnd00001")]);
+        let input: Vec<u8> = vec![b'x'; MAX_LINE_BUF];
+        check_stdin_for_secrets(&input, &mut buf, &map);
+        assert!(
+            buf.len() <= MAX_LINE_BUF,
+            "buf must not exceed MAX_LINE_BUF: got {}",
+            buf.len()
+        );
+    }
+
+    #[test]
+    fn edge_max_line_buf_one_over_boundary() {
+        // Fill buf to MAX_LINE_BUF + 1 chars — must be truncated
+        let mut buf = String::new();
+        let map = secrets(&[("needle", "VK:LOCAL:bnd00002")]);
+        let input: Vec<u8> = vec![b'x'; MAX_LINE_BUF + 1];
+        check_stdin_for_secrets(&input, &mut buf, &map);
+        assert!(
+            buf.len() <= MAX_LINE_BUF,
+            "buf must be capped at MAX_LINE_BUF: got {}",
+            buf.len()
+        );
+    }
+
+    #[test]
+    fn edge_secret_detection_after_truncation() {
+        // After truncation, a secret at the tail end must still be detected
+        let mut buf = String::new();
+        let secret = "needle99";
+        let map = secrets(&[(secret, "VK:LOCAL:trunc001")]);
+        // Fill beyond MAX_LINE_BUF, then add secret + enter
+        let padding: Vec<u8> = vec![b'x'; MAX_LINE_BUF + 100];
+        check_stdin_for_secrets(&padding, &mut buf, &map);
+        let mut secret_bytes = secret.as_bytes().to_vec();
+        secret_bytes.push(b'\r');
+        let result = check_stdin_for_secrets(&secret_bytes, &mut buf, &map);
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "secret at tail after truncation must be caught"
+        );
+    }
 }

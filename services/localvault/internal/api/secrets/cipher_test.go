@@ -173,3 +173,168 @@ func TestCrossKeyDecrypt_Fails(t *testing.T) {
 		t.Error("decrypting with wrong key must fail")
 	}
 }
+
+// --- Edge case: encrypt empty data ---
+
+// Guarantees: Empty plaintext can be encrypted and decrypted.
+// Some AES-GCM implementations may mishandle zero-length inputs.
+func TestEncrypt_EmptyData(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	ct, nonce, err := crypto.Encrypt(dek, []byte{})
+	if err != nil {
+		t.Fatalf("Encrypt empty data failed: %v", err)
+	}
+
+	decrypted, err := crypto.Decrypt(dek, ct, nonce)
+	if err != nil {
+		t.Fatalf("Decrypt empty data failed: %v", err)
+	}
+
+	if len(decrypted) != 0 {
+		t.Errorf("expected empty plaintext, got %d bytes", len(decrypted))
+	}
+}
+
+// --- Edge case: encrypt 1MB data ---
+
+// Guarantees: Large payloads (1MB) encrypt and decrypt correctly.
+// This catches buffer overflow or memory issues with large inputs.
+func TestEncrypt_1MB_Data(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	large := bytes.Repeat([]byte("A"), 1024*1024)
+	ct, nonce, err := crypto.Encrypt(dek, large)
+	if err != nil {
+		t.Fatalf("Encrypt 1MB data failed: %v", err)
+	}
+
+	decrypted, err := crypto.Decrypt(dek, ct, nonce)
+	if err != nil {
+		t.Fatalf("Decrypt 1MB data failed: %v", err)
+	}
+
+	if !bytes.Equal(decrypted, large) {
+		t.Error("1MB roundtrip failed: decrypted data does not match")
+	}
+}
+
+// --- Edge case: encrypt all-zero bytes ---
+
+// Guarantees: Data consisting entirely of zero bytes encrypts correctly.
+// Some implementations have edge cases with all-zero inputs.
+func TestEncrypt_AllZeroBytes(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	zeros := make([]byte, 256)
+	ct, nonce, err := crypto.Encrypt(dek, zeros)
+	if err != nil {
+		t.Fatalf("Encrypt all-zero data failed: %v", err)
+	}
+
+	decrypted, err := crypto.Decrypt(dek, ct, nonce)
+	if err != nil {
+		t.Fatalf("Decrypt all-zero data failed: %v", err)
+	}
+
+	if !bytes.Equal(decrypted, zeros) {
+		t.Error("all-zero roundtrip failed")
+	}
+}
+
+// --- Edge case: encrypt all-0xFF bytes ---
+
+// Guarantees: Data consisting entirely of 0xFF bytes encrypts correctly.
+func TestEncrypt_AllFFBytes(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	ffs := bytes.Repeat([]byte{0xFF}, 256)
+	ct, nonce, err := crypto.Encrypt(dek, ffs)
+	if err != nil {
+		t.Fatalf("Encrypt all-0xFF data failed: %v", err)
+	}
+
+	decrypted, err := crypto.Decrypt(dek, ct, nonce)
+	if err != nil {
+		t.Fatalf("Decrypt all-0xFF data failed: %v", err)
+	}
+
+	if !bytes.Equal(decrypted, ffs) {
+		t.Error("all-0xFF roundtrip failed")
+	}
+}
+
+// --- Edge case: decrypt truncated ciphertext ---
+
+// Guarantees: Truncated ciphertext is rejected. AES-GCM requires the
+// authentication tag at the end; truncating removes it.
+func TestDecrypt_TruncatedCiphertext(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	plaintext := []byte("this will be truncated")
+	ct, nonce, err := crypto.Encrypt(dek, plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	// Truncate at multiple positions
+	truncations := []int{1, len(ct) / 2, len(ct) - 1}
+	for _, truncLen := range truncations {
+		if truncLen >= len(ct) || truncLen <= 0 {
+			continue
+		}
+		truncated := ct[:truncLen]
+		_, err := crypto.Decrypt(dek, truncated, nonce)
+		if err == nil {
+			t.Errorf("Decrypt with ciphertext truncated to %d bytes must fail", truncLen)
+		}
+	}
+}
+
+// --- Edge case: decrypt extended ciphertext (extra bytes appended) ---
+
+// Guarantees: Appending extra bytes to ciphertext is detected and rejected.
+// This prevents length extension or padding oracle attacks.
+func TestDecrypt_ExtendedCiphertext(t *testing.T) {
+	dek, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	plaintext := []byte("this will be extended")
+	ct, nonce, err := crypto.Encrypt(dek, plaintext)
+	if err != nil {
+		t.Fatalf("Encrypt failed: %v", err)
+	}
+
+	// Append various extra bytes
+	extras := [][]byte{
+		{0x00},
+		{0xFF},
+		{0x00, 0x00, 0x00, 0x00},
+		bytes.Repeat([]byte{0x42}, 16),
+	}
+	for _, extra := range extras {
+		extended := append([]byte{}, ct...)
+		extended = append(extended, extra...)
+		_, err := crypto.Decrypt(dek, extended, nonce)
+		if err == nil {
+			t.Errorf("Decrypt with %d extra bytes appended must fail", len(extra))
+		}
+	}
+}

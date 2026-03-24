@@ -170,3 +170,56 @@ func TestDecrypt_TamperedCiphertext_Fails(t *testing.T) {
 		t.Error("Decrypt with tampered ciphertext must return error")
 	}
 }
+
+// --- Edge case: encrypt with zero-length key ---
+
+// Guarantees: A zero-length key is rejected or handled gracefully.
+// Using an empty key would be a catastrophic security failure.
+func TestEncrypt_ZeroLengthKey(t *testing.T) {
+	emptyKey := []byte{}
+	plaintext := []byte("test data")
+	_, _, err := crypto.Encrypt(emptyKey, plaintext)
+	if err == nil {
+		t.Error("Encrypt with zero-length key must return error — empty key is insecure")
+	}
+}
+
+// --- Edge case: encrypt with very long key (1MB) ---
+
+// Guarantees: A non-standard key length is rejected or handled gracefully.
+// AES-256-GCM requires exactly 32 bytes; anything else should fail.
+func TestEncrypt_VeryLongKey(t *testing.T) {
+	longKey := bytes.Repeat([]byte{0x42}, 1024*1024)
+	plaintext := []byte("test data")
+	_, _, err := crypto.Encrypt(longKey, plaintext)
+	if err == nil {
+		t.Error("Encrypt with 1MB key must return error — AES-256 requires 32-byte key")
+	}
+}
+
+// --- Nonce collision check: 100 encryptions, all different ---
+
+// Guarantees: Each encryption uses a unique nonce. Nonce reuse in AES-GCM
+// allows an attacker to recover plaintext. This test encrypts the same data
+// 100 times and verifies all nonces are distinct.
+func TestEncrypt_NonceUniqueness_100(t *testing.T) {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey failed: %v", err)
+	}
+
+	plaintext := []byte("same-data-for-nonce-test")
+	seen := make(map[string]bool, 100)
+
+	for i := 0; i < 100; i++ {
+		_, nonce, err := crypto.Encrypt(key, plaintext)
+		if err != nil {
+			t.Fatalf("Encrypt #%d failed: %v", i, err)
+		}
+		nonceStr := string(nonce)
+		if seen[nonceStr] {
+			t.Fatalf("SECURITY: nonce collision detected at iteration %d — nonce reuse breaks AES-GCM", i)
+		}
+		seen[nonceStr] = true
+	}
+}

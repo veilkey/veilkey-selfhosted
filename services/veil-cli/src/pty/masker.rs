@@ -1101,6 +1101,114 @@ mod tests {
         let (output, _) = mask_with_ve("completely normal text", &map, &[], "");
         assert_eq!(output, "completely normal text");
     }
+
+    // ── Dense edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn edge_mask_output_all_secrets_substrings_of_output() {
+        let map = vec![
+            ("hello".to_string(), "VK:LOCAL:h1111111".to_string()),
+            ("world".to_string(), "VK:LOCAL:w2222222".to_string()),
+            ("test".to_string(), "VK:LOCAL:t3333333".to_string()),
+        ];
+        let input = "hello world test output";
+        let (output, _) = mask_with_ve(input, &map, &[], "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("hello"), "hello must be masked");
+        assert!(!visible.contains("world"), "world must be masked");
+        assert!(!visible.contains("test"), "test must be masked");
+        assert!(visible.contains("output"), "non-secret text must survive");
+    }
+
+    #[test]
+    fn edge_mask_output_overlapping_secrets_containment() {
+        let map = vec![
+            ("password123456".to_string(), "VK:LOCAL:long1111".to_string()),
+            ("password".to_string(), "VK:LOCAL:med11111".to_string()),
+            ("pass".to_string(), "VK:LOCAL:shrt1111".to_string()),
+        ];
+        let input = "value=password123456 done";
+        let (output, _) = mask_with_ve(input, &map, &[], "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("password"), "password must not leak");
+        assert!(!visible.contains("pass"), "pass must not leak");
+    }
+
+    #[test]
+    fn edge_mask_output_secret_at_plain_tail_boundary() {
+        let secret = "boundary-secret-value";
+        let map = vec![(secret.to_string(), "VK:LOCAL:bnd11111".to_string())];
+        let half = secret.len() / 2;
+        let padding_len = PLAIN_TAIL_SIZE - half;
+        let tail = format!("{}{}", "x".repeat(padding_len), &secret[..half]);
+        let new_text = &secret[half..];
+        let result = find_cross_chunk_mask(&tail, new_text, &map);
+        assert!(
+            result.is_some(),
+            "secret at PLAIN_TAIL_SIZE boundary must be detected"
+        );
+    }
+
+    #[test]
+    fn edge_mask_output_only_ansi_escapes() {
+        let map = vec![("secret".to_string(), "VK:LOCAL:ansi1111".to_string())];
+        let input = "\x1b[31m\x1b[0m\x1b[1m\x1b[22m";
+        let (output, _) = mask_with_ve(input, &map, &[], "");
+        assert_eq!(output, input);
+    }
+
+    #[test]
+    fn edge_mask_output_empty_input() {
+        let map = vec![("secret".to_string(), "VK:LOCAL:empty111".to_string())];
+        let (output, tail) = mask_with_ve("", &map, &[], "some-tail");
+        assert!(output.is_empty());
+        assert_eq!(tail, "some-tail");
+    }
+
+    #[test]
+    fn edge_mask_output_binary_data() {
+        let map = vec![("secret".to_string(), "VK:LOCAL:bin11111".to_string())];
+        let data: Vec<u8> = vec![0xFF, 0xFF, 0xFF, 0x41, 0xFF, 0xFF];
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let (output, _) = mask_output(&data, &map, &[], &[], &client, "", "");
+        assert!(!output.is_empty());
+    }
+
+    #[test]
+    fn edge_padded_colorize_ref_unicode_ref_name() {
+        let result = padded_colorize_ref("VK:LOCAL:비밀abc", 20);
+        let visible = strip_ansi(&result);
+        assert!(!visible.is_empty());
+    }
+
+    #[test]
+    fn edge_find_cross_chunk_mask_empty_map() {
+        let result = find_cross_chunk_mask("some-tail", "new-text", &[]);
+        assert!(result.is_none(), "empty mask_map should return None");
+    }
+
+    #[test]
+    fn edge_find_cross_chunk_mask_1000_entries() {
+        let mut map: Vec<(String, String)> = (0..999)
+            .map(|i| {
+                (
+                    format!("other-secret-{:04}", i),
+                    format!("VK:LOCAL:{:08x}", i),
+                )
+            })
+            .collect();
+        map.push(("target-secret-val".to_string(), "VK:LOCAL:target01".to_string()));
+        let start = std::time::Instant::now();
+        let result = find_cross_chunk_mask("target-secret-", "val", &map);
+        let elapsed = start.elapsed();
+        assert!(result.is_some(), "target must be found in 1000-entry map");
+        assert!(
+            elapsed.as_secs() < 2,
+            "1000 entries took {:?} — too slow",
+            elapsed
+        );
+    }
 }
 
 #[cfg(test)]

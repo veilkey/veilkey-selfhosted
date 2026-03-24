@@ -853,4 +853,199 @@ mod tests {
             );
         }
     }
+
+    // ── Dense edge cases ──────────────────────────────────────────
+
+    #[test]
+    fn edge_secret_substring_of_own_ref() {
+        // Secret "LOCAL" is a substring of its own ref "VK:LOCAL:abcd1234"
+        // Must be removed because it matches a ref keyword.
+        let mut map = vec![("LOCAL".to_string(), "VK:LOCAL:abcd1234".to_string())];
+        enrich_mask_map(&mut map);
+        assert!(
+            !map.iter().any(|(p, _)| p == "LOCAL"),
+            "secret 'LOCAL' must be removed (ref keyword)"
+        );
+    }
+
+    #[test]
+    fn edge_secret_is_self_referencing_vk_format() {
+        // Secret is exactly "VK:LOCAL:abcd1234" — same as the ref
+        let mut map = vec![(
+            "VK:LOCAL:abcd1234".to_string(),
+            "VK:LOCAL:abcd1234".to_string(),
+        )];
+        enrich_mask_map(&mut map);
+        assert!(
+            !map.iter().any(|(p, _)| p == "VK:LOCAL:abcd1234"),
+            "self-referencing secret must be removed (contains own ref)"
+        );
+    }
+
+    #[test]
+    fn edge_secret_only_whitespace() {
+        let mut map = vec![("   ".to_string(), "VK:LOCAL:ws123456".to_string())];
+        enrich_mask_map(&mut map);
+        assert!(
+            map.iter().any(|(p, _)| p == "   "),
+            "whitespace-only secret should survive enrichment"
+        );
+    }
+
+    #[test]
+    fn edge_secret_with_leading_trailing_newlines() {
+        let mut map = vec![(
+            "\nhello\n".to_string(),
+            "VK:LOCAL:nl123456".to_string(),
+        )];
+        enrich_mask_map(&mut map);
+        assert!(
+            map.iter().any(|(p, _)| p == "\nhello\n"),
+            "newline-containing secret should survive enrichment"
+        );
+    }
+
+    #[test]
+    fn edge_two_secrets_prefix_relationship() {
+        let mut map = vec![
+            ("pass".to_string(), "VK:LOCAL:short123".to_string()),
+            ("password".to_string(), "VK:LOCAL:long1234".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(map.iter().any(|(p, _)| p == "pass"), "'pass' must survive");
+        assert!(
+            map.iter().any(|(p, _)| p == "password"),
+            "'password' must survive"
+        );
+        let pass_idx = map.iter().position(|(p, _)| p == "pass").unwrap();
+        let password_idx = map.iter().position(|(p, _)| p == "password").unwrap();
+        assert!(
+            password_idx < pass_idx,
+            "longer secret must come first: password@{} pass@{}",
+            password_idx,
+            pass_idx
+        );
+    }
+
+    #[test]
+    fn edge_secret_with_null_bytes() {
+        let mut map = vec![("abc\x00def".to_string(), "VK:LOCAL:null1234".to_string())];
+        enrich_mask_map(&mut map);
+        assert!(
+            map.iter().any(|(p, _)| p == "abc\x00def"),
+            "null-byte secret should survive enrichment"
+        );
+    }
+
+    #[test]
+    fn edge_empty_mask_map() {
+        let mut map: Vec<(String, String)> = Vec::new();
+        enrich_mask_map(&mut map);
+        assert!(map.is_empty(), "empty map should remain empty");
+    }
+
+    #[test]
+    fn edge_1000_entries_performance() {
+        let mut map: Vec<(String, String)> = (0..1000)
+            .map(|i| {
+                (
+                    format!("secret-value-{:04}-padding-extra", i),
+                    format!("VK:LOCAL:{:08x}", i),
+                )
+            })
+            .collect();
+        let start = std::time::Instant::now();
+        enrich_mask_map(&mut map);
+        let elapsed = start.elapsed();
+        assert!(map.iter().any(|(p, _)| p == "secret-value-0000-padding-extra"));
+        assert!(map.iter().any(|(p, _)| p == "secret-value-0999-padding-extra"));
+        assert!(map.len() > 1000, "encoded variants must be added");
+        let lens: Vec<usize> = map.iter().map(|(p, _)| p.len()).collect();
+        for w in lens.windows(2) {
+            assert!(w[0] >= w[1], "sort violated: {} < {}", w[0], w[1]);
+        }
+        assert!(
+            elapsed.as_secs() < 5,
+            "1000 entries took {:?} — too slow",
+            elapsed
+        );
+    }
+
+    #[test]
+    fn edge_hex_encoding_short_secret_not_added() {
+        let mut map = vec![("hello".to_string(), "VK:LOCAL:hel12345".to_string())];
+        enrich_mask_map(&mut map);
+        let hex = "68656c6c6f";
+        assert!(
+            !map.iter().any(|(p, _)| p == hex),
+            "hex encoding should NOT be added for secrets < 8 chars"
+        );
+    }
+
+    #[test]
+    fn edge_hex_encoding_long_secret_added() {
+        let mut map = vec![("hellowor".to_string(), "VK:LOCAL:hex12345".to_string())];
+        enrich_mask_map(&mut map);
+        let hex: String = "hellowor".bytes().map(|b| format!("{:02x}", b)).collect();
+        assert!(
+            map.iter().any(|(p, _)| p == &hex),
+            "hex encoding must be added for secrets >= 8 chars"
+        );
+    }
+
+    #[test]
+    fn edge_base64_encoding_long_secret_added() {
+        let mut map = vec![("hellowor".to_string(), "VK:LOCAL:b64_1234".to_string())];
+        enrich_mask_map(&mut map);
+        let b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            "hellowor".as_bytes(),
+        );
+        assert!(
+            map.iter().any(|(p, _)| p == &b64),
+            "base64 encoding must be added for secrets >= 8 chars"
+        );
+    }
+
+    #[test]
+    fn edge_base64_encoding_short_secret_not_added() {
+        let mut map = vec![("hello".to_string(), "VK:LOCAL:b64short".to_string())];
+        enrich_mask_map(&mut map);
+        let b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            "hello".as_bytes(),
+        );
+        assert!(
+            !map.iter().any(|(p, _)| p == &b64),
+            "base64 encoding should NOT be added for secrets < 8 chars"
+        );
+    }
+
+    #[test]
+    fn edge_secret_shorter_than_3_chars_removed() {
+        let mut map = vec![
+            ("a".to_string(), "VK:LOCAL:one11111".to_string()),
+            ("ab".to_string(), "VK:LOCAL:two22222".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(!map.iter().any(|(p, _)| p == "a"), "1-char removed");
+        assert!(!map.iter().any(|(p, _)| p == "ab"), "2-char removed");
+    }
+
+    #[test]
+    fn edge_secret_equal_to_vk_keyword() {
+        let mut map = vec![
+            ("VK".to_string(), "VK:LOCAL:kw_vk001".to_string()),
+            ("VE".to_string(), "VE:LOCAL:kw_ve001".to_string()),
+            ("LOCAL".to_string(), "VK:LOCAL:kw_loc01".to_string()),
+            ("TEMP".to_string(), "VK:TEMP:kw_tmp01".to_string()),
+            ("HOST".to_string(), "VK:HOST:kw_hst01".to_string()),
+        ];
+        enrich_mask_map(&mut map);
+        assert!(
+            map.is_empty(),
+            "all keyword secrets must be removed, remaining: {:?}",
+            map
+        );
+    }
 }
