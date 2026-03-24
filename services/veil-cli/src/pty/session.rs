@@ -365,14 +365,18 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     // during ECHO-off are implicitly registered as potential secrets
                     // since they won't appear in recent_input for masking-skip.
 
-                    // Track line buffer for potential future use (e.g. DEBUG trap).
-                    // Stdin is always forwarded — output masking handles the replacement.
+                    // Detection-only: check_stdin_for_secrets inspects the input and
+                    // returns StdinGuardResult::Blocked when a secret is detected, but
+                    // the return value is intentionally ignored here — data is always
+                    // forwarded to the PTY regardless. Output masking is the active
+                    // defence; stdin guard is currently passive (logging/future use).
+                    // TODO: When ready to enforce blocking, check StdinGuardResult::Blocked here and skip write_all_fd
                     {
                         let map = stdin_mask_map.read().unwrap();
                         check_stdin_for_secrets(data, &mut line_buf, &map);
                     }
 
-                    // Always forward raw data to PTY
+                    // Always forward raw data to PTY (blocking not yet enforced — see TODO above)
                     unsafe {
                         write_all_fd(master_wr, data);
                     }
