@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -66,7 +68,7 @@ func RunSetupServer(dbPath, dataDir string) {
 
 	saltFile := dataDir + "/salt"
 	mux.HandleFunc("POST /api/setup/init", func(w http.ResponseWriter, r *http.Request) {
-		handleSetupInit(w, r, database, saltFile)
+		handleSetupInit(w, r, database, dbPath, saltFile)
 	})
 
 	log.Printf("veilkey-vaultcenter setup mode on %s (waiting for first-run initialization)", addr)
@@ -84,7 +86,7 @@ func RunSetupServer(dbPath, dataDir string) {
 	}
 }
 
-func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, saltFile string) {
+func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, dbPath, saltFile string) {
 	setupMu.Lock()
 	defer setupMu.Unlock()
 
@@ -124,6 +126,18 @@ func handleSetupInit(w http.ResponseWriter, r *http.Request, database *db.DB, sa
 		return
 	}
 	kek := crypto.DeriveKEK(req.Password, salt)
+
+	// Delete the unencrypted setup DB and create a new encrypted one
+	_ = database.Close()
+	_ = os.Remove(dbPath)
+	dbKeyHash := sha256.Sum256(kek)
+	_ = os.Setenv("VEILKEY_DB_KEY", hex.EncodeToString(dbKeyHash[:]))
+	database, dbErr := db.New(dbPath)
+	if dbErr != nil {
+		log.Printf("setup: failed to create encrypted database: %v", dbErr)
+		http.Error(w, "failed to initialize encrypted database", http.StatusInternalServerError)
+		return
+	}
 
 	dek, err := crypto.GenerateKey()
 	if err != nil {

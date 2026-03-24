@@ -1,12 +1,15 @@
 package api
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -32,6 +35,7 @@ type NodeIdentity struct {
 
 type Server struct {
 	db            *db.DB
+	dbPath        string // for deferred DB opening (DB opens during Unlock)
 	kek           []byte
 	kekMu         sync.RWMutex
 	locked        bool
@@ -52,7 +56,23 @@ type Server struct {
 	functionsHandler *functions.Handler
 }
 
-func (s *Server) Close() { _ = s.db.Close() }
+func (s *Server) Close() {
+	if s.db != nil {
+		_ = s.db.Close()
+	}
+}
+
+// deriveDBKeyFromKEK derives a SQLCipher encryption key from the KEK.
+func deriveDBKeyFromKEK(kek []byte) string {
+	h := sha256.Sum256(kek)
+	return hex.EncodeToString(h[:])
+}
+
+// SetDBPath stores the database path and salt for deferred DB opening during Unlock.
+func (s *Server) SetDBPath(dbPath string, salt []byte) {
+	s.dbPath = dbPath
+	s.salt = salt
+}
 
 func (s *Server) SetIdentity(identity *NodeIdentity) {
 	s.identity = identity
@@ -93,19 +113,34 @@ func (s *Server) SetSalt(salt []byte) {
 }
 
 func (s *Server) Unlock(kek []byte) error {
-	info, err := s.db.GetNodeInfo()
+	// 1. Derive DB_KEY from KEK and open database
+	dbKey := deriveDBKeyFromKEK(kek)
+	_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
+
+	database, err := db.New(s.dbPath)
 	if err != nil {
+		return fmt.Errorf("invalid password (cannot open database)")
+	}
+
+	// 2. Verify KEK by decrypting DEK
+	info, err := database.GetNodeInfo()
+	if err != nil {
+		_ = database.Close()
 		return fmt.Errorf("no node info found: %w", err)
 	}
 	_, err = crypto.Decrypt(kek, info.DEK, info.DEKNonce)
 	if err != nil {
+		_ = database.Close()
 		return fmt.Errorf("invalid password (KEK decryption failed)")
 	}
 
+	// 3. Set DB and unlock
 	s.kekMu.Lock()
+	s.db = database
 	s.kek = kek
 	s.locked = false
 	s.kekMu.Unlock()
+
 	return nil
 }
 
@@ -226,6 +261,19 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Unlock failed from %s: %v", r.RemoteAddr, err)
 		s.respondError(w, http.StatusUnauthorized, "invalid password")
 		return
+	}
+
+	// Set identity from NodeInfo + DB config now that DB is open
+	if info, err := s.db.GetNodeInfo(); err == nil {
+		vaultHash := s.lookupConfigValue("VEILKEY_VAULT_HASH")
+		vaultName := s.lookupConfigValue("VEILKEY_VAULT_NAME")
+		s.SetIdentity(&NodeIdentity{
+			NodeID:    info.NodeID,
+			Version:   info.Version,
+			VaultHash: vaultHash,
+			VaultName: vaultName,
+		})
+		log.Printf("Identity loaded: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
 	}
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)

@@ -286,6 +286,8 @@ github.com/veilkey/veilkey-chain v0.9.0 h1:CL02G6BC9hY8LTEjAJuJA9/iG1L5wOf/wdCnD
 github.com/veilkey/veilkey-chain v0.9.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-go-package v0.4.3 h1:mur0y6dhj3z7pSWya1iPTsnyzX9eXYDZ9MqxBUo8YD4=
 github.com/veilkey/veilkey-go-package v0.4.3/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
+github.com/veilkey/veilkey-go-package v0.4.5 h1:2M0E4HYnZ8YXl7KzE4amy8LHz6JAm7ZjRsvkEhHmGDw=
+github.com/veilkey/veilkey-go-package v0.4.5/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/wneessen/go-mail v0.7.2 h1:xxPnhZ6IZLSgxShebmZ6DPKh1b6OJcoHfzy7UjOkzS8=
 github.com/wneessen/go-mail v0.7.2/go.mod h1:+TkW6QP3EVkgTEqHtVmnAE/1MRhmzb8Y9/W3pweuS+k=
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavMF/ppJZNG9ZpyihvCd0w101no=

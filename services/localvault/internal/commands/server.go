@@ -2,8 +2,8 @@ package commands
 
 import (
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 
@@ -19,16 +19,9 @@ import (
 	"veilkey-localvault/internal/api"
 	"veilkey-localvault/internal/db"
 
-	chain "github.com/veilkey/veilkey-chain"
 	"github.com/veilkey/veilkey-go-package/cmdutil"
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
-
-// deriveDBKey derives a SQLCipher encryption key from the salt file.
-func deriveDBKey(salt []byte) string {
-	h := sha256.Sum256(salt)
-	return hex.EncodeToString(h[:])
-}
 
 var initMu sync.Mutex
 
@@ -51,7 +44,8 @@ func RunServer() {
 	server, addr, listenPort := mustLoadServer()
 	hubURL := server.LogResolvedVaultcenterURL("startup")
 
-	// CometBFT chain full node (optional — set VEILKEY_CHAIN_HOME to enable)
+	// CometBFT chain full node deferred — DB required for chain store adapter.
+	// Chain will not start until after unlock when DB is available.
 	if chainHome := os.Getenv("VEILKEY_CHAIN_HOME"); chainHome != "" {
 		// Fetch genesis from vaultcenter if not already present
 		genesisFile := filepath.Join(chainHome, "config", "genesis.json")
@@ -62,15 +56,7 @@ func RunServer() {
 				log.Println("Chain: no vaultcenter URL, skipping genesis fetch")
 			}
 		}
-
-		adapter := &db.ChainStoreAdapter{DB: server.DB()}
-		cometNode, chainErr := chain.StartNode(adapter, adapter, chainHome)
-		if chainErr != nil {
-			log.Printf("Failed to start chain node: %v (continuing without chain)", chainErr)
-		} else {
-			defer func() { _ = chain.StopNode(cometNode) }()
-			log.Printf("CometBFT full node started (home=%s)", chainHome)
-		}
+		log.Printf("Chain home=%s (will start after unlock when DB is available)", chainHome)
 	} else {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set)")
 	}
@@ -126,7 +112,7 @@ func runSetupServer(dbPath, dataDir string) {
 	mux.HandleFunc("GET /api/install/status", server.HandleInstallStatus)
 	mux.HandleFunc("PATCH /api/install/vaultcenter-url", server.HandlePatchVaultcenterURL)
 	mux.HandleFunc("POST /api/install/init", func(w http.ResponseWriter, r *http.Request) {
-		handleInstallInit(w, r, database, dataDir)
+		handleInstallInit(w, r, database, dbPath, dataDir)
 	})
 
 	log.Printf("veilkey-localvault setup mode on %s (waiting for initialization)", addr)
@@ -144,7 +130,7 @@ func runSetupServer(dbPath, dataDir string) {
 	}
 }
 
-func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dataDir string) {
+func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dbPath, dataDir string) {
 	initMu.Lock()
 	defer initMu.Unlock()
 
@@ -178,6 +164,18 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	}
 
 	kek := crypto.DeriveKEK(req.Password, salt)
+
+	// Delete the unencrypted setup DB and create a new encrypted one
+	_ = database.Close()
+	_ = os.Remove(dbPath)
+	dbKeyHash := sha256.Sum256(kek)
+	_ = os.Setenv("VEILKEY_DB_KEY", fmt.Sprintf("%x", dbKeyHash))
+	database, dbErr := db.New(dbPath)
+	if dbErr != nil {
+		log.Printf("install: failed to create encrypted database: %v", dbErr)
+		http.Error(w, "failed to initialize encrypted database", http.StatusInternalServerError)
+		return
+	}
 
 	dek, err := crypto.GenerateKey()
 	if err != nil {
@@ -255,17 +253,6 @@ func mustLoadServer() (*api.Server, string, int) {
 		log.Fatal("Salt file not found. Run with 'init --root' first.")
 	}
 
-	// Derive DB encryption key from salt
-	// Always derive DB key from salt — ignore VEILKEY_DB_KEY env var
-	{
-		_ = os.Setenv("VEILKEY_DB_KEY", deriveDBKey(salt))
-	}
-
-	database, err := db.New(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-
 	addr := os.Getenv("VEILKEY_ADDR")
 	if addr == "" {
 		log.Fatal("VEILKEY_ADDR is required")
@@ -279,25 +266,10 @@ func mustLoadServer() (*api.Server, string, int) {
 		log.Fatal("VEILKEY_TRUSTED_IPS is required (comma-separated CIDRs)")
 	}
 
-	info, err := database.GetNodeInfo()
-	if err != nil {
-		log.Fatal("Node info not found. Run 'init --root' first.")
-	}
-
-	vaultHash, vaultName, err := ensureVaultIdentity(database, info.NodeID)
-	if err != nil {
-		log.Fatalf("Failed to ensure vault identity: %v", err)
-	}
-
-	server := api.NewServer(database, nil, trustedIPs)
-	server.SetSalt(salt)
-	server.SetIdentity(&api.NodeIdentity{
-		NodeID:    info.NodeID,
-		Version:   info.Version,
-		VaultHash: vaultHash,
-		VaultName: vaultName,
-	})
-	log.Printf("VeilKey agent: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
+	// DB is NOT opened here — it opens during Unlock() when KEK is available.
+	// DB_KEY = SHA256(KEK), so password is required to open the encrypted DB.
+	server := api.NewServer(nil, nil, trustedIPs)
+	server.SetDBPath(dbPath, salt)
 
 	log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 

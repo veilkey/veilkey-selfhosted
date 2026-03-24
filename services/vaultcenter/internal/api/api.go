@@ -2,6 +2,8 @@ package api
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -56,6 +58,7 @@ func DefaultTimeouts() Timeouts {
 
 type Server struct {
 	db              *db.DB
+	dbPath          string // for deferred DB opening (DB opens during Unlock)
 	kek             []byte
 	kekMu           sync.RWMutex
 	locked          bool
@@ -425,7 +428,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		pluginDir:      strings.TrimSpace(os.Getenv("VEILKEY_PLUGIN_DIR")),
 		maskMapNotify:  make(chan struct{}),
 	}
-	if database.HasNodeInfo() {
+	if database != nil && database.HasNodeInfo() {
 		if info, err := database.GetNodeInfo(); err == nil {
 			srv.identity = &NodeIdentity{
 				NodeID:    info.NodeID,
@@ -489,7 +492,24 @@ func (s *Server) BulkApplyDir() string {
 
 func (s *Server) SetSalt(salt []byte) {
 	s.salt = salt
-	s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient)
+	if s.db != nil {
+		s.approvalHandler = approval.NewHandler(s.db, salt, s.httpClient)
+	}
+}
+
+// SetDBPath stores the database path and salt for deferred DB opening during Unlock.
+func (s *Server) SetDBPath(dbPath string, salt []byte) {
+	s.dbPath = dbPath
+	s.salt = salt
+	// Create approvalHandler with nil DB so SetupRoutes doesn't panic.
+	// The handler will be recreated with the real DB after Unlock.
+	s.approvalHandler = approval.NewHandler(nil, salt, s.httpClient)
+}
+
+// deriveDBKeyFromKEK derives a SQLCipher encryption key from the KEK.
+func deriveDBKeyFromKEK(kek []byte) string {
+	h := sha256.Sum256(kek)
+	return hex.EncodeToString(h[:])
 }
 
 // BumpMaskMapVersion increments the mask_map version and notifies waiting long-poll clients.
@@ -515,19 +535,40 @@ func (s *Server) MaskMapWait() <-chan struct{} {
 }
 
 func (s *Server) Unlock(kek []byte) error {
-	info, err := s.db.GetNodeInfo()
+	// 1. Derive DB_KEY from KEK and open database
+	dbKey := deriveDBKeyFromKEK(kek)
+	_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
+
+	database, err := db.New(s.dbPath)
 	if err != nil {
+		return fmt.Errorf("invalid password (cannot open database)")
+	}
+
+	// 2. Verify KEK by decrypting DEK
+	info, err := database.GetNodeInfo()
+	if err != nil {
+		_ = database.Close()
 		return fmt.Errorf("no node info found: %w", err)
 	}
 	_, err = crypto.Decrypt(kek, info.DEK, info.DEKNonce)
 	if err != nil {
+		_ = database.Close()
 		return fmt.Errorf("invalid password (KEK decryption failed)")
 	}
 
+	// 3. Set DB and unlock
 	s.kekMu.Lock()
+	s.db = database
 	s.kek = kek
 	s.locked = false
 	s.kekMu.Unlock()
+
+	// 4. Update chainStore and approvalHandler with the opened database
+	s.chainStore = &db.ChainStoreAdapter{DB: database}
+	if s.salt != nil {
+		s.approvalHandler = approval.NewHandler(database, s.salt, s.httpClient)
+	}
+
 	return nil
 }
 
@@ -570,6 +611,19 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Unlock failed from %s: %v", r.RemoteAddr, err)
 		s.respondError(w, http.StatusUnauthorized, "invalid password")
 		return
+	}
+
+	// Set identity from NodeInfo now that DB is open
+	if s.db != nil && s.db.HasNodeInfo() {
+		if info, err := s.db.GetNodeInfo(); err == nil {
+			s.SetIdentity(&NodeIdentity{
+				NodeID:    info.NodeID,
+				ParentURL: info.ParentURL,
+				Version:   info.Version,
+				IsHKM:     true,
+			})
+			log.Printf("Identity loaded: node=%s version=%d", info.NodeID, info.Version)
+		}
 	}
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)

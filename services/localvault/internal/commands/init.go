@@ -1,7 +1,9 @@
 package commands
 
 import (
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -107,6 +109,10 @@ func RunInit() {
 		log.Fatalf("Failed to generate salt: %v", err)
 	}
 	kek := crypto.DeriveKEK(password, salt)
+
+	// Derive DB encryption key from KEK (not from salt)
+	dbKeyHash := sha256.Sum256(kek)
+	_ = os.Setenv("VEILKEY_DB_KEY", hex.EncodeToString(dbKeyHash[:]))
 
 	database, err := db.New(dbPath)
 	if err != nil {

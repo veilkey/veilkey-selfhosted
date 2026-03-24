@@ -200,6 +200,8 @@ github.com/veilkey/veilkey-go-package v0.4.2 h1:Ghf4G7du33kf/KTUC6cVf+icko9jOeac
 github.com/veilkey/veilkey-go-package v0.4.2/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/veilkey/veilkey-go-package v0.4.3 h1:mur0y6dhj3z7pSWya1iPTsnyzX9eXYDZ9MqxBUo8YD4=
 github.com/veilkey/veilkey-go-package v0.4.3/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
+github.com/veilkey/veilkey-go-package v0.4.5 h1:2M0E4HYnZ8YXl7KzE4amy8LHz6JAm7ZjRsvkEhHmGDw=
+github.com/veilkey/veilkey-go-package v0.4.5/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 go.etcd.io/bbolt v1.4.0-alpha.0.0.20240404170359-43604f3112c5 h1:qxen9oVGzDdIRP6ejyAJc760RwW4SnVDiTYTzwnXuxo=

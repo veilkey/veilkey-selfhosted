@@ -7,7 +7,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/veilkey/veilkey-chain v0.9.0
-	github.com/veilkey/veilkey-go-package v0.4.3
+	github.com/veilkey/veilkey-go-package v0.4.5
 	github.com/wneessen/go-mail v0.7.2
 	golang.org/x/crypto v0.49.0
 	gorm.io/gorm v1.31.1

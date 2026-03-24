@@ -1,27 +1,14 @@
 package commands
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"log"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"veilkey-vaultcenter/internal/api"
-	"veilkey-vaultcenter/internal/db"
-
-	chain "github.com/veilkey/veilkey-chain"
-	"github.com/veilkey/veilkey-go-package/cmdutil"
 )
-
-// deriveDBKey derives a SQLCipher encryption key from the salt file.
-func deriveDBKey(salt []byte) string {
-	h := sha256.Sum256(salt)
-	return hex.EncodeToString(h[:])
-}
 
 func RunServer() {
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
@@ -44,19 +31,6 @@ func RunServer() {
 		log.Fatalf("Failed to read salt file: %v", err)
 	}
 
-	// Derive DB encryption key from salt — no separate VEILKEY_DB_KEY needed
-	// Always derive DB key from salt — ignore VEILKEY_DB_KEY env var
-	{
-		dbKey := deriveDBKey(salt)
-		_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
-	}
-
-	database, err := db.New(dbPath)
-	if err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
-	}
-	defer database.Close()
-
 	addr := os.Getenv("VEILKEY_ADDR")
 	if addr == "" {
 		log.Fatal("VEILKEY_ADDR is required")
@@ -70,54 +44,24 @@ func RunServer() {
 		log.Fatal("VEILKEY_TRUSTED_IPS is required (comma-separated CIDRs)")
 	}
 
-	server := api.NewServer(database, nil, trustedIPs)
-	server.SetSalt(salt)
-
-	if database.HasNodeInfo() {
-		info, err := database.GetNodeInfo()
-		if err != nil {
-			log.Fatalf("Failed to load node info: %v", err)
-		}
-		server.SetIdentity(&api.NodeIdentity{
-			NodeID:    info.NodeID,
-			ParentURL: info.ParentURL,
-			Version:   info.Version,
-			IsHKM:     true,
-		})
-		log.Printf("HKM mode: node=%s version=%d", info.NodeID, info.Version)
-	} else {
-		log.Fatal("node info not found. Legacy centralized mode is no longer supported; initialize HKM root with 'init --root'.")
-	}
+	// DB is NOT opened here — it opens during Unlock() when KEK is available.
+	// DB_KEY = SHA256(KEK), so password is required to open the encrypted DB.
+	server := api.NewServer(nil, nil, trustedIPs)
+	server.SetDBPath(dbPath, salt)
 
 	log.Println("Server started in LOCKED mode. POST /api/unlock with password to unlock.")
 
-	// CometBFT chain node (optional — set VEILKEY_CHAIN_HOME to enable)
+	// CometBFT chain node deferred — DB required for chain store adapter.
+	// Chain will not start until after unlock when DB is available.
 	if chainHome := os.Getenv("VEILKEY_CHAIN_HOME"); chainHome != "" {
-		adapter := &db.ChainStoreAdapter{DB: database}
-		cometNode, chainErr := chain.StartNode(adapter, adapter, chainHome)
-		if chainErr != nil {
-			log.Fatalf("Failed to start chain node: %v", chainErr)
-		}
-		defer func() { _ = chain.StopNode(cometNode) }()
-		server.SetChainClient(chain.NewClient(cometNode))
-		server.SetChainHome(chainHome)
-		server.SetChainNodeID(string(cometNode.NodeInfo().ID()))
-		log.Printf("CometBFT chain node started (home=%s, node=%s)", chainHome, cometNode.NodeInfo().ID())
+		log.Printf("Chain home=%s (will start after unlock when DB is available)", chainHome)
 	} else {
 		log.Println("Chain disabled (VEILKEY_CHAIN_HOME not set, using DB direct mode)")
 	}
 
-	gcStop := make(chan struct{})
-	defer close(gcStop)
-	go api.StartTempRefGC(database, cmdutil.ParseDurationEnv("VEILKEY_GC_INTERVAL", 5*time.Minute), gcStop)
-	log.Println("Temp ref GC started")
-
-	// Load all installed plugins
-	if errs := server.LoadPlugins(); len(errs) > 0 {
-		for _, err := range errs {
-			log.Printf("Plugin load warning: %v", err)
-		}
-	}
+	// Temp ref GC and plugins require DB — they start after unlock via post-unlock hook.
+	// For now, log that they are deferred.
+	log.Println("Temp ref GC and plugins deferred until unlock")
 
 	handler := server.SetupRoutes()
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
