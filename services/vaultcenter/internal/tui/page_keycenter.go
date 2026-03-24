@@ -155,8 +155,9 @@ func (m keycenterModel) updateList(msg tea.KeyMsg, c *Client) (keycenterModel, t
 		m.valueInput.Blur()
 	case "d":
 		if len(m.refs) > 0 {
-			m.detailRef = m.refs[m.cursor]
-			m.subview = kcConfirm
+			return m, func() tea.Msg {
+				return errMsg{fmt.Errorf("temp refs expire automatically — manual delete not supported")}
+			}
 		}
 	case "r":
 		m.loading = true
@@ -314,7 +315,7 @@ func (m keycenterModel) viewList(width int) string {
 		}
 	}
 	b.WriteString("\n")
-	b.WriteString(styleDim.Render("  j/k move  enter detail  n new  d delete  r refresh"))
+	b.WriteString(styleDim.Render("  j/k move  enter detail  n new  r refresh"))
 	return b.String()
 }
 
