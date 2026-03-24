@@ -128,15 +128,22 @@ jobs:
           done
           echo "VaultCenter: $(curl -sk https://localhost:11181/health 2>/dev/null)"
 
+          # Debug: check LocalVault status and logs
+          echo "LocalVault health: $(curl -sk https://localhost:11180/health 2>/dev/null)"
+          echo "LocalVault data files:"
+          docker compose exec -T localvault ls -la /data/ 2>/dev/null || true
+          echo "LocalVault logs (last 20):"
+          docker compose logs --tail=20 localvault 2>/dev/null || true
+
           # Wait for LocalVault agent to register via heartbeat
-          for i in $(seq 1 20); do
+          for i in $(seq 1 30); do
             AGENTS=$(curl -sk --max-time 3 https://localhost:11181/api/agents 2>/dev/null || true)
             if echo "$AGENTS" | grep -q '"agent_hash"'; then
               echo "Agent registered!"
               break
             fi
-            echo "  Waiting for agent registration... [$i]"
-            sleep 3
+            echo "  Waiting for agent registration... [$i] agents=$AGENTS"
+            sleep 5
           done
 
           # Admin login — extract session cookie from Set-Cookie header
