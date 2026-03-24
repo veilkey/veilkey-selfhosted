@@ -284,6 +284,8 @@ github.com/tetratelabs/wazero v1.11.0 h1:+gKemEuKCTevU4d7ZTzlsvgd1uaToIDtlQlmNbw
 github.com/tetratelabs/wazero v1.11.0/go.mod h1:eV28rsN8Q+xwjogd7f4/Pp4xFxO7uOGbLcD/LzB1wiU=
 github.com/veilkey/veilkey-chain v0.9.0 h1:CL02G6BC9hY8LTEjAJuJA9/iG1L5wOf/wdCnD/YL/mM=
 github.com/veilkey/veilkey-chain v0.9.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
+github.com/veilkey/veilkey-chain v0.10.0 h1:wyu2dBNak1/fqg4TZ9/5Nj3Osz7U/i8fQs/zdlx1gdg=
+github.com/veilkey/veilkey-chain v0.10.0/go.mod h1:1UiPygoIR7lSdagVIQL/KDnWb9HEzzDo3eIH0iP4ZGk=
 github.com/veilkey/veilkey-go-package v0.4.3 h1:mur0y6dhj3z7pSWya1iPTsnyzX9eXYDZ9MqxBUo8YD4=
 github.com/veilkey/veilkey-go-package v0.4.3/go.mod h1:FczrNJtUx0kFRvAKsuIB4nkN14D1HCymutJZtUHP5PQ=
 github.com/veilkey/veilkey-go-package v0.4.5 h1:2M0E4HYnZ8YXl7KzE4amy8LHz6JAm7ZjRsvkEhHmGDw=
