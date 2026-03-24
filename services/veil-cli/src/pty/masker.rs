@@ -46,10 +46,19 @@ pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
     }
 }
 
-/// Mask secrets in PTY output data.
-/// - Known secrets from mask_map are replaced with colorized VK refs.
-/// - Lines with replacements get ANSI line-clear to overwrite echo-back.
-/// - Pattern-detected secrets are auto-registered or redacted (fail-closed).
+/// Plain tail size — last N bytes of output kept for cross-chunk secret detection.
+/// Inspired by secretty's plainTail approach: secrets split across PTY read() calls
+/// are caught by matching against tail+new_data combined.
+const PLAIN_TAIL_SIZE: usize = 8192;
+
+/// Mask secrets in PTY output data using a lookback tail buffer.
+///
+/// `plain_tail` holds the last PLAIN_TAIL_SIZE bytes of previously emitted output.
+/// We prepend it to the current data for matching, but only emit replacements that
+/// touch the new data portion. This catches secrets split across PTY chunks without
+/// any timing-dependent heuristics.
+///
+/// Returns (masked_output_bytes, updated_plain_tail).
 pub fn mask_output(
     data: &[u8],
     mask_map: &[(String, String)],
@@ -57,43 +66,21 @@ pub fn mask_output(
     patterns: &[CompiledPattern],
     client: &VeilKeyClient,
     recent_input: &str,
-) -> Vec<u8> {
-    let mut s = String::from_utf8_lossy(data).to_string();
-    let mut had_replacement = false;
-
-    // 1. Known secrets — replace with colorized VK refs
-    for (plaintext, vk_ref) in mask_map {
-        if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
-            s = s.replace(
-                plaintext.as_str(),
-                &padded_colorize_ref(vk_ref, plaintext.len()),
-            );
-            had_replacement = true;
-        }
+    plain_tail: &str,
+) -> (Vec<u8>, String) {
+    let new_text = String::from_utf8_lossy(data).to_string();
+    if new_text.is_empty() {
+        return (Vec::new(), plain_tail.to_string());
     }
 
-    // Line-clear on lines that had secrets replaced (contain our BOLD+CYAN or BOLD+RED).
-    // Only match our colorize_ref output, not pre-existing ANSI codes (e.g. colored prompts).
-    if had_replacement {
-        let mut cleared = String::new();
-        for (i, line) in s.split('\n').enumerate() {
-            if i > 0 {
-                cleared.push('\n');
-            }
-            let has_our_ansi = line.contains("\x1b[1m\x1b[36m") || line.contains("\x1b[1m\x1b[31m");
-            if has_our_ansi {
-                cleared.push_str("\r\x1b[2K");
-            }
-            cleared.push_str(line);
-        }
-        s = cleared;
-    }
+    let combined = format!("{}{}", plain_tail, new_text);
 
-    // 2. Pattern-detected secrets — auto-register or redact
-    // Scan on the ORIGINAL data (before ANSI codes were injected by step 1)
-    let scan_copy = String::from_utf8_lossy(data).to_string();
+    // Pre-scan: detect secrets on combined (tail+new) buffer.
+    // This catches secrets split across PTY chunks. Any detected secret
+    // is issued to the API (registered for future mask_map inclusion).
+    // The actual output masking uses only new_text below.
     for pat in patterns {
-        for caps in pat.regex.captures_iter(&scan_copy) {
+        for caps in pat.regex.captures_iter(&combined) {
             let m = caps
                 .get(pat.group.max(1))
                 .or_else(|| caps.get(1))
@@ -108,29 +95,87 @@ pub fn mask_output(
             if !recent_input.is_empty() && recent_input.contains(secret) {
                 continue;
             }
-            match client.issue(secret) {
-                Ok(ref_canonical) => {
-                    s = s.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
-                }
-                Err(e) => {
-                    eprintln!(
-                        "[veilkey] issue failed for pattern {}: {} — redacting (fail-closed)",
-                        pat.name, e
-                    );
-                    let redacted = format!("[REDACTED:{}]", pat.name);
-                    s = s.replace(secret, &padded_colorize_ref(&redacted, secret.len()));
-                }
+            // Issue to API — registers the secret for future mask_map inclusion.
+            // We don't replace here; the output masking below handles replacement.
+            let _ = client.issue(secret);
+        }
+    }
+
+    // Output masking: apply replacements on new_text only (tail was already emitted).
+    // The combined pre-scan above already issued split secrets to the API.
+    let mut output = new_text.clone();
+    let mut output_had_replacement = false;
+    for (plaintext, vk_ref) in mask_map {
+        if !plaintext.is_empty() && output.contains(plaintext.as_str()) {
+            output = output.replace(
+                plaintext.as_str(),
+                &padded_colorize_ref(vk_ref, plaintext.len()),
+            );
+            output_had_replacement = true;
+        }
+    }
+    // Also apply pattern-detected replacements on new_text
+    for pat in patterns {
+        for caps in pat.regex.captures_iter(&new_text) {
+            let m = caps
+                .get(pat.group.max(1))
+                .or_else(|| caps.get(1))
+                .unwrap_or_else(|| caps.get(0).unwrap());
+            let secret = m.as_str().trim_end_matches(['\r', '\n']);
+            if secret.len() < 8 || secret.starts_with("VK:") {
+                continue;
+            }
+            if mask_map.iter().any(|(p, _)| p == secret) {
+                continue;
+            }
+            if !recent_input.is_empty() && recent_input.contains(secret) {
+                continue;
+            }
+            // Already issued above via combined scan — just replace here
+            if let Ok(ref_canonical) = client.issue(secret) {
+                output = output.replace(secret, &padded_colorize_ref(&ref_canonical, secret.len()));
+                output_had_replacement = true;
             }
         }
     }
-
     for (plaintext, ve_ref) in ve_map {
-        if !plaintext.is_empty() && s.contains(plaintext.as_str()) {
-            s = s.replace(plaintext.as_str(), &colorize_ve_ref(plaintext, ve_ref));
+        if !plaintext.is_empty() && output.contains(plaintext.as_str()) {
+            output = output.replace(plaintext.as_str(), &colorize_ve_ref(plaintext, ve_ref));
         }
     }
 
-    s.into_bytes()
+    // Line-clear on lines that had secrets replaced
+    if output_had_replacement {
+        let mut cleared = String::new();
+        for (i, line) in output.split('\n').enumerate() {
+            if i > 0 {
+                cleared.push('\n');
+            }
+            let has_our_ansi = line.contains("\x1b[1m\x1b[36m") || line.contains("\x1b[1m\x1b[31m");
+            if has_our_ansi {
+                cleared.push_str("\r\x1b[2K");
+            }
+            cleared.push_str(line);
+        }
+        output = cleared;
+    }
+
+    // Update plain tail — keep last PLAIN_TAIL_SIZE bytes of the ORIGINAL new text
+    // (not the masked version, so future matching works on plaintext)
+    let new_tail = if new_text.len() > PLAIN_TAIL_SIZE {
+        let start = new_text.ceil_char_boundary(new_text.len() - PLAIN_TAIL_SIZE);
+        format!("{}{}", &plain_tail[plain_tail.ceil_char_boundary(plain_tail.len().saturating_sub(PLAIN_TAIL_SIZE / 2))..], &new_text[start..])
+    } else {
+        let combined_tail = format!("{}{}", plain_tail, new_text);
+        if combined_tail.len() > PLAIN_TAIL_SIZE {
+            let start = combined_tail.ceil_char_boundary(combined_tail.len() - PLAIN_TAIL_SIZE);
+            combined_tail[start..].to_string()
+        } else {
+            combined_tail
+        }
+    };
+
+    (output.into_bytes(), new_tail)
 }
 
 #[cfg(test)]

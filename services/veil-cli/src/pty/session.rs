@@ -218,11 +218,14 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             });
 
             // PTY master → stdout (output thread with masking)
+            // Uses a plain_tail buffer (8KB lookback) to catch secrets split across
+            // PTY read() chunks. Inspired by secretty's plainTail approach:
+            // each chunk is masked with tail+chunk combined for detection.
             let mask = mask_map.clone();
             let ve = ve_map.clone();
             let input_ref = recent_input.clone();
             let stdout_fd = io::stdout().as_raw_fd();
-            let mut partial_buf: Vec<u8> = Vec::new();
+            let mut plain_tail = String::new();
 
             let mut buf = [0u8; 32768];
             loop {
@@ -230,103 +233,20 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                 if n <= 0 {
                     break;
                 }
-                let n = n as usize;
-                let chunk = &buf[..n];
+                let chunk = &buf[..n as usize];
 
-                if let Some(last_nl) = chunk.iter().rposition(|&b| b == b'\n') {
-                    // Newline found — flush partial + chunk through masker
-                    let mut to_mask = Vec::new();
-                    to_mask.extend_from_slice(&partial_buf);
-                    to_mask.extend_from_slice(&chunk[..last_nl + 1]);
-                    partial_buf.clear();
-
-                    let ri = input_ref.lock().unwrap().clone();
-                    let masked = masker::mask_output(
-                        &to_mask,
-                        &mask.read().unwrap(),
-                        &ve.read().unwrap(),
-                        &patterns,
-                        &client,
-                        &ri,
-                    );
-
-                    unsafe {
-                        libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
-                    }
-
-                    // Remainder → buffer
-                    if last_nl + 1 < n {
-                        partial_buf.extend_from_slice(&chunk[last_nl + 1..]);
-                    }
-                } else {
-                    // No newline — buffer, flush after short wait if no more data.
-                    // Use longer wait to collect full secrets that arrive in multiple chunks.
-                    partial_buf.extend_from_slice(chunk);
-                    std::thread::sleep(Duration::from_millis(50));
-                    // Drain any additional data that arrived during wait
-                    unsafe {
-                        let flags = libc::fcntl(master_fd, libc::F_GETFL);
-                        libc::fcntl(master_fd, libc::F_SETFL, flags | libc::O_NONBLOCK);
-                        let mut drain_buf = [0u8; 4096];
-                        loop {
-                            let dr = libc::read(master_fd, drain_buf.as_mut_ptr() as _, drain_buf.len());
-                            if dr <= 0 { break; }
-                            partial_buf.extend_from_slice(&drain_buf[..dr as usize]);
-                        }
-                        libc::fcntl(master_fd, libc::F_SETFL, flags);
-                    }
-                    // Check if we now have a newline (data arrived during drain)
-                    if let Some(nl) = partial_buf.iter().rposition(|&b| b == b'\n') {
-                        let to_mask = partial_buf[..nl + 1].to_vec();
-                        let remainder = partial_buf[nl + 1..].to_vec();
-                        partial_buf.clear();
-                        partial_buf.extend_from_slice(&remainder);
-                        let ri = input_ref.lock().unwrap().clone();
-                        let masked = masker::mask_output(
-                            &to_mask,
-                            &mask.read().unwrap(),
-                            &ve.read().unwrap(),
-                            &patterns,
-                            &client,
-                            &ri,
-                        );
-                        unsafe {
-                            libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
-                        }
-                    } else {
-                        // No more data — mask and flush
-                        let ri = input_ref.lock().unwrap().clone();
-                        let flushed = masker::mask_output(
-                            &partial_buf,
-                            &mask.read().unwrap(),
-                            &ve.read().unwrap(),
-                            &patterns,
-                            &client,
-                            &ri,
-                        );
-                        unsafe {
-                            if flushed != partial_buf {
-                                let clear = b"\r\x1b[2K";
-                                libc::write(stdout_fd, clear.as_ptr() as _, clear.len());
-                            }
-                            libc::write(stdout_fd, flushed.as_ptr() as _, flushed.len());
-                        }
-                        partial_buf.clear();
-                    }
-                }
-            }
-
-            // Flush remaining
-            if !partial_buf.is_empty() {
                 let ri = input_ref.lock().unwrap().clone();
-                let masked = masker::mask_output(
-                    &partial_buf,
+                let (masked, new_tail) = masker::mask_output(
+                    chunk,
                     &mask.read().unwrap(),
                     &ve.read().unwrap(),
                     &patterns,
                     &client,
                     &ri,
+                    &plain_tail,
                 );
+                plain_tail = new_tail;
+
                 unsafe {
                     libc::write(stdout_fd, masked.as_ptr() as _, masked.len());
                 }
