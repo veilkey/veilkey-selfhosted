@@ -284,6 +284,12 @@ func (s *Server) LoadIdentity() {
 	if vaultName == "" {
 		vaultName = os.Getenv("VEILKEY_VAULT_NAME")
 	}
+	if vaultName == "" {
+		vaultName = os.Getenv("VEILKEY_LABEL")
+	}
+	if vaultName == "" {
+		vaultName, _ = os.Hostname()
+	}
 	if vaultHash == "" {
 		vaultHash = os.Getenv("VEILKEY_VAULT_HASH")
 	}
