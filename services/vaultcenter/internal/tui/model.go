@@ -225,7 +225,7 @@ func (m Model) isEditing() bool {
 		return m.keycenter.creating || m.keycenter.subview == kcPromote
 	}
 	if m.activePage == pageVaults {
-		return m.vaults.creatingSecret || m.vaults.searching || m.vaults.catalogSearching
+		return m.vaults.creatingSecret || m.vaults.searching || m.vaults.catalogSearching || m.vaults.confirmDelete
 	}
 	if m.activePage == pageSettings {
 		return m.settings.creatingToken
