@@ -374,18 +374,7 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set identity from NodeInfo + DB config now that DB is open
-	if info, err := s.db.GetNodeInfo(); err == nil {
-		vaultHash := s.lookupConfigValue("VEILKEY_VAULT_HASH")
-		vaultName := s.lookupConfigValue("VEILKEY_VAULT_NAME")
-		s.SetIdentity(&NodeIdentity{
-			NodeID:    info.NodeID,
-			Version:   info.Version,
-			VaultHash: vaultHash,
-			VaultName: vaultName,
-		})
-		log.Printf("Identity loaded: node=%s version=%d vault=%s:%s", info.NodeID, info.Version, vaultName, vaultHash)
-	}
+	s.LoadIdentity()
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{"status": "unlocked"})

@@ -268,7 +268,7 @@ func autoUnlock(server *api.Server, vcURL string) {
 			if err := server.Unlock(kek); err == nil {
 				log.Println("Auto-unlock: succeeded via vault_key file (bootstrap mode)")
 				server.SetVaultUnlockKey(password)
-				loadIdentityAfterUnlock(server)
+				server.LoadIdentity()
 				return
 			}
 			log.Printf("Auto-unlock: vault_key file invalid: %v", err)
@@ -279,7 +279,7 @@ func autoUnlock(server *api.Server, vcURL string) {
 	if vcURL != "" {
 		if err := server.AutoUnlockFromVC(vcURL); err == nil {
 			log.Println("Auto-unlock: succeeded via VaultCenter")
-			loadIdentityAfterUnlock(server)
+			server.LoadIdentity()
 			// Delete vault_key file if it still exists (migration cleanup)
 			_ = os.Remove(vaultKeyFile)
 			return
@@ -289,10 +289,6 @@ func autoUnlock(server *api.Server, vcURL string) {
 	}
 
 	log.Println("Auto-unlock: no method available. Waiting for POST /api/unlock.")
-}
-
-func loadIdentityAfterUnlock(server *api.Server) {
-	server.LoadIdentity()
 }
 
 func mustLoadServer() (*api.Server, string, int) {
