@@ -21,6 +21,26 @@ import (
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
+// maxFunctionOutputSize caps stdout/stderr to prevent OOM from runaway output.
+const maxFunctionOutputSize = 1 << 20 // 1 MB
+
+// limitedWriter wraps a bytes.Buffer with a maximum size.
+type limitedWriter struct {
+	buf *bytes.Buffer
+	max int
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	remaining := w.max - w.buf.Len()
+	if remaining <= 0 {
+		return len(p), nil // discard silently
+	}
+	if len(p) > remaining {
+		p = p[:remaining]
+	}
+	return w.buf.Write(p)
+}
+
 var functionRunAllowlist = map[string]struct{}{
 	"curl":                    {},
 	"gh":                      {},
@@ -253,13 +273,16 @@ func (h *Handler) handleGlobalFunctionRun(w http.ResponseWriter, r *http.Request
 		cmd.Stdin = strings.NewReader(stdin)
 	}
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	cmd.Stdout = &limitedWriter{buf: &stdout, max: maxFunctionOutputSize}
+	cmd.Stderr = &limitedWriter{buf: &stderr, max: maxFunctionOutputSize}
 	err = cmd.Run()
 	exitCode := 0
 	timedOut := false
 	if err != nil {
 		timedOut = ctx.Err() == context.DeadlineExceeded
+		if timedOut && cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			exitCode = exitErr.ExitCode()
 		} else {
