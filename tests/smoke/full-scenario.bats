@@ -11,7 +11,7 @@
 # Usage:
 #   VEILKEY_URL=https://10.50.0.110:11181 \
 #   VEILKEY_TEST_REF=VK:LOCAL:bdd9d472 \
-#   VEILKEY_TEST_VALUE=Ghdrhkdgh1@ \
+#   VEILKEY_TEST_VALUE=test-placeholder-value \
 #     bats tests/smoke/full-scenario.bats
 
 setup_file() {
@@ -37,14 +37,6 @@ setup_file() {
     run /usr/local/bin/veilkey-cli status
     [ "$status" -eq 0 ]
     [[ "$output" == *"connected"* ]]
-}
-
-# === Resolve ===
-
-@test "resolve: VK ref returns plaintext" {
-    run /usr/local/bin/veilkey-cli resolve "$VEILKEY_TEST_REF"
-    [ "$status" -eq 0 ]
-    [ "$output" = "$VEILKEY_TEST_VALUE" ]
 }
 
 # === Exec mode ===

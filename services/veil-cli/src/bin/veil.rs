@@ -138,11 +138,6 @@ trap 'rm -f "$HISTFILE"' EXIT
         "status" => {
             exec_replace(&cli_bin, &["status".to_string()]);
         }
-        "resolve" => {
-            let mut full = vec!["resolve".to_string()];
-            full.extend_from_slice(&args[1..]);
-            exec_replace(&cli_bin, &full);
-        }
         "exec" => {
             let mut full = vec!["exec".to_string()];
             full.extend_from_slice(&args[1..]);
@@ -245,7 +240,6 @@ trap 'rm -f "$HISTFILE"' EXIT
             println!("Usage:");
             println!("  veil                     Enter protected session (PTY masking)");
             println!("  veil status              Show VeilKey connection status");
-            println!("  veil resolve <VK:ref>    Resolve a VK reference");
             println!("  veil exec <command...>   Resolve VK refs in args and execute");
             println!("  veil scan [file...]      Scan files for secrets");
             println!("  veil localvault [init]   Install/update localvault here");

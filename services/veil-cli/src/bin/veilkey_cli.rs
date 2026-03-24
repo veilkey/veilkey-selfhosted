@@ -28,7 +28,6 @@ fn print_usage() {
   veilkey wrap <command...>         Run command + auto-replace secrets
   veilkey wrap-pty [command]        Interactive PTY + auto-replace (default: bash)
   veilkey exec <command...>         Resolve VK: hashes + run command
-  veilkey resolve <VK:hash>         Resolve VK hash to original value
   veilkey list                      List detected VeilKey entries
   veilkey paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey clear                     Clear session log
@@ -173,13 +172,6 @@ fn main() {
             commands::cmd_filter(file, &api_url, &log_path, patterns_file.as_deref());
         }
         "exec" => commands::cmd_exec(&cmd_args, &api_url),
-        "resolve" => {
-            if cmd_args.is_empty() {
-                eprintln!("Usage: veilkey resolve <VK:hash>");
-                process::exit(1);
-            }
-            commands::cmd_resolve(&cmd_args[0], &api_url);
-        }
         "list" => commands::cmd_list(&log_path),
         "paste-mode" => commands::cmd_paste_mode(&cmd_args),
         "clear" => commands::cmd_clear(&log_path),

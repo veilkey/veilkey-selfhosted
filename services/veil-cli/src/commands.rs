@@ -68,33 +68,6 @@ pub fn cmd_wrap(args: &[String], api_url: &str, log_path: &str, patterns_file: O
     process::exit(exit_code);
 }
 
-pub fn cmd_resolve(hash: &str, api_url: &str) {
-    // Block non-TTY execution to prevent AI tools from reading plaintext via pipe
-    if unsafe { libc::isatty(1) } == 0 {
-        eprintln!("[veilkey] resolve is only available in interactive terminal");
-        process::exit(1);
-    }
-    // Require admin password — resolve returns plaintext, server also requires admin session
-    let password = rpassword::prompt_password("[veilkey] admin password: ").unwrap_or_default();
-    if password.is_empty() {
-        eprintln!("[veilkey] password is required");
-        process::exit(1);
-    }
-    let client = VeilKeyClient::new(api_url);
-    if let Err(e) = client.admin_login(&password) {
-        eprintln!("[veilkey] authentication failed: {}", e);
-        process::exit(1);
-    }
-    match client.resolve(hash) {
-        Ok(v) => print!("{}", v),
-        Err(e) => {
-            eprintln!("[veilkey] resolve failed");
-            let _ = e;
-            process::exit(1);
-        }
-    }
-}
-
 pub fn cmd_exec(args: &[String], api_url: &str) {
     if args.is_empty() {
         eprintln!("Usage: veilkey exec <command...>");
