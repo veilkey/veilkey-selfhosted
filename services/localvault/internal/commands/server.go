@@ -276,19 +276,40 @@ func autoUnlock(server *api.Server, vcURL string) {
 	}
 
 	// 2. Try VC-managed unlock (agent_secret file → fetch unlock key from VC)
-	if vcURL != "" {
+	if vcURL != "" && server.ReadAgentSecretFile() != "" {
 		if err := server.AutoUnlockFromVC(vcURL); err == nil {
 			log.Println("Auto-unlock: succeeded via VaultCenter")
 			server.LoadIdentity()
-			// Delete vault_key file if it still exists (migration cleanup)
 			_ = os.Remove(vaultKeyFile)
 			return
-		} else {
-			log.Printf("Auto-unlock: VC-managed unlock failed: %v (will wait for manual unlock)", err)
 		}
+		log.Printf("Auto-unlock: VC not reachable, starting background retry")
+		// Retry in background — VC might not be up yet
+		go retryAutoUnlock(server, vcURL, vaultKeyFile)
+		return
 	}
 
 	log.Println("Auto-unlock: no method available. Waiting for POST /api/unlock.")
+}
+
+// retryAutoUnlock retries VC-managed unlock in the background with exponential backoff.
+func retryAutoUnlock(server *api.Server, vcURL, vaultKeyFile string) {
+	delays := []time.Duration{5 * time.Second, 10 * time.Second, 30 * time.Second, 60 * time.Second}
+	for i, delay := range delays {
+		time.Sleep(delay)
+		if !server.IsLocked() {
+			return // already unlocked (manual or other)
+		}
+		if err := server.AutoUnlockFromVC(vcURL); err == nil {
+			log.Println("Auto-unlock: succeeded via VaultCenter (background retry)")
+			server.LoadIdentity()
+			_ = os.Remove(vaultKeyFile)
+			return
+		} else {
+			log.Printf("Auto-unlock: retry %d/%d failed: %v", i+1, len(delays), err)
+		}
+	}
+	log.Println("Auto-unlock: all retries exhausted. POST /api/unlock to unlock manually.")
 }
 
 func mustLoadServer() (*api.Server, string, int) {

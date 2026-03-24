@@ -47,9 +47,9 @@ func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Du
 }
 
 func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
-	// Skip heartbeat if server is locked (DB not available yet)
+	// Skip heartbeat silently if server is locked (DB not available yet)
 	if s.IsLocked() || s.db == nil {
-		return fmt.Errorf("server is locked, skipping heartbeat")
+		return nil
 	}
 
 	secretsCount := 0

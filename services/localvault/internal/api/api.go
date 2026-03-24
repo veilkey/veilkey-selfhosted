@@ -82,16 +82,22 @@ func (s *Server) SetDBPath(dbPath string, salt []byte) {
 
 // SetVaultUnlockKey stores the auto-generated password in memory for sending to VC.
 func (s *Server) SetVaultUnlockKey(key string) {
+	s.kekMu.Lock()
+	defer s.kekMu.Unlock()
 	s.vaultUnlockKey = key
 }
 
 // VaultUnlockKey returns the pending vault unlock key (empty after sent to VC).
 func (s *Server) VaultUnlockKey() string {
+	s.kekMu.RLock()
+	defer s.kekMu.RUnlock()
 	return s.vaultUnlockKey
 }
 
 // ClearVaultUnlockKey clears the in-memory vault unlock key after VC confirms storage.
 func (s *Server) ClearVaultUnlockKey() {
+	s.kekMu.Lock()
+	defer s.kekMu.Unlock()
 	s.vaultUnlockKey = ""
 }
 
@@ -375,6 +381,10 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.LoadIdentity()
+
+	// Store password for VC migration — next heartbeat will send it to VC
+	// so future restarts can auto-unlock without manual password entry.
+	s.SetVaultUnlockKey(req.Password)
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{"status": "unlocked"})
