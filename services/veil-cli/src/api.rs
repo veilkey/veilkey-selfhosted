@@ -714,4 +714,140 @@ mod tests {
             assert!(w[0] >= w[1]);
         }
     }
+
+    // ── Defense: JSON injection in password body ─────────────────────
+
+    #[test]
+    fn defense_json_password_nested_escape() {
+        let password = r#"\"},{"admin":true"#;
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("nested escape must produce valid JSON");
+        assert_eq!(
+            parsed["password"].as_str().unwrap(),
+            password,
+            "password must be preserved exactly"
+        );
+        // Must NOT have extra keys injected
+        assert!(
+            parsed.get("admin").is_none(),
+            "injection must not create additional JSON keys"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_unicode_escape_injection() {
+        // \u0022 is a JSON unicode escape for double-quote
+        let password = r#"\u0022,\u0022admin\u0022:true"#;
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("unicode escape injection must produce valid JSON");
+        assert_eq!(
+            parsed["password"].as_str().unwrap(),
+            password,
+            "unicode escapes in password must be treated as literal characters"
+        );
+        assert!(
+            parsed.get("admin").is_none(),
+            "unicode escape injection must not create additional JSON keys"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_very_long() {
+        // 1MB password — verify no panic
+        let password: String = "A".repeat(1_000_000);
+        let body = super::json_password_body(&password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("very long password must produce valid JSON");
+        assert_eq!(
+            parsed["password"].as_str().unwrap().len(),
+            1_000_000,
+            "long password must be preserved"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_binary_data() {
+        // Binary-ish data with control characters
+        let password = "pass\x01\x02\x03\x04\x05\x06\x07";
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("binary data in password must produce valid JSON");
+        // The control chars should be escaped as \u00xx
+        let recovered = parsed["password"].as_str().unwrap();
+        assert_eq!(
+            recovered.len(),
+            password.len(),
+            "binary password must be preserved (control chars escaped then decoded)"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_null_byte() {
+        // Null byte in password
+        let password = "pass\x00word";
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("null byte in password must produce valid JSON");
+        let recovered = parsed["password"].as_str().unwrap();
+        assert_eq!(
+            recovered, password,
+            "null byte must be preserved in password"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_all_special_chars() {
+        let password = "\"\\/{}\n\r\t";
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("special chars must produce valid JSON");
+        assert_eq!(
+            parsed["password"].as_str().unwrap(),
+            password,
+            "all special chars must round-trip correctly"
+        );
+    }
+
+    #[test]
+    fn defense_json_password_empty() {
+        let body = super::json_password_body("");
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("empty password must produce valid JSON");
+        assert_eq!(parsed["password"].as_str().unwrap(), "");
+    }
+
+    #[test]
+    fn defense_json_password_only_structure() {
+        // Attempt to create a completely new JSON structure
+        let password = r#""},"new_key":"value","x":{"password":"#;
+        let body = super::json_password_body(password);
+        let parsed: serde_json::Value = serde_json::from_str(&body)
+            .expect("structural injection must produce valid JSON");
+        assert!(
+            parsed.get("new_key").is_none(),
+            "structural injection must not create new keys"
+        );
+        assert_eq!(
+            parsed["password"].as_str().unwrap(),
+            password,
+        );
+    }
+
+    // ── Defense: resolve_candidates ──────────────────────────────────
+
+    #[test]
+    fn defense_resolve_candidates_injection() {
+        // Verify resolve_candidates doesn't produce unexpected URLs
+        let candidates = super::resolve_candidates("VK:LOCAL:abc123");
+        assert!(!candidates.is_empty());
+        for c in &candidates {
+            assert!(
+                !c.contains(".."),
+                "resolve candidate must not contain path traversal: {}",
+                c
+            );
+        }
+    }
 }

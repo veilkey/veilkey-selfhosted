@@ -190,3 +190,110 @@ func TestRenderGlobalFunctionCommand_MissingRef(t *testing.T) {
 		t.Error("expected error for missing ref")
 	}
 }
+
+// ── Defense: Command injection edge cases ────────────────────────────────────
+
+func TestDefense_FunctionRun_NewlineInjection(t *testing.T) {
+	h := &Handler{}
+	// Newline injection: "curl\n; rm -rf /"
+	// The semicolon after newline is a shell metacharacter
+	cmd := "curl\n; rm -rf /"
+	fn := &db.GlobalFunction{Command: cmd, VarsJSON: "{}"}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error for newline injection: command contains semicolon")
+	}
+}
+
+func TestDefense_FunctionRun_NullByteCommand(t *testing.T) {
+	h := &Handler{}
+	// Null byte: "curl\x00bash" — strings.Fields splits on whitespace, not null bytes
+	// But "curl\x00bash" as a single token won't match allowlist["curl"]
+	cmd := "curl\x00bash"
+	fn := &db.GlobalFunction{Command: cmd, VarsJSON: "{}"}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error for null byte command — combined token should not match allowlist")
+	}
+}
+
+func TestDefense_FunctionRun_UnicodeHomoglyphs(t *testing.T) {
+	h := &Handler{}
+	// Fullwidth 'curl' (U+FF43 U+FF55 U+FF52 U+FF4C) — looks like "curl" but isn't
+	cmd := "\uff43\uff55\uff52\uff4c https://example.com"
+	fn := &db.GlobalFunction{Command: cmd, VarsJSON: "{}"}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error for unicode homoglyph command — must not match allowlist")
+	}
+}
+
+func TestDefense_FunctionRun_DoubleEncodedCommand(t *testing.T) {
+	h := &Handler{}
+	// Double-encoded: "curl%20%7C%20bash" — should not be decoded
+	cmd := "curl%20%7C%20bash"
+	fn := &db.GlobalFunction{Command: cmd, VarsJSON: "{}"}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error for URL-encoded command — should not match allowlist")
+	}
+}
+
+func TestDefense_FunctionRun_EnvVarExpansion(t *testing.T) {
+	h := &Handler{}
+	// "curl $HOME" — $ is a dangerous char
+	cmd := "curl $HOME"
+	fn := &db.GlobalFunction{Command: cmd, VarsJSON: "{}"}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error for env var expansion ($HOME)")
+	}
+}
+
+func TestDefense_ShellQuote_NullByte(t *testing.T) {
+	// Ensure shellQuote handles null bytes (they get single-quoted, neutralized)
+	got := shellQuote("value\x00injected")
+	if got != "'value\x00injected'" {
+		t.Errorf("shellQuote with null byte = %q, want %q", got, "'value\x00injected'")
+	}
+}
+
+func TestDefense_ShellQuote_Newline(t *testing.T) {
+	got := shellQuote("line1\nline2")
+	if got != "'line1\nline2'" {
+		t.Errorf("shellQuote with newline = %q, want %q", got, "'line1\nline2'")
+	}
+}
+
+func TestDefense_FunctionRun_DangerousChars_Semicolon_In_Placeholder(t *testing.T) {
+	// The dangerous chars check strips placeholders first, so metacharacters
+	// OUTSIDE placeholders are caught even with placeholders present
+	h := &Handler{}
+	cmd := "curl {%{URL}%}; rm -rf /"
+	fn := &db.GlobalFunction{
+		Command:  cmd,
+		VarsJSON: `{"URL":{"ref":"VK:LOCAL:abc"}}`,
+	}
+	_, err := h.renderGlobalFunctionCommand(fn)
+	if err == nil {
+		t.Error("expected error: semicolon outside placeholder must be rejected")
+	}
+}
+
+func TestDefense_FunctionRun_EnvOverride_BlocksDangerous(t *testing.T) {
+	// Verify dangerous env vars are not in the allowlist
+	dangerous := []string{
+		"PATH",
+		"HOME",
+		"LD_PRELOAD",
+		"LD_LIBRARY_PATH",
+		"SHELL",
+		"USER",
+		"TERM",
+	}
+	for _, key := range dangerous {
+		if _, ok := functionRunEnvAllowlist[key]; ok {
+			t.Errorf("dangerous env var %q should NOT be in env allowlist", key)
+		}
+	}
+}
