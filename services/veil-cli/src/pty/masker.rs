@@ -22,6 +22,14 @@ pub(crate) fn find_cross_chunk_mask(
     new_text: &str,
     mask_map: &[(String, String)],
 ) -> Option<CrossChunkMatch> {
+    // Skip when new_text contains terminal escape sequences (CSI \x1b[).
+    // These appear during readline operations (history recall, cursor movement,
+    // tab completion) where our cursor erase would conflict with readline's
+    // cursor management, causing VK:LOC partial fragments.
+    if new_text.contains("\x1b[") {
+        return None;
+    }
+
     let combined = format!("{}{}", plain_tail, new_text);
     let tail_len = plain_tail.len();
 
@@ -1694,6 +1702,73 @@ mod tests {
         let visible = strip_ansi(&output);
         assert!(visible.contains("VK:LOCAL:6da25530"));
         assert!(!visible.contains("VK:LOCVK:"), "no partial refs: {}", visible);
+    }
+
+    // ── Escape sequence skip (readline/arrow key safety) ──────────
+
+    #[test]
+    fn cross_chunk_skip_when_new_has_escape_sequence() {
+        // Down arrow: readline outputs \x1b[B or cursor control sequences.
+        // Cross-chunk must NOT fire when new_text contains CSI sequences,
+        // because cursor erase would conflict with readline cursor management.
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Tail has most of the secret, new_text has last char + escape (readline redraw)
+        let r = find_cross_chunk_mask(
+            "(VEIL) root$ Ghdrhkdg",
+            "h1@\x1b[K",  // escape sequence in same chunk
+            &map,
+        );
+        assert!(r.is_none(), "must skip when new_text has escape sequences");
+    }
+
+    #[test]
+    fn cross_chunk_skip_when_new_has_csi_cursor_move() {
+        let map = mk(&[("secret99", "VK:LOCAL:xxx")]);
+        let r = find_cross_chunk_mask("secret9", "9\x1b[C", &map);
+        assert!(r.is_none(), "must skip when CSI cursor movement present");
+    }
+
+    #[test]
+    fn cross_chunk_fires_on_plain_text_and_cr() {
+        // \r (carriage return) is NOT an escape sequence — must still fire
+        let map = mk(&[("secret99", "VK:LOCAL:yyy")]);
+        let r = find_cross_chunk_mask("secret9", "9\r", &map);
+        assert!(r.is_some(), "CR is not escape — must fire");
+    }
+
+    #[test]
+    fn cross_chunk_fires_on_plain_text_and_newline() {
+        let map = mk(&[("secret99", "VK:LOCAL:zzz")]);
+        let r = find_cross_chunk_mask("secret9", "9\n", &map);
+        assert!(r.is_some(), "newline is not escape — must fire");
+    }
+
+    #[test]
+    fn cross_chunk_skip_on_history_recall_output() {
+        // History recall (up/down arrow): readline sends cursor movement + text
+        let map = mk(&[("password", "VK:LOCAL:hist1")]);
+        let r = find_cross_chunk_mask(
+            "$ passwor",
+            "d\x08\x08\x08\x08\x08\x08\x08\x08\x1b[K",  // readline erasing and redrawing
+            &map,
+        );
+        assert!(r.is_none(), "must skip during readline redraw");
+    }
+
+    #[test]
+    fn chunked_down_arrow_after_secret_no_corruption() {
+        // Simulate: type secret → masked → press down arrow → no corruption
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = "(VEIL) root$ ".to_string();
+
+        // Type secret char by char
+        let (out1, count1) = simulate_charwise_echo(&tail, "Ghdrhkdgh1@", &map);
+        assert_eq!(count1, 1);
+        tail.push_str("Ghdrhkdgh1@");
+
+        // Now simulate down arrow output (readline sends escape sequences)
+        let r = find_cross_chunk_mask(&tail, "\x1b[B\x1b[2K\r(VEIL) root$ ", &map);
+        assert!(r.is_none(), "down arrow must not trigger cross-chunk");
     }
 
     // ── Cross-chunk edge cases ─────────────────────────────────────
