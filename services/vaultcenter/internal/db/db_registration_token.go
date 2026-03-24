@@ -52,7 +52,7 @@ func (d *DB) RevokeRegistrationToken(tokenID string) error {
 }
 
 func (d *DB) DeleteExpiredRegistrationTokens() (int64, error) {
-	result := d.conn.Where("status = ? AND expires_at < ?", "active", time.Now().UTC()).
+	result := d.conn.Model(&RegistrationToken{}).Where("status = ? AND expires_at < ?", "active", time.Now().UTC()).
 		Updates(map[string]interface{}{"status": "expired"})
 	return result.RowsAffected, result.Error
 }

@@ -303,11 +303,6 @@ func (c *Client) ListAuditEvents() ([]map[string]any, error) {
 	return decodeList[map[string]any](data, "events")
 }
 
-func (c *Client) ListCatalogAudit() ([]map[string]any, error) {
-	// catalog/audit requires entity_type+entity_id, use admin audit instead
-	return c.ListAuditEvents()
-}
-
 // ── Settings ──
 
 func (c *Client) AuthSettings() (map[string]any, error) {

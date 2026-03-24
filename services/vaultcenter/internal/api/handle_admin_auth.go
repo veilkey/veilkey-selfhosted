@@ -93,13 +93,13 @@ func remoteIP(r *http.Request) string {
 	}
 	if ip := net.ParseIP(addr); ip != nil && isPrivateIP(ip) {
 		if h := r.Header.Get(httputil.HeaderXRealIP); h != "" {
-			if parsed := net.ParseIP(strings.TrimSpace(h)); parsed != nil {
+			if parsed := net.ParseIP(strings.TrimSpace(h)); parsed != nil && !parsed.IsLoopback() {
 				return parsed.String()
 			}
 		}
 		if h := r.Header.Get(httputil.HeaderXForwardedFor); h != "" {
 			first := strings.TrimSpace(strings.SplitN(h, ",", 2)[0])
-			if parsed := net.ParseIP(first); parsed != nil {
+			if parsed := net.ParseIP(first); parsed != nil && !parsed.IsLoopback() {
 				return parsed.String()
 			}
 		}
@@ -242,6 +242,10 @@ func (s *Server) handleAdminSetup(w http.ResponseWriter, r *http.Request) {
 		s.respondError(w, http.StatusBadRequest, "admin_password must be at least 8 characters")
 		return
 	}
+	if len(req.AdminPassword) > 256 {
+		s.respondError(w, http.StatusBadRequest, "admin_password must not exceed 256 characters")
+		return
+	}
 	// Verify owner password (KEK)
 	kek := crypto.DeriveKEK(req.OwnerPassword, s.salt)
 	info, err := s.db.GetNodeInfo()
@@ -277,6 +281,10 @@ func (s *Server) handleAdminChangePassword(w http.ResponseWriter, r *http.Reques
 	}
 	if len(req.NewAdminPassword) < 8 {
 		s.respondError(w, http.StatusBadRequest, "new_admin_password must be at least 8 characters")
+		return
+	}
+	if len(req.NewAdminPassword) > 256 {
+		s.respondError(w, http.StatusBadRequest, "admin_password must not exceed 256 characters")
 		return
 	}
 	// Verify owner password (KEK) — the ONLY way to change admin password

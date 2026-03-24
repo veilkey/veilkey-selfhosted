@@ -63,7 +63,10 @@ func RunServer() {
 	// For now, log that they are deferred.
 	log.Println("Temp ref GC and plugins deferred until unlock")
 
-	handler := server.SetupRoutes()
+	handler, err := server.SetupRoutes()
+	if err != nil {
+		log.Fatalf("SetupRoutes failed: %v", err)
+	}
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
 	tlsKey := os.Getenv("VEILKEY_TLS_KEY")
 	if tlsCert != "" && tlsKey != "" {

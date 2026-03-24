@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -27,20 +28,22 @@ type vaultsModel struct {
 	cursor int
 
 	// Vault detail → secrets
-	showDetail     bool
-	detailVault    map[string]any
-	secrets        []map[string]any
+	showDetail      bool
+	detailVault     map[string]any
+	secrets         []map[string]any
 	filteredSecrets []map[string]any
-	secretsCursor  int
-	secretsLoading bool
+	secretsCursor   int
+	secretsLoading  bool
 
 	// Search
 	searching   bool
 	searchInput textinput.Model
 	searchQuery string
 
-	// Secret create
+	// Secret create/edit
 	creatingSecret bool
+	editingSecret  bool
+	editSecretName string
 	createName     textinput.Model
 	createValue    textinput.Model
 	createFocus    int
@@ -53,6 +56,10 @@ type vaultsModel struct {
 	metaLoading      bool
 	revealValue      string
 	revealing        bool
+
+	// Delete confirm
+	confirmDelete    bool
+	deleteTargetName string
 
 	// Agents
 	agents      []map[string]any
@@ -123,6 +130,16 @@ func createSecretCmd(c *Client, runtimeHash, name, value string) tea.Cmd {
 	}
 }
 
+func updateSecretCmd(c *Client, runtimeHash, name, value string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := c.UpdateVaultSecret(runtimeHash, name, value)
+		if err != nil {
+			return errMsg{err}
+		}
+		return secretCreatedMsg{} // reuse: triggers secrets reload
+	}
+}
+
 func deleteSecretCmd(c *Client, runtimeHash, name string) tea.Cmd {
 	return func() tea.Msg {
 		if err := c.DeleteVaultSecret(runtimeHash, name); err != nil {
@@ -137,6 +154,25 @@ func loadVaultsCmd(c *Client) tea.Cmd {
 		vaults, err := c.ListVaults()
 		if err != nil {
 			return errMsg{err}
+		}
+		// Enrich vaults with agent info; failure is non-fatal — agent fields will be empty.
+		agents, err := c.ListAgents()
+		if err != nil {
+			log.Printf("[tui] loadVaultsCmd: ListAgents: %v", err)
+		}
+		agentByHash := map[string]map[string]any{}
+		for _, a := range agents {
+			if rh := str(a, "vault_runtime_hash"); rh != "" {
+				agentByHash[rh] = a
+			}
+		}
+		for i, v := range vaults {
+			if a, ok := agentByHash[str(v, "vault_runtime_hash")]; ok {
+				vaults[i]["health"] = str(a, "health")
+				vaults[i]["secrets_count"] = str(a, "secrets_count")
+				vaults[i]["ip"] = str(a, "ip")
+				vaults[i]["last_seen_ago"] = str(a, "last_seen_ago")
+			}
 		}
 		return vaultsLoadedMsg{vaults}
 	}
@@ -251,6 +287,10 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Delete confirm mode
+		if m.confirmDelete {
+			return m.updateDeleteConfirm(msg, c)
+		}
 		// Search mode in secrets
 		if m.searching {
 			return m.updateSearch(msg)
@@ -298,12 +338,13 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 			case "h":
 				m.revealValue = ""
 			case "d":
-				name := str(m.secretDetail, "name")
-				rh := str(m.detailVault, "vault_runtime_hash")
-				return m, deleteSecretCmd(c, rh, name)
+				m.confirmDelete = true
+				m.deleteTargetName = str(m.secretDetail, "name")
 			case "e":
+				m.editingSecret = true
+				m.editSecretName = str(m.secretDetail, "name")
 				m.creatingSecret = true
-				m.createName.SetValue(str(m.secretDetail, "name"))
+				m.createName.SetValue(m.editSecretName)
 				m.createValue.SetValue("")
 				m.createFocus = 1
 				m.createName.Blur()
@@ -432,7 +473,34 @@ func (m vaultsModel) updateCatalog(msg tea.KeyMsg) (vaultsModel, tea.Cmd) {
 	return m, nil
 }
 
+func (m vaultsModel) updateDeleteConfirm(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd) {
+	switch msg.String() {
+	case "y":
+		m.confirmDelete = false
+		rh := str(m.detailVault, "vault_runtime_hash")
+		m.showSecretDetail = false
+		m.revealValue = ""
+		return m, deleteSecretCmd(c, rh, m.deleteTargetName)
+	case "n", "esc":
+		m.confirmDelete = false
+	}
+	return m, nil
+}
+
+func (m vaultsModel) viewDeleteConfirm() string {
+	var b strings.Builder
+	b.WriteString(styleError.Render("  ⚠ Delete secret?"))
+	b.WriteString("\n\n")
+	b.WriteString("  " + styleValue.Render(m.deleteTargetName))
+	b.WriteString("\n\n")
+	b.WriteString(styleDim.Render("  y confirm  n cancel"))
+	return b.String()
+}
+
 func (m vaultsModel) view(width int) string {
+	if m.confirmDelete {
+		return m.viewDeleteConfirm()
+	}
 	if m.showSecretDetail {
 		return m.viewSecretDetail()
 	}
@@ -494,20 +562,25 @@ func (m vaultsModel) viewList(width int) string {
 		return b.String()
 	}
 
-	h := fmt.Sprintf("  %-20s %-20s %-10s %-10s %-10s", "Name", "Display", "Status", "Mode", "Blocked")
+	h := fmt.Sprintf("  %-20s %-10s %-10s %-18s %-8s %-10s", "Name", "Status", "Health", "IP", "Secrets", "Last Seen")
 	b.WriteString(styleDim.Render(h))
 	b.WriteString("\n")
 	for i, v := range m.vaults {
-		name := str(v, "vault_name")
+		// Prefer display_name (human-readable label) over vault_name (internal identifier).
+		// Fallback order was intentionally changed from vault_name->display_name to
+		// display_name->vault_name when the enriched vault list view was introduced,
+		// so that the human-friendly label is shown as the primary column.
+		name := str(v, "display_name")
 		if name == "" {
-			name = str(v, "display_name")
+			name = str(v, "vault_name")
 		}
-		line := fmt.Sprintf("  %-20s %-20s %-10s %-10s %-10s",
+		line := fmt.Sprintf("  %-20s %-10s %-10s %-18s %-8s %-10s",
 			truncate(name, 18),
-			truncate(str(v, "display_name"), 18),
 			str(v, "status"),
-			str(v, "mode"),
-			str(v, "blocked"),
+			str(v, "health"),
+			truncate(str(v, "ip"), 16),
+			str(v, "secrets_count"),
+			str(v, "last_seen_ago"),
 		)
 		if i == m.cursor {
 			line = lipgloss.NewStyle().Background(colorHighlight).Foreground(colorFg).Width(max(width-4, 80)).Render(line)
@@ -572,14 +645,24 @@ func (m vaultsModel) viewSecrets(width int) string {
 
 func (m vaultsModel) viewSecretCreate() string {
 	var b strings.Builder
-	name := str(m.detailVault, "vault_name")
-	b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — New Secret", name)))
+	vaultName := str(m.detailVault, "vault_name")
+	if m.editingSecret {
+		b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — Edit: %s", vaultName, m.editSecretName)))
+	} else {
+		b.WriteString(styleHeader.Render(fmt.Sprintf("  %s — New Secret", vaultName)))
+	}
 	b.WriteString("\n\n")
-	b.WriteString("  " + styleLabel.Render("Name") + "\n")
-	b.WriteString("  " + m.createName.View() + "\n\n")
+	if !m.editingSecret {
+		b.WriteString("  " + styleLabel.Render("Name") + "\n")
+		b.WriteString("  " + m.createName.View() + "\n\n")
+	}
 	b.WriteString("  " + styleLabel.Render("Value") + "\n")
 	b.WriteString("  " + m.createValue.View() + "\n\n")
-	b.WriteString(styleDim.Render("  tab switch  enter create  esc cancel"))
+	if m.editingSecret {
+		b.WriteString(styleDim.Render("  enter update  esc cancel"))
+	} else {
+		b.WriteString(styleDim.Render("  tab switch  enter create  esc cancel"))
+	}
 	return b.String()
 }
 
@@ -670,21 +753,29 @@ func (m vaultsModel) viewAgents(width int) string {
 		return b.String()
 	}
 
-	h := fmt.Sprintf("  %-18s %-10s %-10s %-8s %-8s %-8s", "Vault Name", "Status", "Health", "Ver", "Secrets", "Rotate")
+	h := fmt.Sprintf("  %-16s %-10s %-10s %-18s %-8s %-6s %-10s", "Name", "Status", "Health", "IP", "Secrets", "Ver", "Last Seen")
 	b.WriteString(styleDim.Render(h))
 	b.WriteString("\n")
 	for i, a := range m.agents {
-		vname := str(a, "vault_name")
+		vname := str(a, "label")
 		if vname == "" {
-			vname = truncate(str(a, "vault_hash"), 16)
+			vname = str(a, "vault_name")
 		}
-		line := fmt.Sprintf("  %-18s %-10s %-10s %-8s %-8s %-8s",
-			truncate(vname, 16),
+		if vname == "" {
+			vname = truncate(str(a, "vault_hash"), 14)
+		}
+		ip := str(a, "ip")
+		if port := str(a, "port"); port != "" && port != "0" {
+			ip += ":" + port
+		}
+		line := fmt.Sprintf("  %-16s %-10s %-10s %-18s %-8s %-6s %-10s",
+			truncate(vname, 14),
 			str(a, "status"),
 			str(a, "health"),
-			str(a, "key_version"),
+			truncate(ip, 16),
 			str(a, "secrets_count"),
-			str(a, "rotation_required"),
+			str(a, "key_version"),
+			str(a, "last_seen_ago"),
 		)
 		if i == m.agentCursor {
 			line = lipgloss.NewStyle().Background(colorHighlight).Foreground(colorFg).Width(max(width-4, 80)).Render(line)
@@ -830,7 +921,7 @@ func (m vaultsModel) viewCatalogSearching() string {
 	return b.String()
 }
 
-// ── Create secret ──
+// ── Create/Edit secret ──
 
 func (m vaultsModel) updateCreateSecret(msg tea.KeyMsg, c *Client) (vaultsModel, tea.Cmd) {
 	switch msg.String() {
@@ -852,9 +943,14 @@ func (m vaultsModel) updateCreateSecret(msg tea.KeyMsg, c *Client) (vaultsModel,
 			return m, nil
 		}
 		runtimeHash := str(m.detailVault, "vault_runtime_hash")
+		if m.editingSecret {
+			m.editingSecret = false
+			return m, updateSecretCmd(c, runtimeHash, m.editSecretName, value)
+		}
 		return m, createSecretCmd(c, runtimeHash, name, value)
 	case "esc":
 		m.creatingSecret = false
+		m.editingSecret = false
 	default:
 		var cmd tea.Cmd
 		if m.createFocus == 0 {

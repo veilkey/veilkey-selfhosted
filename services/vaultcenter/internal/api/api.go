@@ -598,11 +598,17 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxJSONBody)
 	var req struct {
 		Password string `json:"password"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Password == "" {
 		s.respondError(w, http.StatusBadRequest, "password is required")
+		return
+	}
+
+	if len(req.Password) > 256 {
+		s.respondError(w, http.StatusBadRequest, "password too long")
 		return
 	}
 
@@ -643,7 +649,10 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+const maxJSONBody int64 = 1 << 20
+
 func decodeJSON(r *http.Request, dst any) error {
+	r.Body = http.MaxBytesReader(nil, r.Body, maxJSONBody)
 	return json.NewDecoder(r.Body).Decode(dst)
 }
 
@@ -675,9 +684,9 @@ func (s *Server) Ready(w http.ResponseWriter, r *http.Request) {
 	s.respondJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 
-func (s *Server) SetupRoutes() http.Handler {
+func (s *Server) SetupRoutes() (http.Handler, error) {
 	if s.approvalHandler == nil {
-		panic("api: SetSalt must be called before SetupRoutes")
+		return nil, fmt.Errorf("api: SetSalt must be called before SetupRoutes")
 	}
 	mux := http.NewServeMux()
 
@@ -691,7 +700,7 @@ func (s *Server) SetupRoutes() http.Handler {
 
 	mux.HandleFunc("/health", s.Health)
 	mux.HandleFunc("/ready", s.Ready)
-	mux.HandleFunc("GET /api/chain/info", s.handleChainInfo)
+	mux.HandleFunc("GET /api/chain/info", s.requireTrustedIP(s.handleChainInfo))
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
 	s.approvalHandler.Register(mux, s.requireTrustedIP)
 	s.SetupAPIRoutes(mux)
@@ -704,7 +713,7 @@ func (s *Server) SetupRoutes() http.Handler {
 	s.pluginHandler.Register(mux, s.requireTrustedIP)
 	mux.HandleFunc("POST /api/admin/tracked-refs/cleanup", s.requireReadyForOps(s.adminHandler.RequireAdminSession(s.hkmHandler.HandleTrackedRefCleanup)))
 
-	return securityHeadersMiddleware(logMiddleware(TxActorMiddleware(mux)))
+	return securityHeadersMiddleware(logMiddleware(TxActorMiddleware(mux))), nil
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {
@@ -712,6 +721,8 @@ func securityHeadersMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "DENY")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'")
 		next.ServeHTTP(w, r)
 	})
 }
