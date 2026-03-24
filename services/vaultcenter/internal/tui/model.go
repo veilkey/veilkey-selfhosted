@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,8 +21,16 @@ const (
 	pageSettings
 )
 
-var pageNames = []string{"Keycenter", "Vaults", "Functions", "Audit", "Plugins", "Settings"}
+var pageNameKeys = []string{"nav.keycenter", "nav.vaults", "nav.functions", "nav.audit", "nav.plugins", "nav.settings"}
 var pages = []page{pageKeycenter, pageVaults, pageFunctions, pageAudit, pagePlugins, pageSettings}
+
+func pageNames() []string {
+	names := make([]string, len(pageNameKeys))
+	for i, key := range pageNameKeys {
+		names[i] = T(key)
+	}
+	return names
+}
 
 // Model is the top-level bubbletea model.
 type Model struct {
@@ -31,6 +40,7 @@ type Model struct {
 	activePage page
 	status    string
 	err       error
+	lang      Lang
 
 	// Sub-models
 	login     loginModel
@@ -45,10 +55,18 @@ type Model struct {
 // NewModel creates a new TUI model.
 func NewModel(serverURL string) Model {
 	client := NewClient(serverURL)
+	lang := LangEN
+	if envLang := os.Getenv("LANG"); strings.HasPrefix(envLang, "ko") {
+		lang = LangKO
+	} else if envLC := os.Getenv("LC_ALL"); strings.HasPrefix(envLC, "ko") {
+		lang = LangKO
+	}
+	SetLang(lang)
 	return Model{
 		client:     client,
 		activePage: pageLogin,
 		status:     "connecting...",
+		lang:       lang,
 		login:      newLoginModel(),
 		keycenter:  newKeycenterModel(),
 		vaults:     newVaultsModel(),
@@ -91,7 +109,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
 			// Tab bar click (first line, row 0)
 			if msg.Y == 0 && m.activePage != pageLogin {
-				clickedTab := detectTabClick(msg.X, pageNames)
+				clickedTab := detectTabClick(msg.X, pageNames())
 				if clickedTab >= 0 && clickedTab < len(pages) {
 					return m.switchPage(pages[clickedTab])
 				}
@@ -112,6 +130,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case loginFailMsg:
 		// Let login handle it
+
+	case langToggleMsg:
+		if m.lang == LangEN {
+			m.lang = LangKO
+		} else {
+			m.lang = LangEN
+		}
+		SetLang(m.lang)
+		return m, nil
 	}
 
 	// Delegate to active page
@@ -171,8 +198,9 @@ func (m Model) View() string {
 }
 
 func (m Model) renderTabs() string {
+	names := pageNames()
 	var tabs []string
-	for i, name := range pageNames {
+	for i, name := range names {
 		label := fmt.Sprintf(" %d %s ", i+1, name)
 		if pages[i] == m.activePage {
 			tabs = append(tabs, styleActive.Render(label))

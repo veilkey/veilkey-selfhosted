@@ -69,7 +69,7 @@ func (m pluginsModel) view(width int) string {
 	title := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("15")).
-		Render("Plugins")
+		Render(T("plugins.title"))
 	b.WriteString(title + "\n\n")
 
 	if m.err != "" {
@@ -77,12 +77,12 @@ func (m pluginsModel) view(width int) string {
 	}
 
 	if !m.loaded {
-		b.WriteString("  Loading...\n")
+		b.WriteString("  " + T("common.loading") + "\n")
 		return b.String()
 	}
 
 	if len(m.plugins) == 0 {
-		b.WriteString("  No plugins installed.\n")
+		b.WriteString("  " + T("plugins.empty") + "\n")
 		b.WriteString("\n  Install: POST /api/plugins (multipart: wasm + manifest)\n")
 		return b.String()
 	}

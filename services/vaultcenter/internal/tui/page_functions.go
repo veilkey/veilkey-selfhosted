@@ -99,6 +99,23 @@ func (m functionsModel) update(msg tea.Msg, c *Client) (functionsModel, tea.Cmd)
 		m.offline = true
 		return m, nil
 
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft && !m.showDetail {
+			// Sub-tab header(1) + blank(1) + col header(1) + main tab(1) = row 4
+			idx := msg.Y - 4
+			switch m.tab {
+			case fnTabList:
+				if idx >= 0 && idx < len(m.functions) {
+					m.cursor = idx
+				}
+			case fnTabBindings:
+				if idx >= 0 && idx < len(m.bindings) {
+					m.bindingCursor = idx
+				}
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		if !m.showDetail {
 			switch msg.String() {
@@ -190,8 +207,8 @@ func (m functionsModel) view(width int) string {
 		name string
 		t    fnTab
 	}{
-		{"Functions", fnTabList},
-		{"Bindings", fnTabBindings},
+		{T("fn.title"), fnTabList},
+		{T("fn.bindings"), fnTabBindings},
 	}
 	var tabParts []string
 	for _, t := range tabs {
@@ -215,15 +232,15 @@ func (m functionsModel) viewList(width int) string {
 	var b strings.Builder
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.offline {
-		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
+		b.WriteString(styleError.Render("  ⚠ " + T("common.offline")))
 		return b.String()
 	}
 	if len(m.functions) == 0 {
-		b.WriteString(styleDim.Render("  No global functions."))
+		b.WriteString(styleDim.Render("  " + T("fn.empty")))
 		return b.String()
 	}
 
@@ -263,7 +280,7 @@ func (m functionsModel) viewDetail() string {
 
 	b.WriteString("\n")
 	if m.running {
-		b.WriteString("  " + styleDim.Render("Running..."))
+		b.WriteString("  " + styleDim.Render(T("common.running")))
 	} else if m.runOutput != "" {
 		b.WriteString("  " + styleLabel.Render("Output") + "\n")
 		b.WriteString("  " + styleValue.Render(truncate(m.runOutput, 300)))
@@ -277,15 +294,15 @@ func (m functionsModel) viewBindings(width int) string {
 	var b strings.Builder
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.offline {
-		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
+		b.WriteString(styleError.Render("  ⚠ " + T("common.offline")))
 		return b.String()
 	}
 	if len(m.bindings) == 0 {
-		b.WriteString(styleDim.Render("  No bindings."))
+		b.WriteString(styleDim.Render("  " + T("fn.no_bindings")))
 		return b.String()
 	}
 

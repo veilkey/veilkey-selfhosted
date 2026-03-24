@@ -289,6 +289,45 @@ func (m vaultsModel) update(msg tea.Msg, c *Client) (vaultsModel, tea.Cmd) {
 		m.revealing = false
 		return m, nil
 
+	case tea.MouseMsg:
+		if msg.Action == tea.MouseActionRelease && msg.Button == tea.MouseButtonLeft {
+			if !m.showDetail && !m.showSecretDetail && !m.creatingSecret && !m.searching && !m.catalogSearching && !m.confirmDelete {
+				// Sub-tab header(1) + blank(1) + col header(1) = list starts at Y=4 (relative to page, +1 for main tab bar)
+				switch m.tab {
+				case vaultTabList:
+					idx := msg.Y - 4
+					if idx >= 0 && idx < len(m.vaults) {
+						m.cursor = idx
+					}
+				case vaultTabAgents:
+					idx := msg.Y - 4
+					if idx >= 0 && idx < len(m.agents) {
+						m.agentCursor = idx
+					}
+				case vaultTabCatalog:
+					offset := 4
+					if m.catalogQuery != "" {
+						offset += 2 // search line + blank
+					}
+					idx := msg.Y - offset
+					if idx >= 0 && idx < len(m.filteredCatalog) {
+						m.catalogCursor = idx
+					}
+				}
+			} else if m.showDetail && !m.showSecretDetail {
+				// Secrets list: header(1) + blank(1) + col header(1) = starts at Y=4
+				offset := 4
+				if m.searchQuery != "" {
+					offset += 2
+				}
+				idx := msg.Y - offset
+				if idx >= 0 && idx < len(m.filteredSecrets) {
+					m.secretsCursor = idx
+				}
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		// Delete confirm mode
 		if m.confirmDelete {
@@ -495,7 +534,7 @@ func (m vaultsModel) updateDeleteConfirm(msg tea.KeyMsg, c *Client) (vaultsModel
 
 func (m vaultsModel) viewDeleteConfirm() string {
 	var b strings.Builder
-	b.WriteString(styleError.Render("  ⚠ Delete secret?"))
+	b.WriteString(styleError.Render("  ⚠ " + T("vaults.delete_confirm")))
 	b.WriteString("\n\n")
 	b.WriteString("  " + styleValue.Render(m.deleteTargetName))
 	b.WriteString("\n\n")
@@ -528,9 +567,9 @@ func (m vaultsModel) view(width int) string {
 		name string
 		t    vaultTab
 	}{
-		{"Vaults", vaultTabList},
-		{"Agents", vaultTabAgents},
-		{"Catalog", vaultTabCatalog},
+		{T("vaults.title"), vaultTabList},
+		{T("vaults.agents"), vaultTabAgents},
+		{T("vaults.catalog"), vaultTabCatalog},
 	}
 	var tabParts []string
 	for _, t := range tabs {
@@ -556,15 +595,15 @@ func (m vaultsModel) viewList(width int) string {
 	var b strings.Builder
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.offline {
-		b.WriteString(styleError.Render("  ⚠ Cannot reach VaultCenter"))
+		b.WriteString(styleError.Render("  ⚠ " + T("common.offline")))
 		return b.String()
 	}
 	if len(m.vaults) == 0 {
-		b.WriteString(styleDim.Render("  No vaults."))
+		b.WriteString(styleDim.Render("  " + T("vaults.empty")))
 		return b.String()
 	}
 
@@ -611,18 +650,18 @@ func (m vaultsModel) viewSecrets(width int) string {
 	b.WriteString("\n\n")
 
 	if m.secretsLoading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.searchQuery != "" {
-		b.WriteString("  " + styleDim.Render("search: ") + styleReveal.Render(m.searchQuery) + "\n\n")
+		b.WriteString("  " + styleDim.Render(T("common.search")+" ") + styleReveal.Render(m.searchQuery) + "\n\n")
 	}
 
 	if len(m.filteredSecrets) == 0 {
 		if m.searchQuery != "" {
-			b.WriteString(styleDim.Render("  No matches."))
+			b.WriteString(styleDim.Render("  " + T("vaults.no_matches")))
 		} else {
-			b.WriteString(styleDim.Render("  No secrets."))
+			b.WriteString(styleDim.Render("  " + T("vaults.no_secrets")))
 		}
 		b.WriteString("\n\n" + styleDim.Render("  / search  n create  esc back"))
 		return b.String()
@@ -700,7 +739,7 @@ func (m vaultsModel) viewSecretDetail() string {
 	row("Version", str(m.secretDetail, "version"))
 
 	if m.metaLoading {
-		b.WriteString("\n  " + styleDim.Render("Loading metadata..."))
+		b.WriteString("\n  " + styleDim.Render(T("common.loading_meta")))
 	} else {
 		if m.secretMeta != nil {
 			b.WriteString("\n")
@@ -728,7 +767,7 @@ func (m vaultsModel) viewSecretDetail() string {
 	isVK := strings.HasPrefix(ref, "VK:")
 	if isVK {
 		if m.revealing {
-			b.WriteString("  " + styleDim.Render("Decrypting..."))
+			b.WriteString("  " + styleDim.Render(T("common.decrypting")))
 		} else if m.revealValue != "" {
 			b.WriteString("  " + styleLabel.Render("Value"))
 			b.WriteString(styleReveal.Render(m.revealValue))
@@ -757,11 +796,11 @@ func (m vaultsModel) viewAgents(width int) string {
 	var b strings.Builder
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if len(m.agents) == 0 {
-		b.WriteString(styleDim.Render("  No agents."))
+		b.WriteString(styleDim.Render("  " + T("vaults.no_agents")))
 		return b.String()
 	}
 
@@ -803,18 +842,18 @@ func (m vaultsModel) viewCatalog(width int) string {
 	var b strings.Builder
 
 	if m.loading {
-		b.WriteString(styleDim.Render("  Loading..."))
+		b.WriteString(styleDim.Render("  " + T("common.loading")))
 		return b.String()
 	}
 	if m.catalogQuery != "" {
-		b.WriteString("  " + styleDim.Render("search: ") + styleReveal.Render(m.catalogQuery) + "\n\n")
+		b.WriteString("  " + styleDim.Render(T("common.search")+" ") + styleReveal.Render(m.catalogQuery) + "\n\n")
 	}
 
 	if len(m.filteredCatalog) == 0 {
 		if m.catalogQuery != "" {
-			b.WriteString(styleDim.Render("  No matches."))
+			b.WriteString(styleDim.Render("  " + T("vaults.no_matches")))
 		} else {
-			b.WriteString(styleDim.Render("  No secrets in catalog."))
+			b.WriteString(styleDim.Render("  " + T("vaults.no_catalog")))
 		}
 		b.WriteString("\n\n" + styleDim.Render("  / search"))
 		return b.String()
@@ -917,7 +956,7 @@ func (m *vaultsModel) applyCatalogFilter() {
 
 func (m vaultsModel) viewSearching() string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Search secrets"))
+	b.WriteString(styleHeader.Render("  " + T("vaults.search")))
 	b.WriteString("\n\n")
 	b.WriteString("  " + m.searchInput.View() + "\n\n")
 	b.WriteString(styleDim.Render("  enter search  esc cancel"))
@@ -926,7 +965,7 @@ func (m vaultsModel) viewSearching() string {
 
 func (m vaultsModel) viewCatalogSearching() string {
 	var b strings.Builder
-	b.WriteString(styleHeader.Render("  Search catalog"))
+	b.WriteString(styleHeader.Render("  " + T("vaults.search_catalog")))
 	b.WriteString("\n\n")
 	b.WriteString("  " + m.catalogSearch.View() + "\n\n")
 	b.WriteString(styleDim.Render("  enter search  esc cancel"))

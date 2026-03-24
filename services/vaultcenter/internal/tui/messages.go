@@ -5,6 +5,7 @@ import tea "github.com/charmbracelet/bubbletea"
 // Common messages
 type errMsg struct{ err error }
 type statusMsg struct{ status string }
+type langToggleMsg struct{}
 
 // Keycenter messages
 type refsLoadedMsg struct{ refs []TempRef }
