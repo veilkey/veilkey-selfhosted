@@ -370,31 +370,16 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     // during ECHO-off are implicitly registered as potential secrets
                     // since they won't appear in recent_input for masking-skip.
 
-                    // Enter-key secret guard: check stdin for known secrets.
-                    let secret_blocked = {
+                    // Track line buffer for potential future use (e.g. DEBUG trap).
+                    // Stdin is always forwarded — output masking handles the replacement.
+                    {
                         let map = stdin_mask_map.read().unwrap();
-                        check_stdin_for_secrets(data, &mut line_buf, &map)
-                            == StdinGuardResult::Blocked
-                    };
+                        check_stdin_for_secrets(data, &mut line_buf, &map);
+                    }
 
-                    if secret_blocked {
-                        // Cancel the command by sending Ctrl+C to the PTY
-                        unsafe {
-                            write_all_fd(master_wr, b"\x03");
-                        }
-                        // Clear the line and show a warning directly to the user
-                        let warning =
-                            "\r\x1b[2K\x1b[1;31m[veilkey] blocked: secret detected in command input\x1b[0m\r\n";
-                        let stdout_fd = io::stdout().as_raw_fd();
-                        unsafe {
-                            write_all_fd(stdout_fd, warning.as_bytes());
-                        }
-                        line_buf.clear();
-                    } else {
-                        // Forward raw data to PTY (including escape sequences)
-                        unsafe {
-                            write_all_fd(master_wr, data);
-                        }
+                    // Always forward raw data to PTY
+                    unsafe {
+                        write_all_fd(master_wr, data);
                     }
                 }
             });
