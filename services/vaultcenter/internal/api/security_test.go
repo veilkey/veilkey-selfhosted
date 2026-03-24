@@ -131,3 +131,55 @@ func TestNoPanic(t *testing.T) {
 		t.Error("static_assets must not panic")
 	}
 }
+
+// ══ CSP header ══════════════════════════════════════════════════
+
+func TestCSPHeader(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	body := extractFn(string(s), "func securityHeadersMiddleware(")
+	if body == "" {
+		t.Fatal("securityHeadersMiddleware must exist")
+	}
+	if !strings.Contains(body, "Content-Security-Policy") {
+		t.Error("must set Content-Security-Policy header")
+	}
+}
+
+// ══ No secret leaks in log statements ═══════════════════════════
+
+func TestNoPasswordInLogs(t *testing.T) {
+	files := []string{"api.go", "handle_admin_auth.go", "handlers.go"}
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		code := string(src)
+		for i, line := range strings.Split(code, "\n") {
+			if !strings.Contains(line, "log.") && !strings.Contains(line, "Log(") {
+				continue
+			}
+			lower := strings.ToLower(line)
+			// log line must not interpolate password/secret/token values
+			if strings.Contains(lower, "req.password") ||
+				strings.Contains(lower, "req.adminpassword") ||
+				strings.Contains(lower, "req.ownerpassword") ||
+				strings.Contains(lower, "req.newadminpassword") {
+				t.Errorf("%s:%d: log statement may leak password: %s", f, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+// ══ OTP policy requires auth ════════════════════════════════════
+
+func TestOTPPolicyAuth(t *testing.T) {
+	s, _ := os.ReadFile("handlers.go")
+	line := routeLine(string(s), "/api/otp-policy")
+	if line == "" {
+		t.Skip("/api/otp-policy route not found")
+	}
+	if !strings.Contains(line, "requireTrustedIP") && !strings.Contains(line, "requireUnlocked") {
+		t.Error("/api/otp-policy should have auth middleware")
+	}
+}

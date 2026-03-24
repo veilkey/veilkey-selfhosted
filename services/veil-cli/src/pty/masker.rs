@@ -8,10 +8,10 @@ const GREEN: &str = "\x1b[92m";
 const RESET: &str = "\x1b[0m";
 
 pub fn colorize_ref(vk_ref: &str) -> String {
-    if vk_ref.contains(":LOCAL:") {
-        format!("{}{}{}{}", BOLD, CYAN, vk_ref, RESET)
-    } else if vk_ref.contains(":TEMP:") {
+    if vk_ref.contains(":TEMP:") {
         format!("{}{}{}{}", BOLD, RED, vk_ref, RESET)
+    } else if vk_ref.contains(":LOCAL:") || vk_ref.starts_with("VK:") || vk_ref.chars().all(|c| c.is_ascii_hexdigit() || c == ' ') {
+        format!("{}{}{}{}", BOLD, CYAN, vk_ref, RESET)
     } else {
         vk_ref.to_string()
     }
@@ -40,7 +40,9 @@ pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
             let pad = original_len - compact_len;
             if pad > 0 { format!("{}{}", compact, " ".repeat(pad)) } else { compact }
         } else if original_len >= 3 {
-            hash.chars().take(original_len).collect()
+            let h: String = hash.chars().take(original_len).collect();
+            let hlen = h.chars().count();
+            if hlen < original_len { format!("{}{}", h, " ".repeat(original_len - hlen)) } else { h }
         } else {
             "*".repeat(original_len)
         }

@@ -114,3 +114,83 @@ func TestBulkApplyAssertions(t *testing.T) {
 		t.Error("type assertions need ok check")
 	}
 }
+
+// ══ CSP header ══════════════════════════════════════════════════
+
+func TestCSPHeader(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	body := extractFn(string(s), "func securityHeadersMiddleware(")
+	if body == "" {
+		t.Fatal("securityHeadersMiddleware must exist")
+	}
+	if !strings.Contains(body, "Content-Security-Policy") {
+		t.Error("must set Content-Security-Policy header")
+	}
+}
+
+// ══ Diagnostics: no raw env leak ════════════════════════════════
+
+func TestDiagnosticsNoRawEnvDump(t *testing.T) {
+	s, _ := os.ReadFile("admin_api.go")
+	body := extractFn(string(s), "func (s *Server) handleDiagnostics(")
+	if body == "" {
+		t.Skip("handleDiagnostics not found")
+	}
+	// Must NOT dump full os.Environ() — only specific safe keys
+	if strings.Contains(body, "os.Environ()") {
+		t.Error("diagnostics must not dump full os.Environ() — may leak secrets")
+	}
+	// Must be behind trusted IP (check route)
+	routeSrc, _ := os.ReadFile("admin_api.go")
+	if routeSrc != nil {
+		code := string(routeSrc)
+		line := ""
+		for _, l := range strings.Split(code, "\n") {
+			if strings.Contains(l, "diagnostics") && strings.Contains(l, "HandleFunc") {
+				line = l
+				break
+			}
+		}
+		if line != "" && !strings.Contains(line, "trusted(") && !strings.Contains(line, "requireTrustedIP") {
+			t.Error("diagnostics must be behind trusted IP check")
+		}
+	}
+}
+
+// ══ No secret leaks in log statements ═══════════════════════════
+
+func TestNoPasswordInLogs(t *testing.T) {
+	files := []string{"api.go", "admin_api.go"}
+	for _, f := range files {
+		src, err := os.ReadFile(f)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(src), "\n") {
+			if !strings.Contains(line, "log.") {
+				continue
+			}
+			lower := strings.ToLower(line)
+			if strings.Contains(lower, "req.password") ||
+				strings.Contains(lower, "agentsecret") {
+				t.Errorf("%s:%d: log may leak secret: %s", f, i+1, strings.TrimSpace(line))
+			}
+		}
+	}
+}
+
+// ══ Write errors: static file handlers ══════════════════════════
+
+func TestInstallWizardWriteError(t *testing.T) {
+	s, _ := os.ReadFile("install_wizard.go")
+	if s == nil {
+		t.Skip("install_wizard.go not found")
+	}
+	code := string(s)
+	// Check that w.Write errors are not silently swallowed
+	// Acceptable: `_, _ = w.Write(body)` for static HTML (nothing to do on error)
+	// This test documents the pattern — if Write starts doing something critical, revisit
+	if strings.Contains(code, "_, _ = w.Write(") {
+		t.Log("NOTE: install_wizard.go silently ignores w.Write errors (acceptable for static HTML)")
+	}
+}
