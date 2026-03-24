@@ -51,7 +51,8 @@ pub(crate) fn find_cross_chunk_mask(
                 if is_longer {
                     let tail_part = &combined[pos..tail_len];
                     let tail_chars = tail_part.chars().count();
-                    let erase: String = "\x08 \x08".repeat(tail_chars);
+                    // Use ANSI CSI: move cursor left N, erase to end of line, then print ref
+                    let erase = format!("\x1b[{}D\x1b[K", tail_chars);
                     let replacement = padded_colorize_ref(vk_ref, plaintext.len());
                     let remainder = new_text[new_part.len()..].to_string();
                     best = Some((plaintext.len(), erase, replacement, remainder));
@@ -1283,7 +1284,8 @@ mod tests {
         let out = result.unwrap().output;
         let visible = strip_ansi(&out);
         assert!(visible.contains("VK:LOCAL:aaa"), "must contain VK ref");
-        assert!(out.contains("\x08"), "must have backspace to erase tail chars");
+        // Uses ANSI CSI cursor-left + erase-to-end (not backspace)
+        assert!(out.contains("\x1b["), "must have ANSI erase sequence");
     }
 
     #[test]
@@ -1393,15 +1395,16 @@ mod tests {
     }
 
     #[test]
-    fn cross_chunk_backspace_count_matches_tail_chars() {
-        // Verify the number of backspace sequences matches the chars in tail portion
+    fn cross_chunk_erase_uses_ansi_cursor_control() {
+        // Verify the erase uses CSI cursor-left + erase-to-end, not backspaces
         let map = mk(&[("abcdefgh", "VK:LOCAL:kkk")]);
         let result = find_cross_chunk_mask("abcde", "fgh", &map);
         assert!(result.is_some());
         let out = result.unwrap().output;
-        // 5 chars in tail → 5 backspace-space-backspace sequences
-        let bs_count = out.matches("\x08 \x08").count();
-        assert_eq!(bs_count, 5, "must erase exactly 5 tail chars");
+        // 5 chars in tail → \x1b[5D (cursor left 5) + \x1b[K (erase to end)
+        assert!(out.contains("\x1b[5D"), "must have CSI cursor-left 5");
+        assert!(out.contains("\x1b[K"), "must have erase-to-end");
+        assert!(!out.contains("\x08"), "must NOT use backspace");
     }
 
     // ── Char-by-char echo simulation ────────────────────────────────
@@ -1553,5 +1556,335 @@ mod tests {
         let map = mk(&[("secret123", "VK:LOCAL:yyy")]);
         let result = find_cross_chunk_mask("$ ", "secret123\r", &map);
         assert!(result.is_none(), "fully in new_text → standard mask handles it");
+    }
+
+    // ── Fast typing: multi-char chunks ──────────────────────────────
+    // When user types fast, multiple chars arrive in a single read().
+    // Simulate by calling find_cross_chunk_mask with multi-char new_text.
+
+    /// Simulate fast typing: split typed string into chunks of given size
+    fn simulate_chunked_echo(
+        initial_tail: &str,
+        typed: &str,
+        chunk_size: usize,
+        mask_map: &[(String, String)],
+    ) -> (String, usize) {
+        let mut tail = initial_tail.to_string();
+        let mut full_output = String::new();
+        let mut match_count = 0;
+        let chars: Vec<char> = typed.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            let end = (i + chunk_size).min(chars.len());
+            let chunk: String = chars[i..end].iter().collect();
+            if let Some(m) = find_cross_chunk_mask(&tail, &chunk, mask_map) {
+                full_output.push_str(&m.output);
+                match_count += 1;
+            } else {
+                full_output.push_str(&chunk);
+            }
+            tail.push_str(&chunk);
+            if tail.len() > 4096 {
+                let start = tail.ceil_char_boundary(tail.len() - 4096);
+                tail = tail[start..].to_string();
+            }
+            i = end;
+        }
+        (full_output, match_count)
+    }
+
+    #[test]
+    fn fast_typing_2char_chunks_no_partial_refs() {
+        // Secret "Ghdrhkdgh1@" typed in 2-char chunks
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (output, count) = simulate_chunked_echo(
+            "(VEIL) root$ ", "Ghdrhkdgh1@\r", 2, &map,
+        );
+        assert_eq!(count, 1, "must match exactly once with 2-char chunks");
+        let visible = strip_ansi(&output);
+        assert!(
+            !visible.contains("VK:LOCVK:"),
+            "no concatenated partial refs: {}", visible
+        );
+    }
+
+    #[test]
+    fn fast_typing_3char_chunks_no_partial_refs() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (output, count) = simulate_chunked_echo(
+            "(VEIL) root$ ", "Ghdrhkdgh1@\r", 3, &map,
+        );
+        assert_eq!(count, 1, "must match exactly once with 3-char chunks");
+        let visible = strip_ansi(&output);
+        assert!(
+            !visible.contains("VK:LOCVK:"),
+            "no concatenated partial refs: {}", visible
+        );
+    }
+
+    #[test]
+    fn fast_typing_5char_chunks_no_partial_refs() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (output, count) = simulate_chunked_echo(
+            "(VEIL) root$ ", "Ghdrhkdgh1@\r", 5, &map,
+        );
+        assert_eq!(count, 1);
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("VK:LOCVK:"), "no partial refs: {}", visible);
+    }
+
+    #[test]
+    fn fast_typing_whole_line_at_once() {
+        // Entire line arrives in one chunk — cross-chunk should NOT fire
+        // (fully in new_text, handled by standard mask)
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (_, count) = simulate_chunked_echo(
+            "(VEIL) root$ ", "Ghdrhkdgh1@\r", 100, &map,
+        );
+        assert_eq!(count, 0, "fully in new_text — cross-chunk must not fire");
+    }
+
+    #[test]
+    fn fast_typing_repeated_5_times_2char() {
+        let map = mk(&[("Fkslrhenfk1@", "VK:LOCAL:abc12345")]);
+        let mut tail = String::new();
+        for i in 0..5 {
+            tail.push_str("(VEIL) root$ ");
+            let (output, count) = simulate_chunked_echo(&tail, "Fkslrhenfk1@\r", 2, &map);
+            assert_eq!(count, 1, "attempt {} must match exactly once", i + 1);
+            let visible = strip_ansi(&output);
+            assert!(
+                !visible.contains("VK:LOCVK:"),
+                "attempt {}: no partial refs: {}", i + 1, visible
+            );
+            // Simulate bash error appended to tail
+            tail.push_str("Fkslrhenfk1@\nbash: Fkslrhenfk1@: command not found\n");
+            if tail.len() > 4096 {
+                let start = tail.ceil_char_boundary(tail.len() - 4096);
+                tail = tail[start..].to_string();
+            }
+        }
+    }
+
+    #[test]
+    fn fast_typing_with_prefix_overlap() {
+        // "pass" and "password" both in mask_map, typed in 2-char chunks
+        let map = mk(&[
+            ("password", "VK:LOCAL:long1"),
+            ("pass", "VK:LOCAL:short1"),
+        ]);
+        let (output, _count) = simulate_chunked_echo("$ ", "password\r", 2, &map);
+        let visible = strip_ansi(&output);
+        // Must not have corrupted "VK:LOCVK:LOC" fragments
+        assert!(
+            !visible.contains("VK:LOCVK:"),
+            "no concatenated partial refs: {}", visible
+        );
+    }
+
+    #[test]
+    fn fast_typing_multiple_secrets_in_mask_map() {
+        // 103 secrets (like real veil session), type one of them fast
+        let mut map: Vec<(String, String)> = (0..102)
+            .map(|i| (format!("other_secret_{:03}", i), format!("VK:LOCAL:{:08x}", i)))
+            .collect();
+        map.push(("Ghdrhkdgh1@".to_string(), "VK:LOCAL:6da25530".to_string()));
+        let (output, count) = simulate_chunked_echo("$ ", "Ghdrhkdgh1@\r", 2, &map);
+        assert_eq!(count, 1);
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("VK:LOCAL:6da25530"));
+        assert!(!visible.contains("VK:LOCVK:"), "no partial refs: {}", visible);
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    // SECURITY ROUND 2: VE, recent_input, tail, unicode, formats
+    // ══════════════════════════════════════════════════════════════════
+
+    fn mask_with_ve(
+        data: &str, mask_map: &[(String, String)],
+        ve_map: &[(String, String)], tail: &str,
+    ) -> (String, String) {
+        init_rustls();
+        let (b, t) = mask_output(
+            data.as_bytes(), mask_map, ve_map, &[],
+            &crate::api::VeilKeyClient::new("http://127.0.0.1:1"), "", tail,
+        );
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    fn mask_with_input(data: &str, mask_map: &[(String, String)], input: &str) -> String {
+        init_rustls();
+        let (b, _) = mask_output(
+            data.as_bytes(), mask_map, &[], &[],
+            &crate::api::VeilKeyClient::new("http://127.0.0.1:1"), input, "",
+        );
+        strip_ansi(&String::from_utf8_lossy(&b))
+    }
+
+    // ── VE entries ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_sec_ve_colorized() {
+        let ve = vec![("config-val".into(), "VE:LOCAL:c1".into())];
+        let (out, _) = mask_with_ve("setting=config-val", &[], &ve, "");
+        assert!(out.contains(GREEN), "VE must be green");
+        assert!(out.contains("config-val"));
+    }
+
+    #[test]
+    fn test_sec_vk_and_ve_together() {
+        let vk = vec![("secret-pw".into(), "VK:LOCAL:a".into())];
+        let ve = vec![("cfg-val".into(), "VE:LOCAL:b".into())];
+        let (out, _) = mask_with_ve("pw=secret-pw cfg=cfg-val", &vk, &ve, "");
+        let vis = strip_ansi(&out);
+        assert!(!vis.contains("secret-pw"), "VK leaked with VE");
+        assert!(vis.contains("cfg-val"), "VE lost");
+    }
+
+    #[test]
+    fn test_sec_ve_empty_ignored() {
+        let ve = vec![("".into(), "VE:LOCAL:e".into())];
+        let (out, _) = mask_with_ve("text", &[], &ve, "");
+        assert_eq!(strip_ansi(&out), "text");
+    }
+
+    // ── recent_input ────────────────────────────────────────────────
+
+    #[test]
+    fn test_sec_unrelated_input_still_masks() {
+        let m = vec![("SuperSecret".into(), "VK:LOCAL:r1".into())];
+        let r = mask_with_input("SuperSecret", &m, "echo hello");
+        assert!(!r.contains("SuperSecret"));
+    }
+
+    #[test]
+    fn test_sec_empty_input_masks() {
+        let m = vec![("password".into(), "VK:LOCAL:r2".into())];
+        let r = mask_with_input("password", &m, "");
+        assert!(!r.contains("password"));
+    }
+
+    // ── plain_tail ──────────────────────────────────────────────────
+
+    #[test]
+    fn test_sec_tail_overflow() {
+        let m = vec![("x".into(), "VK:LOCAL:t1".into())];
+        let (_, tail) = mask_output_simple(&"x".repeat(16000), &m, "");
+        assert!(tail.len() <= 8192 + 100, "tail={}", tail.len());
+    }
+
+    #[test]
+    fn test_sec_tail_boundary_secret() {
+        let pad = "a".repeat(8190);
+        let m = vec![("SECRETHERE".into(), "VK:LOCAL:t2".into())];
+        let (out, _) = mask_output_simple(&format!("{}SECRETHERE", pad), &m, "");
+        assert!(!strip_ansi(&out).contains("SECRETHERE"));
+    }
+
+    #[test]
+    fn test_sec_accumulated_tail() {
+        let m = vec![("crossval".into(), "VK:LOCAL:t3".into())];
+        let (_, t1) = mask_output_simple(&"a".repeat(4000), &m, "");
+        let (_, t2) = mask_output_simple(&"b".repeat(4000), &m, &t1);
+        let (out, _) = mask_output_simple("crossval", &m, &t2);
+        assert!(!strip_ansi(&out).contains("crossval"));
+    }
+
+    // ── Unicode ─────────────────────────────────────────────────────
+
+    #[test]
+    fn test_sec_korean() {
+        let s = "비밀번호입니다";
+        let m = vec![(s.into(), "VK:LOCAL:u1".into())];
+        assert!(!simulate_mask(&format!("pw={}", s), &m).contains(s));
+    }
+
+    #[test]
+    fn test_sec_emoji() {
+        let s = "🔑key🔑val🔑";
+        let m = vec![(s.into(), "VK:LOCAL:u2".into())];
+        assert!(!simulate_mask(&format!("t={}", s), &m).contains(s));
+    }
+
+    #[test]
+    fn test_sec_mixed_ascii_unicode() {
+        let s = "pass한글word";
+        let m = vec![(s.into(), "VK:LOCAL:u3".into())];
+        assert!(!simulate_mask(&format!("v={}", s), &m).contains(s));
+    }
+
+    // ── Null / control chars ────────────────────────────────────────
+
+    #[test]
+    fn test_sec_null_byte() {
+        let m = vec![("secret".into(), "VK:LOCAL:n1".into())];
+        init_rustls();
+        let (out, _) = mask_output(
+            b"x\x00secret\x00y", &m, &[], &[],
+            &crate::api::VeilKeyClient::new("http://127.0.0.1:1"), "", "",
+        );
+        assert!(!strip_ansi(&String::from_utf8_lossy(&out)).contains("secret"));
+    }
+
+    #[test]
+    fn test_sec_carriage_return() {
+        let m = vec![("password".into(), "VK:LOCAL:n2".into())];
+        let (out, _) = mask_output_simple("password\roverwrite", &m, "");
+        assert!(!strip_ansi(&out).contains("password"));
+    }
+
+    // ── Output formats ──────────────────────────────────────────────
+
+    #[test]
+    fn test_sec_yaml() {
+        let m = vec![("api-key-12345".into(), "VK:LOCAL:f1".into())];
+        let (out, _) = mask_output_simple("  key: api-key-12345\n  host: x.com\n", &m, "");
+        let v = strip_ansi(&out);
+        assert!(!v.contains("api-key-12345"));
+        assert!(v.contains("x.com"));
+    }
+
+    #[test]
+    fn test_sec_docker_env() {
+        let m = vec![("db_pass".into(), "VK:LOCAL:f2".into())];
+        let (out, _) = mask_output_simple("MYSQL_ROOT_PASSWORD=db_pass\nDB=app\n", &m, "");
+        let v = strip_ansi(&out);
+        assert!(!v.contains("db_pass"));
+        assert!(v.contains("DB=app"));
+    }
+
+    #[test]
+    fn test_sec_log_line() {
+        let m = vec![("Bearer sk-abc".into(), "VK:LOCAL:f3".into())];
+        let (out, _) = mask_output_simple("[INFO] Auth: Bearer sk-abc", &m, "");
+        assert!(!strip_ansi(&out).contains("sk-abc"));
+    }
+
+    #[test]
+    fn test_sec_git_diff() {
+        let m = vec![("ghp_ABCDEF".into(), "VK:LOCAL:f4".into())];
+        let (out, _) = mask_output_simple("+TOKEN=ghp_ABCDEF\n-TOKEN=old\n", &m, "");
+        assert!(!strip_ansi(&out).contains("ghp_ABCDEF"));
+    }
+
+    #[test]
+    fn test_sec_curl_verbose() {
+        let m = vec![("Bearer tok123".into(), "VK:LOCAL:f5".into())];
+        let (out, _) = mask_output_simple("> Authorization: Bearer tok123\r\n", &m, "");
+        assert!(!strip_ansi(&out).contains("tok123"));
+    }
+
+    #[test]
+    fn test_sec_sql_table() {
+        let m = vec![("admin_pw".into(), "VK:LOCAL:f6".into())];
+        let (out, _) = mask_output_simple("| admin | admin_pw |\n", &m, "");
+        assert!(!strip_ansi(&out).contains("admin_pw"));
+    }
+
+    #[test]
+    fn test_sec_nested_json() {
+        let m = vec![("deep-val".into(), "VK:LOCAL:f7".into())];
+        let (out, _) = mask_output_simple(r#"{"a":{"b":"deep-val"}}"#, &m, "");
+        assert!(!strip_ansi(&out).contains("deep-val"));
     }
 }
