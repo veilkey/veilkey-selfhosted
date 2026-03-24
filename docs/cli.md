@@ -188,6 +188,6 @@ scan:
 | `VEILKEY_HUB_URL` | Fallback API endpoint |
 | `VEILKEY_STATE_DIR` | Session state directory (default: `$TMPDIR/veilkey-cli`) |
 | `VEILKEY_FUNCTION_DIR` | Function wrapper directory |
-| `VEILKEY_DB_KEY` | Auto-derived from salt. No manual setting needed |
+| `VEILKEY_DB_KEY` | Derived from master password (KEK) during unlock. No manual setting needed |
 | `VEILKEY_TLS_INSECURE` | Set `1` to skip TLS certificate verification |
 | `VEILKEY_CURL_OPTS` | Custom curl options for bulk-apply sync (default: `-sk`) |

@@ -20,7 +20,7 @@
 |----------|---------|-------------|
 | `VEILKEY_ADDR` | `:10181` / `:10180` | Listen address |
 | `VEILKEY_DB_PATH` | `/data/veilkey.db` | Database path |
-| `VEILKEY_DB_KEY` | **(auto-derived)** | SQLCipher encryption key. Automatically derived from salt file (`SHA256(salt)`). No manual setting needed |
+| `VEILKEY_DB_KEY` | **(KEK-derived)** | SQLCipher encryption key. Derived from master password (KEK) during unlock. DB only opens after password entry |
 | `VEILKEY_TLS_INSECURE` | `0` | Accept self-signed certs (also applies to `init --token` validation) |
 | `VEILKEY_TLS_CERT` | - | TLS certificate path |
 | `VEILKEY_TLS_KEY` | - | TLS private key path |

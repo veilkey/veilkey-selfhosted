@@ -215,4 +215,4 @@ bash tests/test_ci_deploy_rules.sh
 
 ## License
 
-MIT License
+AGPL-3.0 License

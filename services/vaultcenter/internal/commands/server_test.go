@@ -42,18 +42,22 @@ func TestServerStartsLocked(t *testing.T) {
 	}
 }
 
-func TestDBKeyDerivedFromSalt(t *testing.T) {
-	// DB encryption key must be derived from salt — no separate VEILKEY_DB_KEY required.
+func TestDBKeyDerivedFromKEK(t *testing.T) {
+	// DB key derivation is now in api.go Unlock() via deriveDBKeyFromKEK.
 	src, err := os.ReadFile("server.go")
 	if err != nil {
 		t.Fatalf("failed to read server.go: %v", err)
 	}
 	code := string(src)
-	if !contains(code, "deriveDBKey(salt)") {
-		t.Error("server.go must derive DB key from salt via deriveDBKey()")
+	if contains(code, "deriveDBKey(salt)") {
+		t.Error("server.go must NOT derive DB key from salt directly — KEK-based derivation is in api.go Unlock()")
 	}
-	if !contains(code, "sha256.Sum256") {
-		t.Error("server.go must use SHA256 for DB key derivation")
+	apiSrc, err := os.ReadFile("../api/api.go")
+	if err != nil {
+		t.Fatalf("failed to read api.go: %v", err)
+	}
+	if !contains(string(apiSrc), "deriveDBKeyFromKEK") {
+		t.Error("api.go must derive DB key from KEK via deriveDBKeyFromKEK()")
 	}
 }
 

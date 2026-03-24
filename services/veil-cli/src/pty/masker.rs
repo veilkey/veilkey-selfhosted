@@ -107,7 +107,9 @@ pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
             colored
         }
     } else {
-        colored
+        // Ref is longer than original — truncate to fit exactly
+        let truncated: String = vk_ref.chars().take(original_len).collect();
+        colorize_ref(&truncated)
     }
 }
 

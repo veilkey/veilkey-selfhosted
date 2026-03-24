@@ -69,6 +69,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		ConfigsCount      int      `json:"configs_count"`
 		Version           int      `json:"version"`
 		RegistrationToken string   `json:"registration_token"`
+		VaultUnlockKey    string   `json:"vault_unlock_key,omitempty"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -313,8 +314,47 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 			log.Printf("agent: failed to generate agent_secret for %s: %v", nodeID, secretErr)
 		}
 
+		// Store vault_unlock_key if provided during registration
+		if req.VaultUnlockKey != "" {
+			encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
+				log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+			} else {
+				resp["vault_unlock_key_stored"] = true
+				log.Printf("agent: vault_unlock_key stored for %s (%s)", nodeID, req.Label)
+			}
+		}
+
 		respondJSON(w, http.StatusOK, resp)
 		return
+	}
+
+	// Store vault_unlock_key if provided on existing agent (first-time migration).
+	// Requires valid agent_secret in Authorization header to prevent unauthenticated key injection.
+	vukStored := false
+	if req.VaultUnlockKey != "" && len(agent.VaultUnlockKeyEnc) == 0 {
+		authHeader := r.Header.Get("Authorization")
+		token := strings.TrimPrefix(authHeader, "Bearer ")
+		if authHeader == "" || token == authHeader {
+			log.Printf("agent: rejected vault_unlock_key from %s: missing agent auth", nodeID)
+		} else if authedAgent, authErr := h.authenticateAgentBySecret(token); authErr != nil {
+			log.Printf("agent: rejected vault_unlock_key from %s: invalid agent secret", nodeID)
+		} else if authedAgent.NodeID != nodeID {
+			log.Printf("agent: rejected vault_unlock_key from %s: secret belongs to different agent %s", nodeID, authedAgent.NodeID)
+		} else {
+			kek := h.deps.GetKEK()
+			encKey, encNonce, encErr := crypto.Encrypt(kek, []byte(req.VaultUnlockKey))
+			if encErr != nil {
+				log.Printf("agent: failed to encrypt vault_unlock_key for %s: %v", nodeID, encErr)
+			} else if err := h.deps.DB().UpdateVaultUnlockKey(nodeID, encKey, encNonce); err != nil {
+				log.Printf("agent: failed to store vault_unlock_key for %s: %v", nodeID, err)
+			} else {
+				vukStored = true
+				log.Printf("agent: vault_unlock_key stored for existing agent %s (%s)", nodeID, agent.Label)
+			}
+		}
 	}
 
 	resp := map[string]interface{}{
@@ -322,6 +362,9 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		"vault_id":      httputil.FormatVaultID(agent.VaultName, agent.VaultHash),
 		"managed_paths": db.DecodeManagedPaths(agent.ManagedPaths),
 		"key_version":   agent.KeyVersion,
+	}
+	if vukStored {
+		resp["vault_unlock_key_stored"] = true
 	}
 	setNodeIdentityAliases(resp, nodeID)
 	setRuntimeHashAliases(resp, agent.AgentHash)

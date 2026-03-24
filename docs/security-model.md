@@ -86,11 +86,12 @@ Screen/AI sees:      VK:LOCAL:ea2bfd16
 
 ## Database Encryption
 
-All databases (VaultCenter + LocalVault) are encrypted with SQLCipher. The encryption key is automatically derived from the salt file (`DB_KEY = SHA256(salt)`). No manual `VEILKEY_DB_KEY` setting needed.
+All databases (VaultCenter + LocalVault) are encrypted with SQLCipher. The encryption key is derived from the master password: `DB_KEY = SHA256(KEK)`. Database can only be opened after unlock — salt file alone cannot open the DB.
 
 ```
-salt file (32 bytes, generated at init)
-  → SHA256(salt) → DB_KEY (64-char hex)
+master password (entered during unlock)
+  → KEK = DeriveKEK(password, salt)
+  → DB_KEY = SHA256(KEK)
   → SQLCipher _pragma_key
   → plain sqlite3 cannot read DB
 ```
