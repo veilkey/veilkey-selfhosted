@@ -376,3 +376,19 @@ type AdminPasskey struct {
 }
 
 func (AdminPasskey) TableName() string { return "admin_passkeys" }
+
+type SSHKey struct {
+	Ref             string    `gorm:"primaryKey;column:ref" json:"ref"`
+	Ownership       string    `gorm:"column:ownership;not null;default:'own'" json:"ownership"` // own | external
+	Label           string    `gorm:"column:label" json:"label"`
+	KeyType         string    `gorm:"column:key_type" json:"key_type"` // ed25519 | rsa | ecdsa
+	Fingerprint     string    `gorm:"column:fingerprint;uniqueIndex" json:"fingerprint"`
+	PrivateKeyEnc   []byte    `gorm:"column:private_key_enc" json:"-"`
+	PrivateKeyNonce []byte    `gorm:"column:private_key_nonce" json:"-"`
+	PublicKey       string    `gorm:"column:public_key;not null" json:"public_key"`
+	HostsJSON       string    `gorm:"column:hosts_json;type:text;default:'[]'" json:"hosts_json"`
+	MetadataJSON    string    `gorm:"column:metadata_json;type:text;default:'{}'" json:"metadata_json"`
+	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+}
+
+func (SSHKey) TableName() string { return "ssh_keys" }
