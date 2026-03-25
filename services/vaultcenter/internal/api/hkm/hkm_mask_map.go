@@ -110,12 +110,12 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 
 	// Add SSH keys stored directly on VaultCenter (not via agent heartbeat)
 	sshRefs, _ := h.deps.DB().ListRefs()
+	localDEK, localDEKErr := h.deps.GetLocalDEK()
 	for _, ref := range sshRefs {
 		if ref.RefScope != db.RefScopeSSH || string(ref.Status) != string(db.RefStatusActive) {
 			continue
 		}
-		localDEK, dekErr := h.deps.GetLocalDEK()
-		if dekErr != nil {
+		if localDEKErr != nil {
 			break // DEK not available, skip all SSH refs
 		}
 		ct, nonce, decodeErr := crypto.DecodeCiphertext(ref.Ciphertext)
