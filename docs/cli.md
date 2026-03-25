@@ -3,12 +3,13 @@
 ## Quick Usage
 
 ```bash
-veil                          # Enter protected shell
-veil create [value]           # Create a temp ref (VK:TEMP:xxx)
-veil status                   # Check connection
-veil resolve VK:LOCAL:xxx     # Decrypt a reference (requires admin password)
-veil exec echo VK:LOCAL:xxx   # Run command with real values
-veil scan file.env            # Find secrets in files
+veil                            # Enter protected shell
+veil status                     # Check connection
+veil exec echo VK:LOCAL:xxx     # Run command with real values
+veil scan file.env              # Find secrets in files
+
+veilkey create [value]          # Create a temp ref (VK:TEMP:xxx)
+veilkey resolve VK:LOCAL:xxx    # Decrypt a reference
 ```
 
 `veil` is a shorthand for `veilkey-cli wrap-pty`. All commands below also work via `veilkey-cli` directly.

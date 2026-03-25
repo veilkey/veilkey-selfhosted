@@ -236,16 +236,9 @@ trap 'rm -f "$HISTFILE"' EXIT
                 }
             }
         }
-        "create" => {
-            // Forward to veilkey-cli create
-            let mut full = vec!["create".to_string()];
-            full.extend_from_slice(&args[1..]);
-            exec_replace(&cli_bin, &full);
-        }
         "help" | "-h" | "--help" => {
             println!("Usage:");
             println!("  veil                     Enter protected session (PTY masking)");
-            println!("  veil create [value]      Create a temp ref (prompts if no value)");
             println!("  veil status              Show VeilKey connection status");
             println!("  veil exec <command...>   Resolve VK refs in args and execute");
             println!("  veil scan [file...]      Scan files for secrets");

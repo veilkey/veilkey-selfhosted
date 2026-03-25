@@ -16,6 +16,7 @@ fn print_usage() {
     println!("  veilkey session [command...]         Start a protected session or run a command via wrap-pty");
     println!("  veilkey status                       Show VeilKey status");
     println!("  veilkey paste-mode [on|off|status]   Control standalone pasted temp issuance");
+    println!("  veilkey create [value]                Create a temp ref (VK:TEMP:xxx)");
     println!("  veilkey encrypt                      Encrypt plaintext into a VeilKey ref");
     println!("  veilkey scan [args...]               Run secret scan");
     println!("  veilkey filter [args...]             Run secret filter");
@@ -54,7 +55,7 @@ fn main() {
             exec_as("veil", &veilkey_cli_bin, &full);
         }
         "status" | "paste-mode" | "scan" | "filter" | "exec" | "resolve" | "proxy" | "list"
-        | "clear" | "function" | "version" => {
+        | "clear" | "function" | "create" | "version" => {
             load_session_env(&session_config_bin);
             let mut full = vec![cmd.to_string()];
             full.extend_from_slice(args.get(1..).unwrap_or(&[]));
