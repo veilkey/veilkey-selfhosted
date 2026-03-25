@@ -87,6 +87,7 @@ type Server struct {
 	bulkHandler     *bulk.Handler
 	pluginRegistry  *plugin.Registry
 	pluginHandler   *plugin.Handler
+	gcStop          chan struct{}
 }
 
 // ── hkm.Deps implementation ──────────────────────────────────────────────────
@@ -454,6 +455,12 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 	})
 	srv.pluginHandler = plugin.NewHandler(srv.pluginRegistry, srv)
 
+	// Start GC if already unlocked (KEK provided at startup)
+	if !locked && database != nil {
+		srv.gcStop = make(chan struct{})
+		go StartTempRefGC(database, 5*time.Minute, srv.gcStop)
+	}
+
 	return srv
 }
 
@@ -585,6 +592,10 @@ func (s *Server) Unlock(kek []byte) error {
 	if s.salt != nil {
 		s.approvalHandler = approval.NewHandler(database, s.salt, s.httpClient)
 	}
+
+	// 5. Start background GC for expired temp refs, registration tokens, and stale agents
+	s.gcStop = make(chan struct{})
+	go StartTempRefGC(database, 5*time.Minute, s.gcStop)
 
 	return nil
 }
