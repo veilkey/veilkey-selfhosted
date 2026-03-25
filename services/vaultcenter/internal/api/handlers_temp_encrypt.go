@@ -89,19 +89,32 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimSpace(req.Name)
-	if _, err := s.SubmitTx(r.Context(), chain.TxSaveTokenRef, chain.SaveTokenRefPayload{
-		RefFamily:     parts.Family,
-		RefScope:      refs.RefScope(parts.Scope),
-		RefID:         parts.ID,
-		SecretName:    name,
-		PlaintextHash: plaintextHash,
-		Ciphertext:    encoded,
-		Version:       nodeInfo.Version,
-		Status:        refs.RefStatus(db.RefStatusTemp),
-		ExpiresAt:     func() *time.Time { if expiresAt.IsZero() { return nil }; return &expiresAt }(),
-	}); err != nil {
-		s.respondError(w, http.StatusInternalServerError, "failed to save temp ref")
-		return
+	status := db.RefStatusTemp
+	if scope == db.RefScopeSSH {
+		status = db.RefStatusActive
+	}
+
+	if scope == db.RefScopeSSH {
+		// SSH keys bypass chain tx (chain doesn't support SSH scope yet)
+		if err := s.db.SaveRef(parts, encoded, nodeInfo.Version, status, ""); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "failed to save SSH key")
+			return
+		}
+	} else {
+		if _, err := s.SubmitTx(r.Context(), chain.TxSaveTokenRef, chain.SaveTokenRefPayload{
+			RefFamily:     parts.Family,
+			RefScope:      refs.RefScope(parts.Scope),
+			RefID:         parts.ID,
+			SecretName:    name,
+			PlaintextHash: plaintextHash,
+			Ciphertext:    encoded,
+			Version:       nodeInfo.Version,
+			Status:        refs.RefStatus(status),
+			ExpiresAt:     func() *time.Time { if expiresAt.IsZero() { return nil }; return &expiresAt }(),
+		}); err != nil {
+			s.respondError(w, http.StatusInternalServerError, "failed to save ref")
+			return
+		}
 	}
 
 	canonical := parts.Canonical()

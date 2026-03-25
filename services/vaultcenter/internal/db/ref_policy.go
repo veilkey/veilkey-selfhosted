@@ -33,5 +33,12 @@ func MakeRef(family string, scope RefScope, id string) string {
 }
 
 func NormalizeScopeStatus(family string, scope RefScope, status RefStatus, fallbackScope RefScope) (RefScope, RefStatus, error) {
+	// SSH scope: treat like LOCAL (active, no expiry)
+	if scope == RefScopeSSH {
+		if status == "" {
+			status = RefStatusActive
+		}
+		return scope, status, nil
+	}
 	return refs.NormalizeScopeStatus(family, scope, status, fallbackScope)
 }
