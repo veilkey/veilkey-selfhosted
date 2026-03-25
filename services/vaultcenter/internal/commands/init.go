@@ -177,14 +177,17 @@ func fileExists(path string) bool {
 // If force is true and the DB exists, it removes the DB files and returns nil.
 func checkInitDBExists(dbPath string, force bool) error {
 	if _, err := os.Stat(dbPath); err != nil {
-		return nil // DB does not exist, safe to proceed
+		if os.IsNotExist(err) {
+			return nil // DB does not exist, safe to proceed
+		}
+		return err
 	}
 	if !force {
-		return fmt.Errorf("ABORT: Database already exists at %s\n"+
+		return fmt.Errorf("ABORT: database already exists at %s\n"+
 			"  This would destroy all existing secrets.\n"+
 			"  To force re-init, delete the file first:\n"+
 			"    rm %s %s-shm %s-wal\n"+
-			"  Or use --force flag.", dbPath, dbPath, dbPath, dbPath)
+			"  Or use --force flag", dbPath, dbPath, dbPath, dbPath)
 	}
 	log.Printf("WARNING: --force specified, overwriting existing database at %s", dbPath)
 	_ = os.Remove(dbPath)

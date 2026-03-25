@@ -141,7 +141,9 @@ func TestReadSecretEnv_Empty(t *testing.T) {
 func TestReadSecretEnv_FileValue(t *testing.T) {
 	dir := t.TempDir()
 	secretFile := filepath.Join(dir, "secret.txt")
-	os.WriteFile(secretFile, []byte("  file-secret-value  \n"), 0o600)
+	if err := os.WriteFile(secretFile, []byte("  file-secret-value  \n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("TEST_FILE_KEY_FILE", secretFile)
 	os.Unsetenv("TEST_FILE_KEY")
@@ -155,7 +157,9 @@ func TestReadSecretEnv_FileValue(t *testing.T) {
 func TestReadSecretEnv_FileTakesPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	secretFile := filepath.Join(dir, "secret.txt")
-	os.WriteFile(secretFile, []byte("from-file"), 0o600)
+	if err := os.WriteFile(secretFile, []byte("from-file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	t.Setenv("TEST_PRIO_KEY", "from-env")
 	t.Setenv("TEST_PRIO_KEY_FILE", secretFile)
