@@ -1072,6 +1072,117 @@ mod tests {
         assert!(visible.contains("config-value"));
     }
 
+    // ── VE config masking ──────────────────────────────────────────
+
+    #[test]
+    fn test_ve_shows_plaintext_not_ref() {
+        let ve = vec![("10.50.0.113".to_string(), "VE:LOCAL:DB_HOST".to_string())];
+        let (output, _) = mask_with_ve("connecting to 10.50.0.113:3306", &[], &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("10.50.0.113"));
+        assert!(!visible.contains("VE:LOCAL:DB_HOST"));
+    }
+
+    #[test]
+    fn test_ve_colorized_green() {
+        let ve = vec![("production".to_string(), "VE:LOCAL:APP_ENV".to_string())];
+        let (output, _) = mask_with_ve("env=production", &[], &ve, "");
+        assert!(output.contains(GREEN));
+        assert!(output.contains(RESET));
+    }
+
+    #[test]
+    fn test_vk_and_ve_both_applied() {
+        let map = vec![("super-secret-key".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
+        let (output, _) = mask_with_ve("key=super-secret-key host=10.0.0.5", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("super-secret-key"), "VK secret must be masked");
+        assert!(visible.contains("10.0.0.5"), "VE config must show plaintext");
+    }
+
+    #[test]
+    fn test_vk_masked_before_ve_applied() {
+        let map = vec![("secret-10.0.0.5-pass".to_string(), "VK:LOCAL:full1234".to_string())];
+        let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
+        let (output, _) = mask_with_ve("data: secret-10.0.0.5-pass", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("secret-10.0.0.5-pass"));
+    }
+
+    #[test]
+    fn test_ve_multiple_occurrences() {
+        let ve = vec![("prod".to_string(), "VE:LOCAL:ENV".to_string())];
+        let (output, _) = mask_with_ve("prod server: prod mode", &[], &ve, "");
+        assert!(output.matches(GREEN).count() >= 2);
+    }
+
+    #[test]
+    fn test_ve_empty_value_skipped() {
+        let ve = vec![("".to_string(), "VE:LOCAL:EMPTY".to_string())];
+        let (output, _) = mask_with_ve("normal text", &[], &ve, "");
+        assert_eq!(output, "normal text");
+    }
+
+    #[test]
+    fn test_ve_no_entries() {
+        let (output, _) = mask_with_ve("normal text", &[], &[], "");
+        assert_eq!(output, "normal text");
+    }
+
+    #[test]
+    fn test_ve_unicode() {
+        let ve = vec![("설정값".to_string(), "VE:LOCAL:LABEL".to_string())];
+        let (output, _) = mask_with_ve("label: 설정값", &[], &ve, "");
+        assert!(strip_ansi(&output).contains("설정값"));
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_not_in_output() {
+        let ve = vec![("absent".to_string(), "VE:LOCAL:X".to_string())];
+        let (output, _) = mask_with_ve("nothing here", &[], &ve, "");
+        assert_eq!(output, "nothing here");
+    }
+
+    #[test]
+    fn test_ve_multiple_configs() {
+        let ve = vec![
+            ("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string()),
+            ("3306".to_string(), "VE:LOCAL:DB_PORT".to_string()),
+            ("production".to_string(), "VE:LOCAL:ENV".to_string()),
+        ];
+        let (output, _) = mask_with_ve("host=10.0.0.5 port=3306 env=production", &[], &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("10.0.0.5"));
+        assert!(visible.contains("3306"));
+        assert!(visible.contains("production"));
+        assert!(output.matches(GREEN).count() >= 3);
+    }
+
+    #[test]
+    fn domain_ve_preserves_plaintext_vk_replaces() {
+        let map = vec![("secret-password".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let ve = vec![("config-hostname".to_string(), "VE:LOCAL:HOST".to_string())];
+        let (output, _) = mask_with_ve("pw=secret-password host=config-hostname", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("secret-password"), "VK must be HIDDEN");
+        assert!(visible.contains("config-hostname"), "VE must be VISIBLE");
+    }
+
+    #[test]
+    fn domain_pattern_detection_skips_vk_prefix() {
+        let src = include_str!("masker.rs");
+        assert!(src.matches(r#"starts_with("VK:")"#).count() >= 2);
+    }
+
+    #[test]
+    fn domain_stdin_guard_uses_mask_map_not_ve() {
+        let src = include_str!("session.rs");
+        assert!(src.contains("stdin_mask_map"));
+        assert!(!src.contains("stdin_ve_map"));
+    }
+
     #[test]
     fn test_mask_output_recent_input_skips() {
         // When the secret was recently typed as input, masking is skipped

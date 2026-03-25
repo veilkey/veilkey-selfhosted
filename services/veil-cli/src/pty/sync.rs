@@ -1,12 +1,13 @@
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use crate::api::{enrich_mask_map, VeilKeyClient};
+use crate::api::{enrich_mask_map, parse_mask_map_entries, VeilKeyClient};
 
 /// Spawn a background thread that long-polls /api/mask-map for changes.
-/// Updates the shared mask_map when secrets are added/changed/deleted.
+/// Updates the shared mask_map (and ve_map) when secrets are added/changed/deleted.
 pub fn spawn_mask_map_sync(
     mask_map: Arc<RwLock<Vec<(String, String)>>>,
+    ve_map: Arc<RwLock<Vec<(String, String)>>>,
     client: Arc<VeilKeyClient>,
 ) {
     std::thread::spawn(move || {
@@ -25,27 +26,21 @@ pub fn spawn_mask_map_sync(
                     let new_version = data["version"].as_u64().unwrap_or(version);
                     let changed = data["changed"].as_bool().unwrap_or(false);
                     if changed && new_version >= version {
-                        if let Some(entries) = data["entries"].as_array() {
-                            let mut new_map: Vec<(String, String)> = Vec::new();
-                            for e in entries {
-                                let r = e["ref"].as_str().unwrap_or_default();
-                                let v = e["value"].as_str().unwrap_or_default();
-                                let trimmed = v.trim_end_matches(['\r', '\n']);
-                                if !trimmed.is_empty() && !r.is_empty() {
-                                    new_map.push((trimmed.to_string(), r.to_string()));
-                                }
-                            }
+                        let (mut new_map, new_ve) = parse_mask_map_entries(&data);
 
-                            enrich_mask_map(&mut new_map);
+                        enrich_mask_map(&mut new_map);
 
-                            if let Ok(mut map) = mask_map.write() {
-                                *map = new_map;
-                                eprintln!(
-                                    "[veilkey] mask_map synced: {} secret(s) (v{})",
-                                    map.len(),
-                                    new_version
-                                );
-                            }
+                        if let Ok(mut map) = mask_map.write() {
+                            *map = new_map;
+                            eprintln!(
+                                "[veilkey] mask_map synced: {} secret(s), {} config(s) (v{})",
+                                map.len(),
+                                new_ve.len(),
+                                new_version
+                            );
+                        }
+                        if let Ok(mut ve) = ve_map.write() {
+                            *ve = new_ve;
                         }
                         version = new_version;
                     } else {

@@ -310,7 +310,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let client = Arc::new(client);
 
             // Background mask_map sync
-            mask_sync::spawn_mask_map_sync(mask_map.clone(), client.clone());
+            mask_sync::spawn_mask_map_sync(mask_map.clone(), ve_map.clone(), client.clone());
 
             // Recent input tracking
             let recent_input = Arc::new(Mutex::new(String::new()));

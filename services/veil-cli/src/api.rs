@@ -354,32 +354,12 @@ impl VeilKeyClient {
             }
         };
 
-        let entries = data["entries"].as_array().cloned().unwrap_or_default();
-        let mut result: Vec<(String, String)> = Vec::new();
-        for entry in &entries {
-            let vk_ref = entry["ref"].as_str().unwrap_or_default();
-            let value = entry["value"].as_str().unwrap_or_default();
-            let trimmed = value.trim_end_matches(['\r', '\n']);
-            if !trimmed.is_empty() && !vk_ref.is_empty() {
-                result.push((trimmed.to_string(), vk_ref.to_string()));
-            }
-        }
+        let (mut result, ve) = parse_mask_map_entries(&data);
 
         enrich_mask_map(&mut result);
 
-        if let Some(ve_arr) = data["ve_entries"].as_array() {
-            let mut ve: Vec<(String, String)> = Vec::new();
-            for entry in ve_arr {
-                let ve_ref = entry["ref"].as_str().unwrap_or_default();
-                let value = entry["value"].as_str().unwrap_or_default();
-                let trimmed = value.trim_end_matches(['\r', '\n']);
-                if !trimmed.is_empty() && !ve_ref.is_empty() {
-                    ve.push((trimmed.to_string(), ve_ref.to_string()));
-                }
-            }
-            if let Ok(mut guard) = self.ve_entries.lock() {
-                *guard = ve;
-            }
+        if let Ok(mut guard) = self.ve_entries.lock() {
+            *guard = ve;
         }
 
         Some(result)
@@ -569,6 +549,32 @@ pub fn enrich_mask_map(map: &mut Vec<(String, String)>) {
         }
         true
     });
+}
+
+/// Parse the mask-map API response, separating VK secrets from VE config entries.
+/// Returns (secrets, ve_entries) where:
+/// - secrets: VK: refs (and any unknown prefix) → used for PTY output masking
+/// - ve_entries: VE: refs → used for config tagging
+pub fn parse_mask_map_entries(data: &serde_json::Value) -> (Vec<(String, String)>, Vec<(String, String)>) {
+    let entries = data["entries"].as_array().cloned().unwrap_or_default();
+    let mut secrets: Vec<(String, String)> = Vec::new();
+    let mut ve_entries: Vec<(String, String)> = Vec::new();
+
+    for entry in &entries {
+        let vk_ref = entry["ref"].as_str().unwrap_or_default();
+        let value = entry["value"].as_str().unwrap_or_default();
+        let trimmed = value.trim_end_matches(['\r', '\n']);
+        if trimmed.is_empty() || vk_ref.is_empty() {
+            continue;
+        }
+        if vk_ref.starts_with("VE:") {
+            ve_entries.push((trimmed.to_string(), vk_ref.to_string()));
+        } else {
+            secrets.push((trimmed.to_string(), vk_ref.to_string()));
+        }
+    }
+
+    (secrets, ve_entries)
 }
 
 fn resolve_candidates(token: &str) -> Vec<String> {
@@ -1241,5 +1247,466 @@ mod connection_domain_tests {
                 ep
             );
         }
+    }
+
+    // ── parse_mask_map_entries: VK/VE separation ────────────────────
+
+    #[test]
+    fn test_parse_splits_vk_and_ve_entries() {
+        let data = serde_json::json!({"version":1,"changed":true,"entries":[
+            {"ref":"VK:LOCAL:abc12345","value":"my-secret-password","vault":"host-lv"},
+            {"ref":"VE:LOCAL:DB_HOST","value":"10.0.0.5","vault":"host-lv"},
+            {"ref":"VK:LOCAL:def67890","value":"another-secret","vault":"host-lv"},
+            {"ref":"VE:LOCAL:APP_PORT","value":"8080","vault":"host-lv"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 2);
+        assert_eq!(c.len(), 2);
+        assert!(s.iter().any(|(p, _)| p == "my-secret-password"));
+        assert!(c.iter().any(|(_, r)| r == "VE:LOCAL:DB_HOST"));
+    }
+
+    #[test]
+    fn test_parse_only_vk_entries() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"s1","vault":"v1"},
+            {"ref":"VK:SSH:b","value":"ssh-key","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 2);
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_only_ve_entries() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:DB_HOST","value":"10.0.0.5","vault":"v1"},
+            {"ref":"VE:LOCAL:DB_PORT","value":"3306","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty());
+        assert_eq!(c.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_empty_entries() {
+        let (s, c) = super::parse_mask_map_entries(&serde_json::json!({"entries":[]}));
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_missing_entries_field() {
+        let (s, c) = super::parse_mask_map_entries(&serde_json::json!({"version":1}));
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_trims_trailing_newlines() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"secret\r\n","vault":"v1"},
+            {"ref":"VE:LOCAL:H","value":"host\n","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0, "secret");
+        assert_eq!(c[0].0, "host");
+    }
+
+    #[test]
+    fn test_parse_skips_empty_values() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"","vault":"v1"},
+            {"ref":"VE:LOCAL:H","value":"","vault":"v1"},
+            {"ref":"VK:LOCAL:b","value":"real","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_skips_empty_refs() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"","value":"orphan","vault":"v1"},
+            {"ref":"VK:LOCAL:a","value":"real","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_unknown_prefix_goes_to_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"XX:LOCAL:a","value":"unknown","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_vk_ssh_goes_to_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:SSH:k","value":"-----BEGIN KEY-----","vault":"vc"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_vk_temp_goes_to_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:TEMP:t","value":"temp-val","vault":"vc"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ve_host_goes_to_configs() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:HOST:CFG","value":"val","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert_eq!(c.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_ve_multiple_scopes() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:A","value":"a","vault":"v1"},
+            {"ref":"VE:HOST:B","value":"b","vault":"v1"},
+            {"ref":"VE:TEMP:C","value":"c","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert_eq!(c.len(), 3);
+    }
+
+    #[test]
+    fn test_parse_ve_prefix_is_case_sensitive() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"ve:LOCAL:a","value":"v","vault":"v1"},
+            {"ref":"Ve:LOCAL:b","value":"v","vault":"v1"},
+            {"ref":"vE:LOCAL:c","value":"v","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 3); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_null_ref() {
+        let data = serde_json::json!({"entries":[{"ref":null,"value":"v","vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_null_value() {
+        let data = serde_json::json!({"entries":[{"ref":"VK:LOCAL:a","value":null,"vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_numeric_value() {
+        let data = serde_json::json!({"entries":[{"ref":"VK:LOCAL:a","value":123,"vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_object_value() {
+        let data = serde_json::json!({"entries":[{"ref":"VK:LOCAL:a","value":{"x":1},"vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entries_not_array() {
+        let (s, c) = super::parse_mask_map_entries(&serde_json::json!({"entries":"str"}));
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entries_null() {
+        let (s, c) = super::parse_mask_map_entries(&serde_json::json!({"entries":null}));
+        assert!(s.is_empty()); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_ref_bare_ve() {
+        let data = serde_json::json!({"entries":[{"ref":"VE:","value":"bare","vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty()); assert_eq!(c.len(), 1);
+    }
+
+    #[test]
+    fn test_parse_ref_embedded_ve_not_config() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:VE:abc","value":"tricky","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_value_only_newlines() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"\r\n","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty());
+    }
+
+    #[test]
+    fn test_parse_value_internal_newlines_preserved() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:SSH:k","value":"l1\nl2\nl3\n","vault":"vc"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0, "l1\nl2\nl3");
+    }
+
+    #[test]
+    fn test_parse_value_unicode() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:u","value":"비밀번호🔑","vault":"v1"},
+            {"ref":"VE:LOCAL:L","value":"설정값","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0, "비밀번호🔑");
+        assert_eq!(c[0].0, "설정값");
+    }
+
+    #[test]
+    fn test_parse_value_containing_ref_pattern() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"VK:LOCAL:fake","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0, "VK:LOCAL:fake");
+    }
+
+    #[test]
+    fn test_parse_duplicate_entries_kept() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"same","vault":"v1"},
+            {"ref":"VK:LOCAL:a","value":"same","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 2);
+    }
+
+    #[test]
+    fn test_parse_same_value_vk_and_ve() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:s","value":"10.0.0.5","vault":"v1"},
+            {"ref":"VE:LOCAL:H","value":"10.0.0.5","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert_eq!(c.len(), 1);
+        assert_eq!(s[0].0, c[0].0);
+    }
+
+    #[test]
+    fn test_parse_preserves_order() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:1","value":"aaa","vault":"v1"},
+            {"ref":"VK:LOCAL:2","value":"bbb","vault":"v1"},
+            {"ref":"VK:LOCAL:3","value":"ccc","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!((s[0].0.as_str(), s[1].0.as_str(), s[2].0.as_str()), ("aaa","bbb","ccc"));
+    }
+
+    #[test]
+    fn test_parse_ve_preserves_order() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:A","value":"first","vault":"v1"},
+            {"ref":"VK:LOCAL:x","value":"sec","vault":"v1"},
+            {"ref":"VE:LOCAL:B","value":"second","vault":"v1"}
+        ]});
+        let (_, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(c[0].0, "first"); assert_eq!(c[1].0, "second");
+    }
+
+    #[test]
+    fn test_parse_large_payload() {
+        let mut entries = Vec::new();
+        for i in 0..500 {
+            entries.push(serde_json::json!({"ref":format!("VK:LOCAL:{:08x}",i),"value":format!("s{:04}",i),"vault":"v1"}));
+            entries.push(serde_json::json!({"ref":format!("VE:LOCAL:C_{:04}",i),"value":format!("c{:04}",i),"vault":"v1"}));
+        }
+        let (s, c) = super::parse_mask_map_entries(&serde_json::json!({"entries":entries}));
+        assert_eq!(s.len(), 500); assert_eq!(c.len(), 500);
+    }
+
+    #[test]
+    fn defense_parse_injection_in_ref() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:../../etc/passwd","value":"inject","vault":"v1"},
+            {"ref":"VE:LOCAL:$(rm -rf /)","value":"inject","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert_eq!(c.len(), 1);
+    }
+
+    #[test]
+    fn defense_parse_control_chars() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:c","value":"p\u{0001}\u{0002}w","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0, "p\u{0001}\u{0002}w");
+    }
+
+    #[test]
+    fn defense_parse_very_long_value() {
+        let v = "A".repeat(100_000);
+        let data = serde_json::json!({"entries":[{"ref":"VK:LOCAL:l","value":v,"vault":"v1"}]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s[0].0.len(), 100_000);
+    }
+
+    #[test]
+    fn defense_parse_garbage_entries() {
+        let data = serde_json::json!({"entries":["str",42,null,
+            {"ref":"VK:LOCAL:g","value":"real","vault":"v1"},
+            {"ref":null,"value":"x"},
+            {"ref":"VE:LOCAL:C","value":"cfg","vault":"v1"},
+            true
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1); assert_eq!(c.len(), 1);
+    }
+
+    #[test]
+    fn domain_parse_ve_never_in_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:A","value":"a","vault":"v1"},
+            {"ref":"VK:LOCAL:b","value":"b","vault":"v1"},
+            {"ref":"VE:HOST:C","value":"c","vault":"v1"}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        for (_, r) in &s { assert!(!r.starts_with("VE:")); }
+    }
+
+    #[test]
+    fn domain_parse_vk_never_in_configs() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"s","vault":"v1"},
+            {"ref":"VE:LOCAL:B","value":"c","vault":"v1"},
+            {"ref":"VK:SSH:d","value":"k","vault":"v1"}
+        ]});
+        let (_, c) = super::parse_mask_map_entries(&data);
+        for (_, r) in &c { assert!(!r.starts_with("VK:")); }
+    }
+
+    #[test]
+    fn domain_parse_total_count() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"s1","vault":"v1"},
+            {"ref":"VK:LOCAL:b","value":"s2","vault":"v1"},
+            {"ref":"VE:LOCAL:C","value":"c1","vault":"v1"},
+            {"ref":"VK:LOCAL:d","value":"","vault":"v1"},
+            {"ref":"","value":"bad","vault":"v1"}
+        ]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len() + c.len(), 3);
+    }
+
+    // ── Pipeline integration: parse → enrich ─────────────────────────
+
+    #[test]
+    fn pipeline_enrich_only_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"my-api-key-value","vault":"v1"},
+            {"ref":"VE:LOCAL:H","value":"10.0.0.5","vault":"v1"},
+            {"ref":"VE:LOCAL:P","value":"5432","vault":"v1"}
+        ]});
+        let (mut secrets, configs) = super::parse_mask_map_entries(&data);
+        super::enrich_mask_map(&mut secrets);
+        assert!(secrets.len() > 1);
+        assert_eq!(configs.len(), 2);
+        for (_, r) in &secrets { assert!(!r.starts_with("VE:")); }
+    }
+
+    #[test]
+    fn pipeline_config_not_in_secrets() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:s","value":"super-secret-key-value","vault":"v1"},
+            {"ref":"VE:LOCAL:H","value":"192.168.1.100","vault":"v1"}
+        ]});
+        let (mut secrets, _) = super::parse_mask_map_entries(&data);
+        super::enrich_mask_map(&mut secrets);
+        assert!(!secrets.iter().any(|(p, _)| p == "192.168.1.100"));
+    }
+
+    #[test]
+    fn pipeline_no_encoded_variants_for_configs() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:L","value":"a-config-value-that-is-long-enough","vault":"v1"}
+        ]});
+        let (mut secrets, configs) = super::parse_mask_map_entries(&data);
+        super::enrich_mask_map(&mut secrets);
+        let cfg_b64 = base64::Engine::encode(
+            &base64::engine::general_purpose::STANDARD,
+            "a-config-value-that-is-long-enough".as_bytes(),
+        );
+        assert!(!secrets.iter().any(|(p, _)| p == &cfg_b64));
+        assert_eq!(configs.len(), 1);
+    }
+
+    #[test]
+    fn pipeline_realistic_response() {
+        let data = serde_json::json!({"version":42,"changed":true,"entries":[
+            {"ref":"VK:LOCAL:ce2aac9a","value":"sk-ant-oat01-xxxxx","vault":"host-lv"},
+            {"ref":"VK:LOCAL:7accddf2","value":"sk-proj-yyyyy","vault":"host-lv"},
+            {"ref":"VK:LOCAL:bdd9d472","value":"p@ssw0rd!123","vault":"host-lv"},
+            {"ref":"VK:SSH:key0001","value":"-----BEGIN KEY-----\ndata","vault":"vc"},
+            {"ref":"VE:LOCAL:DB_HOST","value":"10.50.0.113","vault":"mysql"},
+            {"ref":"VE:LOCAL:DB_PORT","value":"3306","vault":"mysql"},
+            {"ref":"VE:LOCAL:APP_ENV","value":"production","vault":"host-lv"},
+            {"ref":"VE:HOST:LOG_LEVEL","value":"info","vault":"host-lv"}
+        ]});
+        let (mut s, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 4); assert_eq!(c.len(), 4);
+        super::enrich_mask_map(&mut s);
+        assert!(s.len() > 4); assert_eq!(c.len(), 4);
+    }
+
+    // ── Source-code regression guards ────────────────────────────────
+
+    #[test]
+    fn guard_fetch_uses_parse_function() {
+        assert!(include_str!("api.rs").contains("parse_mask_map_entries(&data)"));
+    }
+
+    #[test]
+    fn guard_no_inline_ve_entries_parsing() {
+        let src = include_str!("api.rs");
+        let non_test = match src.find("#[cfg(test)]") {
+            Some(pos) => &src[..pos],
+            None => src,
+        };
+        let old = format!(r#"data["ve_{}"]"#, "entries");
+        assert!(!non_test.contains(&old));
+    }
+
+    #[test]
+    fn guard_sync_uses_parse_function() {
+        assert!(include_str!("pty/sync.rs").contains("parse_mask_map_entries"));
+    }
+
+    #[test]
+    fn guard_sync_updates_ve_map() {
+        assert!(include_str!("pty/sync.rs").contains("ve_map"));
+    }
+
+    #[test]
+    fn guard_sync_no_inline_parsing() {
+        assert!(!include_str!("pty/sync.rs").contains(r#"e["ref"]"#));
+    }
+
+    #[test]
+    fn guard_session_passes_ve_map_to_sync() {
+        assert!(include_str!("pty/session.rs").contains("ve_map.clone()"));
     }
 }
