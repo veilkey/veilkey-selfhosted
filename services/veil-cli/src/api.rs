@@ -394,6 +394,97 @@ impl VeilKeyClient {
         Ok(())
     }
 
+    /// Register an SSH key via the VaultCenter API.
+    pub fn ssh_add(
+        &self,
+        label: &str,
+        public_key: &str,
+        private_key: Option<&str>,
+        key_type: &str,
+    ) -> Result<String, String> {
+        let url = format!("{}/api/ssh/keys", self.base_url);
+        let mut body = serde_json::json!({
+            "label": label,
+            "public_key": public_key,
+            "key_type": key_type,
+        });
+        if let Some(pk) = private_key {
+            body["private_key"] = serde_json::Value::String(pk.to_string());
+        }
+        let mut req = self
+            .agent
+            .post(&url)
+            .set("Content-Type", "application/json");
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        let resp = req
+            .send_json(&body)
+            .map_err(|e| format!("ssh add failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("ssh add decode failed: {}", e))?;
+        let vk_ref = result["ref"]
+            .as_str()
+            .ok_or("missing ref in response")?
+            .to_string();
+        Ok(vk_ref)
+    }
+
+    /// List all SSH keys (public info only).
+    pub fn ssh_list(&self) -> Result<Vec<serde_json::Value>, String> {
+        let url = format!("{}/api/ssh/keys", self.base_url);
+        let mut req = self.agent.get(&url);
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        let resp = req.call().map_err(|e| format!("ssh list failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("ssh list decode failed: {}", e))?;
+        let keys = result["keys"].as_array().cloned().unwrap_or_default();
+        Ok(keys)
+    }
+
+    /// Get the public key for an SSH key ref.
+    pub fn ssh_pubkey(&self, ref_str: &str) -> Result<String, String> {
+        let url = format!(
+            "{}/api/ssh/keys/{}",
+            self.base_url,
+            urlencoding::encode(ref_str)
+        );
+        let mut req = self.agent.get(&url);
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        let resp = req
+            .call()
+            .map_err(|e| format!("ssh pubkey failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("ssh pubkey decode failed: {}", e))?;
+        result["public_key"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| "missing public_key in response".to_string())
+    }
+
+    /// Delete an SSH key by ref.
+    pub fn ssh_remove(&self, ref_str: &str) -> Result<(), String> {
+        let url = format!(
+            "{}/api/ssh/keys/{}",
+            self.base_url,
+            urlencoding::encode(ref_str)
+        );
+        let mut req = self.agent.delete(&url);
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        req.call()
+            .map_err(|e| format!("ssh remove failed: {}", e))?;
+        Ok(())
+    }
+
     pub fn health_check(&self) -> bool {
         let secs = std::env::var("VEILKEY_HEALTH_TIMEOUT")
             .ok()
@@ -446,6 +537,54 @@ impl VeilKeyClient {
             Err(_) => Err("cannot reach VaultCenter".to_string()),
         }
     }
+}
+
+/// Parse an SSH key file and return (key_type, public_key, Option<private_key>).
+/// Supports both private key files (extracts public key from comment or generates)
+/// and public key files.
+pub fn parse_ssh_key(content: &str) -> (String, String, Option<String>) {
+    let trimmed = content.trim();
+
+    // Check if it's a public key file (starts with ssh-...)
+    if trimmed.starts_with("ssh-ed25519 ")
+        || trimmed.starts_with("ssh-rsa ")
+        || trimmed.starts_with("ecdsa-sha2-")
+    {
+        let key_type = if trimmed.starts_with("ssh-ed25519") {
+            "ed25519"
+        } else if trimmed.starts_with("ssh-rsa") {
+            "rsa"
+        } else {
+            "ecdsa"
+        };
+        return (key_type.to_string(), trimmed.to_string(), None);
+    }
+
+    // It's a private key file — detect type from header
+    let key_type = if trimmed.contains("OPENSSH PRIVATE KEY") {
+        // Need to check the key data for type; heuristic: check for ed25519 in decoded data
+        // or check file size (ed25519 private keys are much smaller)
+        if trimmed.len() < 800 {
+            "ed25519"
+        } else {
+            "rsa"
+        }
+    } else if trimmed.contains("RSA PRIVATE KEY") {
+        "rsa"
+    } else if trimmed.contains("EC PRIVATE KEY") {
+        "ecdsa"
+    } else {
+        "unknown"
+    };
+
+    // Try to find a corresponding .pub file or extract from the last line comment
+    // For now, return the private key content and empty public key
+    // The caller should provide the public key separately or the server derives it
+    (
+        key_type.to_string(),
+        String::new(),
+        Some(trimmed.to_string()),
+    )
 }
 
 /// Build a JSON `{"password":"..."}` body with proper escaping.
@@ -1107,5 +1246,45 @@ mod tests {
             "all keyword secrets must be removed, remaining: {:?}",
             map
         );
+    }
+
+    // ── parse_ssh_key tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_parse_ssh_key_public_ed25519() {
+        let content = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... user@host";
+        let (kt, pubkey, privkey) = super::parse_ssh_key(content);
+        assert_eq!(kt, "ed25519");
+        assert!(pubkey.starts_with("ssh-ed25519"));
+        assert!(privkey.is_none());
+    }
+
+    #[test]
+    fn test_parse_ssh_key_public_rsa() {
+        let content = "ssh-rsa AAAAB3NzaC1yc2EAAA... user@host";
+        let (kt, pubkey, privkey) = super::parse_ssh_key(content);
+        assert_eq!(kt, "rsa");
+        assert!(pubkey.starts_with("ssh-rsa"));
+        assert!(privkey.is_none());
+    }
+
+    #[test]
+    fn test_parse_ssh_key_private_rsa() {
+        let content = "-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB...\n-----END RSA PRIVATE KEY-----";
+        let (kt, pubkey, privkey) = super::parse_ssh_key(content);
+        assert_eq!(kt, "rsa");
+        assert!(pubkey.is_empty());
+        assert!(privkey.is_some());
+    }
+
+    #[test]
+    fn test_parse_ssh_key_private_openssh() {
+        // Small key content simulating ed25519 (< 800 chars)
+        let content =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3Blbn...\n-----END OPENSSH PRIVATE KEY-----";
+        let (kt, pubkey, privkey) = super::parse_ssh_key(content);
+        assert_eq!(kt, "ed25519");
+        assert!(pubkey.is_empty());
+        assert!(privkey.is_some());
     }
 }

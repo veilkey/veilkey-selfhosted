@@ -34,6 +34,10 @@ fn print_usage() {
   veilkey function add <name>       Create a global function
   veilkey function remove <name>    Delete a global function
   veilkey list                      List detected VeilKey entries
+  veilkey ssh add <keyfile> [opts]   Register SSH key (--label, --external)
+  veilkey ssh list                  List SSH keys
+  veilkey ssh pubkey <ref>          Show public key for ref
+  veilkey ssh remove <ref>          Delete SSH key
   veilkey paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey clear                     Clear session log
   veilkey status                    Show status
@@ -303,6 +307,146 @@ fn main() {
                 Ok(vk_ref) => println!("{}", vk_ref),
                 Err(e) => {
                     eprintln!("[veilkey] create failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "ssh" => {
+            let subcmd = cmd_args.first().map(String::as_str).unwrap_or_else(|| {
+                eprintln!("Usage: veilkey ssh <add|list|pubkey|remove> [args]");
+                process::exit(1);
+            });
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&api_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match subcmd {
+                "add" => {
+                    let keyfile = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("Usage: veilkey ssh add <keyfile> [--label name] [--external]");
+                        process::exit(1);
+                    });
+
+                    // Parse optional flags
+                    let mut label = String::new();
+                    let mut external = false;
+                    let mut i = 2;
+                    while i < cmd_args.len() {
+                        match cmd_args[i].as_str() {
+                            "--label" => {
+                                if i + 1 < cmd_args.len() {
+                                    label = cmd_args[i + 1].clone();
+                                    i += 2;
+                                } else {
+                                    eprintln!("--label requires a value");
+                                    process::exit(1);
+                                }
+                            }
+                            "--external" => {
+                                external = true;
+                                i += 1;
+                            }
+                            other => {
+                                eprintln!("Unknown flag: {}", other);
+                                process::exit(1);
+                            }
+                        }
+                    }
+
+                    let key_content = std::fs::read_to_string(keyfile).unwrap_or_else(|e| {
+                        eprintln!("[veilkey] failed to read key file: {}", e);
+                        process::exit(1);
+                    });
+
+                    // Detect key type and extract public/private
+                    let (key_type, mut public_key, private_key) =
+                        veil_cli_rs::api::parse_ssh_key(&key_content);
+
+                    // If public key is empty (private key file), try to read .pub file
+                    if public_key.is_empty() {
+                        let pub_path = format!("{}.pub", keyfile);
+                        if let Ok(pub_content) = std::fs::read_to_string(&pub_path) {
+                            public_key = pub_content.trim().to_string();
+                        } else {
+                            eprintln!("[veilkey] no .pub file found at {}. Provide a public key file or place the .pub alongside the private key.", pub_path);
+                            process::exit(1);
+                        }
+                    }
+
+                    if label.is_empty() {
+                        // Use filename as label
+                        label = std::path::Path::new(keyfile)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "ssh-key".to_string());
+                    }
+
+                    let priv_key = if external {
+                        None
+                    } else {
+                        private_key.as_deref()
+                    };
+                    match client.ssh_add(&label, &public_key, priv_key, &key_type) {
+                        Ok(vk_ref) => println!("{}", vk_ref),
+                        Err(e) => {
+                            eprintln!("[veilkey] ssh add failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "list" => match client.ssh_list() {
+                    Ok(keys) => {
+                        if keys.is_empty() {
+                            println!("No SSH keys registered");
+                        } else {
+                            for k in &keys {
+                                let r = k["ref"].as_str().unwrap_or("?");
+                                let lbl = k["label"].as_str().unwrap_or("");
+                                let kt = k["key_type"].as_str().unwrap_or("");
+                                let own = k["ownership"].as_str().unwrap_or("");
+                                println!("{}  {} ({}) [{}]", r, lbl, kt, own);
+                            }
+                            println!("\nTotal: {} key(s)", keys.len());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[veilkey] ssh list failed: {}", e);
+                        process::exit(1);
+                    }
+                },
+                "pubkey" => {
+                    let vk_ref = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("Usage: veilkey ssh pubkey <ref>");
+                        process::exit(1);
+                    });
+                    match client.ssh_pubkey(vk_ref) {
+                        Ok(pubkey) => println!("{}", pubkey),
+                        Err(e) => {
+                            eprintln!("[veilkey] ssh pubkey failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "remove" => {
+                    let vk_ref = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("Usage: veilkey ssh remove <ref>");
+                        process::exit(1);
+                    });
+                    match client.ssh_remove(vk_ref) {
+                        Ok(()) => println!("SSH key {} deleted", vk_ref),
+                        Err(e) => {
+                            eprintln!("[veilkey] ssh remove failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                unknown => {
+                    eprintln!("Unknown ssh subcommand: {}", unknown);
+                    eprintln!("Usage: veilkey ssh <add|list|pubkey|remove> [args]");
                     process::exit(1);
                 }
             }
