@@ -471,7 +471,7 @@ func (h *Handler) handlePasskeyLoginFinish(w http.ResponseWriter, r *http.Reques
 		respondError(w, http.StatusInternalServerError, "failed to create admin session")
 		return
 	}
-	setAdminSessionCookie(w, token, adminSession.ExpiresAt)
+	setAdminSessionCookie(w, r, token, adminSession.ExpiresAt)
 
 	h.deps.SaveAuditEvent("admin_session", adminSession.SessionID, "session_login", "api", httputil.ActorIDForRequest(r), "", "admin_auth", nil, map[string]any{
 		"auth_method":     "passkey",

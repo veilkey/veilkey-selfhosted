@@ -54,6 +54,16 @@ func AgentScheme() string {
 	return "http"
 }
 
+// IsSecureRequest returns true if the request arrived over TLS or via a
+// trusted reverse proxy that sets X-Forwarded-Proto: https.
+// Use this to decide whether cookies should have the Secure flag.
+func IsSecureRequest(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return strings.EqualFold(strings.TrimSpace(r.Header.Get("X-Forwarded-Proto")), "https")
+}
+
 func RequestBaseURL(r *http.Request) string {
 	scheme := "http"
 	if r.TLS != nil {

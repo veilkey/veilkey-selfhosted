@@ -160,8 +160,8 @@ func TestDefense_SessionCookie_SecurityFlags(t *testing.T) {
 	if !strings.Contains(content, "HttpOnly: true") {
 		t.Error("session cookie must have HttpOnly flag to prevent XSS theft")
 	}
-	if !strings.Contains(content, "Secure:   true") && !strings.Contains(content, "Secure: true") {
-		t.Error("session cookie must have Secure flag to prevent transmission over HTTP")
+	if !strings.Contains(content, "httputil.IsSecureRequest(r)") {
+		t.Error("session cookie Secure flag must be derived from httputil.IsSecureRequest(r), not hardcoded")
 	}
 	if !strings.Contains(content, "SameSiteStrictMode") {
 		t.Error("session cookie must use SameSite=Strict to prevent CSRF")
