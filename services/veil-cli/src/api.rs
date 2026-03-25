@@ -152,6 +152,24 @@ impl VeilKeyClient {
         req.call()
     }
 
+    #[allow(clippy::result_large_err)]
+    pub fn raw_post(&self, url: &str, body: &serde_json::Value) -> Result<ureq::Response, ureq::Error> {
+        let mut req = self.agent.post(url).set("Content-Type", "application/json");
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        req.send_json(body)
+    }
+
+    #[allow(clippy::result_large_err)]
+    pub fn raw_delete(&self, url: &str) -> Result<ureq::Response, ureq::Error> {
+        let mut req = self.agent.delete(url);
+        if let Some(cookie) = self.cookie_header() {
+            req = req.set("Cookie", &cookie);
+        }
+        req.call()
+    }
+
     pub fn issue(&self, value: &str) -> Result<String, String> {
         let value = value.trim_end_matches(['\r', '\n']);
         {

@@ -448,6 +448,162 @@ pub fn cmd_status(api_url: &str, log_path: &str, patterns_file: Option<&str>, ve
     }
 }
 
+pub fn cmd_traefik(args: &[String], api_url: &str, _log_path: &str, _patterns_file: Option<&str>) {
+    if args.is_empty() {
+        eprintln!("Usage: veilkey traefik <init|status|destroy>");
+        eprintln!("  init    --domain <domain> --dns cloudflare    Initialize Traefik config");
+        eprintln!("  status                                        Show Traefik route status");
+        eprintln!("  destroy [--purge]                             Remove Traefik config");
+        process::exit(1);
+    }
+    match args[0].as_str() {
+        "init" => traefik_init(&args[1..], api_url),
+        "status" => traefik_status(api_url),
+        "destroy" => traefik_destroy(&args[1..], api_url),
+        other => {
+            eprintln!("Unknown traefik subcommand: {}", other);
+            process::exit(1);
+        }
+    }
+}
+
+fn traefik_init(args: &[String], api_url: &str) {
+    let mut domain: Option<String> = None;
+    let mut dns: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--domain" if i + 1 < args.len() => {
+                domain = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--domain=") => {
+                domain = Some(a["--domain=".len()..].to_string());
+                i += 1;
+            }
+            "--dns" if i + 1 < args.len() => {
+                dns = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--dns=") => {
+                dns = Some(a["--dns=".len()..].to_string());
+                i += 1;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+    let domain = match domain {
+        Some(d) => d,
+        None => {
+            eprintln!("ERROR: --domain is required");
+            eprintln!("Usage: veilkey traefik init --domain <domain> --dns <provider>");
+            process::exit(1);
+        }
+    };
+    let dns = dns.unwrap_or_else(|| "cloudflare".to_string());
+
+    let client = VeilKeyClient::new(api_url);
+    let url = format!(
+        "{}/api/plugins/traefik-sync/api/routes",
+        client.base_url()
+    );
+    let body = serde_json::json!({ "domain": domain, "dns": dns });
+    match client
+        .raw_post(&url, &body)
+    {
+        Ok(resp) => {
+            let result: serde_json::Value = resp.into_json().unwrap_or_default();
+            println!(
+                "Traefik config initialized: domain={}, dns={}",
+                domain, dns
+            );
+            if let Some(msg) = result["message"].as_str() {
+                println!("  {}", msg);
+            }
+        }
+        Err(e) => {
+            eprintln!("ERROR: traefik init failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn traefik_status(api_url: &str) {
+    let client = VeilKeyClient::new(api_url);
+    let url = format!(
+        "{}/api/plugins/traefik-sync/api/routes",
+        client.base_url()
+    );
+    match client.raw_get(&url) {
+        Ok(resp) => {
+            let result: serde_json::Value = resp.into_json().unwrap_or_default();
+            let routes = result["routes"].as_array();
+            match routes {
+                Some(routes) if !routes.is_empty() => {
+                    println!(
+                        "\x1b[0;36m{:<20} {:<30} {:<30} {:<6}\x1b[0m",
+                        "NAME", "DOMAIN", "BACKEND", "TLS"
+                    );
+                    println!("{}", "─".repeat(86));
+                    for r in routes {
+                        println!(
+                            "{:<20} {:<30} {:<30} {:<6}",
+                            r["name"].as_str().unwrap_or("-"),
+                            r["domain"].as_str().unwrap_or("-"),
+                            r["backend"].as_str().unwrap_or("-"),
+                            if r["tls"].as_bool().unwrap_or(false) {
+                                "yes"
+                            } else {
+                                "no"
+                            },
+                        );
+                    }
+                    println!("\nTotal: {} route(s)", routes.len());
+                }
+                _ => {
+                    println!("No Traefik routes configured");
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("ERROR: traefik status failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn traefik_destroy(args: &[String], api_url: &str) {
+    let purge = args.iter().any(|a| a == "--purge");
+
+    let client = VeilKeyClient::new(api_url);
+    let mut url = format!(
+        "{}/api/plugins/traefik-sync/api/routes",
+        client.base_url()
+    );
+    if purge {
+        url.push_str("?purge=true");
+    }
+    match client.raw_delete(&url) {
+        Ok(resp) => {
+            let result: serde_json::Value = resp.into_json().unwrap_or_default();
+            if purge {
+                println!("Traefik config destroyed (purge)");
+            } else {
+                println!("Traefik config destroyed");
+            }
+            if let Some(msg) = result["message"].as_str() {
+                println!("  {}", msg);
+            }
+        }
+        Err(e) => {
+            eprintln!("ERROR: traefik destroy failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
 pub fn cmd_proxy(args: &[String]) {
     let mut listen = String::new();
     let mut allow_hosts: Vec<String> = Vec::new();
