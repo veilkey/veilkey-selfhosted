@@ -243,10 +243,11 @@ fn main() {
                 },
                 "add" => {
                     let name = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
-                        eprintln!("Usage: veilkey function add <name>");
+                        eprintln!("Usage: veilkey function add <name> [command]");
                         process::exit(1);
                     });
-                    match client.function_add(name) {
+                    let command = cmd_args.get(2).map(String::as_str).unwrap_or(name);
+                    match client.function_add(name, command) {
                         Ok(()) => println!("Function '{}' created", name),
                         Err(e) => {
                             eprintln!("[veilkey] function add failed: {}", e);

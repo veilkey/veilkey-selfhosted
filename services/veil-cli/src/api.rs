@@ -353,9 +353,19 @@ impl VeilKeyClient {
     }
 
     /// Create a global function by name.
-    pub fn function_add(&self, name: &str) -> Result<(), String> {
+    pub fn function_add(&self, name: &str, command: &str) -> Result<(), String> {
         let url = format!("{}/api/functions/global", self.base_url);
-        let body = serde_json::json!({ "name": name });
+        // Simple hash: first 8 hex chars of name bytes sum
+        let hash: u64 = name.bytes().enumerate().fold(0u64, |acc, (i, b)| {
+            acc.wrapping_add((b as u64).wrapping_mul(31u64.wrapping_pow(i as u32)))
+        });
+        let body = serde_json::json!({
+            "name": name,
+            "command": command,
+            "function_hash": format!("{:08x}", hash),
+            "category": "",
+            "vars_json": "[]"
+        });
         let mut req = self
             .agent
             .post(&url)
