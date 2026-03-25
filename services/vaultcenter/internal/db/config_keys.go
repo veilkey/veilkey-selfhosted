@@ -4,6 +4,10 @@ package db
 const (
 	ConfigKeyVaultcenterPassword = "VAULTCENTER_PASSWORD"
 	ConfigKeyAdminPassword       = "ADMIN_PASSWORD"
+
+	// Version tracking keys (written at init time, checked at startup)
+	ConfigKeyBinaryVersion         = "binary_version"
+	ConfigKeyKeyDerivationVersion  = "key_derivation_version"
 )
 
 // DefaultAgentRole is the fallback role assigned to agents without an explicit role.

@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -56,5 +57,19 @@ func TestInitNoDBNoError(t *testing.T) {
 	err := checkInitDBExists(dbPath, false)
 	if err != nil {
 		t.Fatalf("expected no error when DB does not exist, got: %v", err)
+	}
+}
+
+func TestInitSourceStoresVersionMetadata(t *testing.T) {
+	src, err := os.ReadFile("init.go")
+	if err != nil {
+		t.Fatalf("failed to read init.go: %v", err)
+	}
+	code := string(src)
+	if !strings.Contains(code, "ConfigKeyBinaryVersion") {
+		t.Error("init.go must store binary version in DB config")
+	}
+	if !strings.Contains(code, "ConfigKeyKeyDerivationVersion") {
+		t.Error("init.go must store key derivation version in DB config")
 	}
 }

@@ -414,6 +414,20 @@ func TestUnlockDoubleCheckUnderWriteLock(t *testing.T) {
 	}
 }
 
+func TestUnlockChecksKeyDerivationVersion(t *testing.T) {
+	s, _ := os.ReadFile("api.go")
+	b := extractFn(string(s), "func (s *Server) Unlock(")
+	if !strings.Contains(b, "checkKeyDerivationVersion") {
+		t.Error("Unlock must check key derivation version after opening DB")
+	}
+}
+
+func TestCurrentKeyDerivationVersionDefined(t *testing.T) {
+	if CurrentKeyDerivationVersion == "" {
+		t.Error("CurrentKeyDerivationVersion must be defined")
+	}
+}
+
 func TestRevealWindowNotExtendable(t *testing.T) {
 	s, _ := os.ReadFile("admin/admin_auth.go")
 	b := extractFn(string(s), "func (h *Handler) handleAdminRevealAuthorize(")

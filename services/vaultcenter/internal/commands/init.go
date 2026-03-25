@@ -113,6 +113,14 @@ func RunInit() {
 		log.Fatalf("Failed to save node info: %v", err)
 	}
 
+	// Store version metadata for compatibility checks on future startups
+	if err := database.SaveConfig(db.ConfigKeyBinaryVersion, productVersion()); err != nil {
+		log.Printf("Warning: failed to save binary version: %v", err)
+	}
+	if err := database.SaveConfig(db.ConfigKeyKeyDerivationVersion, CurrentKeyDerivationVersion); err != nil {
+		log.Printf("Warning: failed to save key derivation version: %v", err)
+	}
+
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
 		log.Fatalf("Failed to save salt: %v", err)
 	}

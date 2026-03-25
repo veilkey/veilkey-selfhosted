@@ -556,6 +556,9 @@ func (s *Server) Unlock(kek []byte) error {
 		return fmt.Errorf("invalid password (KEK decryption failed)")
 	}
 
+	// 2b. Check key derivation version compatibility
+	checkKeyDerivationVersion(database)
+
 	// 3. Set DB and unlock — double-check under write lock to prevent DB connection leak
 	s.kekMu.Lock()
 	if !s.locked {
@@ -576,6 +579,23 @@ func (s *Server) Unlock(kek []byte) error {
 	}
 
 	return nil
+}
+
+// CurrentKeyDerivationVersion must match commands.CurrentKeyDerivationVersion.
+// Increment if DeriveDBKeyFromKEK logic changes.
+const CurrentKeyDerivationVersion = "1"
+
+// checkKeyDerivationVersion logs a warning if the DB was created with a different
+// key derivation version than the current binary.
+func checkKeyDerivationVersion(database *db.DB) {
+	cfg, err := database.GetConfig(db.ConfigKeyKeyDerivationVersion)
+	if err != nil {
+		return // config not present (DB created before version tracking)
+	}
+	if cfg.Value != "" && cfg.Value != CurrentKeyDerivationVersion {
+		log.Printf("WARNING: DB was created with key derivation v%s, current binary uses v%s",
+			cfg.Value, CurrentKeyDerivationVersion)
+	}
 }
 
 func (s *Server) IsLocked() bool {
