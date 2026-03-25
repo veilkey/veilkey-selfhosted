@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -370,5 +371,120 @@ func TestAutoBackupDBNoDBNoOp(t *testing.T) {
 	backupDir := filepath.Join(tmpDir, "backups")
 	if _, err := os.Stat(backupDir); !os.IsNotExist(err) {
 		t.Error("backup dir should not be created when DB does not exist")
+	}
+}
+
+func TestAutoBackupDBAlsoBacksSalt(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+	saltPath := filepath.Join(tmpDir, "salt")
+
+	if err := os.WriteFile(dbPath, []byte("test-db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	saltContent := []byte("test-salt-content-abc123")
+	if err := os.WriteFile(saltPath, saltContent, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir not created: %v", err)
+	}
+
+	// Should have both a veilkey.db.* and a salt.* backup
+	var dbCount, saltCount int
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "veilkey.db.") {
+			dbCount++
+		}
+		if strings.HasPrefix(e.Name(), "salt.") {
+			saltCount++
+			// Verify salt backup content
+			data, err := os.ReadFile(filepath.Join(backupDir, e.Name()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(data, saltContent) {
+				t.Errorf("salt backup content mismatch: got %q, want %q", data, saltContent)
+			}
+		}
+	}
+	if dbCount != 1 {
+		t.Errorf("expected 1 DB backup, got %d", dbCount)
+	}
+	if saltCount != 1 {
+		t.Errorf("expected 1 salt backup, got %d", saltCount)
+	}
+}
+
+func TestAutoBackupDBNoSaltStillWorks(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+
+	if err := os.WriteFile(dbPath, []byte("test-db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// No salt file — should still backup DB without error
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir not created: %v", err)
+	}
+
+	var dbCount, saltCount int
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "veilkey.db.") {
+			dbCount++
+		}
+		if strings.HasPrefix(e.Name(), "salt.") {
+			saltCount++
+		}
+	}
+	if dbCount != 1 {
+		t.Errorf("expected 1 DB backup, got %d", dbCount)
+	}
+	if saltCount != 0 {
+		t.Errorf("expected 0 salt backups when no salt file exists, got %d", saltCount)
+	}
+}
+
+func TestCopyFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "source")
+	dst := filepath.Join(tmpDir, "dest")
+
+	content := []byte("copy test content")
+	if err := os.WriteFile(src, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyFile(src, dst); err != nil {
+		t.Fatalf("copyFile failed: %v", err)
+	}
+
+	data, err := os.ReadFile(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(data, content) {
+		t.Errorf("copied content mismatch: got %q, want %q", data, content)
+	}
+}
+
+func TestCopyFileMissingSrc(t *testing.T) {
+	tmpDir := t.TempDir()
+	src := filepath.Join(tmpDir, "nonexistent")
+	dst := filepath.Join(tmpDir, "dest")
+
+	err := copyFile(src, dst)
+	if err == nil {
+		t.Fatal("expected error when source file does not exist")
 	}
 }

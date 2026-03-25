@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -560,7 +561,21 @@ func (s *Server) SetupRoutes() http.Handler {
 	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
 	s.registerAdminRoutes(mux)
 
-	return securityHeadersMiddleware(logMiddleware(mux))
+	return recoveryMiddleware(securityHeadersMiddleware(logMiddleware(mux)))
+}
+
+// recoveryMiddleware catches panics in HTTP handlers, logs the stack trace,
+// and returns a 500 response instead of crashing the server.
+func recoveryMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Printf("PANIC recovered: %v\n%s", err, debug.Stack())
+				http.Error(w, "internal server error", http.StatusInternalServerError)
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func securityHeadersMiddleware(next http.Handler) http.Handler {

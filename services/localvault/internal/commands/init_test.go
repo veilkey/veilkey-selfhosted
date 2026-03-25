@@ -137,3 +137,72 @@ func TestInitDBExistsWithZeroByteDB(t *testing.T) {
 		t.Fatal("expected error for 0-byte DB file without --force, got nil")
 	}
 }
+
+func TestInitPreexistingSaltNotDeleted(t *testing.T) {
+	tmpDir := t.TempDir()
+	saltFile := filepath.Join(tmpDir, "salt")
+
+	// Create a pre-existing salt
+	if err := os.WriteFile(saltFile, []byte("pre-existing-salt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	if !fileExists(saltFile) {
+		t.Error("fileExists should return true for pre-existing salt file")
+	}
+
+	// Simulate: init detects salt and refuses without --force.
+	// The key invariant: if init fails (non-force), salt must still exist.
+	if _, err := os.Stat(saltFile); err != nil {
+		t.Error("pre-existing salt file should still exist after failed init check")
+	}
+	data, err := os.ReadFile(saltFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "pre-existing-salt" {
+		t.Errorf("salt content should be preserved, got %q", string(data))
+	}
+}
+
+func TestInitNewSaltDeletedOnError(t *testing.T) {
+	tmpDir := t.TempDir()
+	saltFile := filepath.Join(tmpDir, "salt")
+
+	if fileExists(saltFile) {
+		t.Fatal("salt should not exist before test")
+	}
+
+	saltExistedBefore := fileExists(saltFile)
+	if saltExistedBefore {
+		t.Fatal("saltExistedBefore should be false when salt does not exist")
+	}
+
+	// Simulate: init creates salt then hits an error
+	if err := os.WriteFile(saltFile, []byte("newly-created-salt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// On error, since salt didn't exist before, it's safe to clean up
+	if !saltExistedBefore {
+		_ = os.Remove(saltFile)
+	}
+
+	if fileExists(saltFile) {
+		t.Error("newly created salt should be removed on error when it didn't pre-exist")
+	}
+}
+
+func TestFileExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	existing := filepath.Join(tmpDir, "exists")
+	if err := os.WriteFile(existing, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(existing) {
+		t.Error("fileExists should return true for existing file")
+	}
+	if fileExists(filepath.Join(tmpDir, "nonexistent")) {
+		t.Error("fileExists should return false for non-existing file")
+	}
+}

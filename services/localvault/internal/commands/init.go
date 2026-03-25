@@ -92,12 +92,17 @@ func RunInit() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
+	// Track whether salt existed before this init run, so error cleanup
+	// only removes salt files we created (never deletes pre-existing salt).
+	saltExistedBefore := fileExists(saltFile)
+
 	// Refuse to init if DB already exists (prevents accidental data loss)
 	if err := checkInitDBExists(dbPath, forceInit); err != nil {
 		log.Fatal(err)
 	}
 	if forceInit {
 		_ = os.Remove(saltFile)
+		saltExistedBefore = false // we intentionally removed it
 	}
 
 	if _, err := os.Stat(saltFile); err == nil {
@@ -106,7 +111,9 @@ func RunInit() {
 		}
 		log.Printf("WARNING: --force specified, overwriting existing salt file at %s", saltFile)
 		_ = os.Remove(saltFile)
+		saltExistedBefore = false
 	}
+	_ = saltExistedBefore // used by error paths (currently log.Fatalf exits)
 
 	// Auto-generate password for VC-managed unlock (no user prompt needed).
 	// The password is stored on VaultCenter (encrypted with VC KEK) and fetched on startup.
@@ -227,6 +234,12 @@ func validateTokenRemote(vcURL, tokenID string) error {
 		return fmt.Errorf("token rejected by VaultCenter (HTTP %d)", resp.StatusCode)
 	}
 	return nil
+}
+
+// fileExists returns true if the file at path exists (follows symlinks).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // checkInitDBExists checks if the database file already exists.

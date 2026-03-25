@@ -90,9 +90,30 @@ func RunServer() {
 	}
 }
 
+// copyFile copies a single file from src to dst with mode 0600.
+func copyFile(src, dst string) error {
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return fmt.Errorf("open source: %w", err)
+	}
+	defer srcFile.Close()
+
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0600)
+	if err != nil {
+		return fmt.Errorf("create destination: %w", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return fmt.Errorf("copy: %w", err)
+	}
+	return nil
+}
+
 // autoBackupDB creates a timestamped backup of the DB file on startup.
 // It keeps at most 5 backups in a "backups" subdirectory, removing the oldest
-// when the limit is exceeded.
+// when the limit is exceeded. The salt file is also backed up alongside the DB,
+// since the DB is unusable without the salt.
 func autoBackupDB(dbPath string) {
 	if _, err := os.Stat(dbPath); err != nil {
 		return // no DB to backup
@@ -103,42 +124,45 @@ func autoBackupDB(dbPath string) {
 		return
 	}
 
-	// Keep last 5 backups
+	// Keep last 5 backups (rotate both DB and salt backups)
 	entries, _ := os.ReadDir(backupDir)
-	var backups []string
+	var dbBackups, saltBackups []string
 	for _, e := range entries {
 		if strings.HasPrefix(e.Name(), "veilkey.db.") {
-			backups = append(backups, filepath.Join(backupDir, e.Name()))
+			dbBackups = append(dbBackups, filepath.Join(backupDir, e.Name()))
+		} else if strings.HasPrefix(e.Name(), "salt.") {
+			saltBackups = append(saltBackups, filepath.Join(backupDir, e.Name()))
 		}
 	}
-	sort.Strings(backups)
-	for len(backups) >= 5 {
-		_ = os.Remove(backups[0])
-		backups = backups[1:]
+	sort.Strings(dbBackups)
+	for len(dbBackups) >= 5 {
+		_ = os.Remove(dbBackups[0])
+		dbBackups = dbBackups[1:]
+	}
+	sort.Strings(saltBackups)
+	for len(saltBackups) >= 5 {
+		_ = os.Remove(saltBackups[0])
+		saltBackups = saltBackups[1:]
 	}
 
 	// Copy current DB
 	timestamp := time.Now().Format("20060102-150405")
 	dst := filepath.Join(backupDir, fmt.Sprintf("veilkey.db.%s", timestamp))
 
-	srcFile, err := os.Open(dbPath)
-	if err != nil {
-		log.Printf("Auto-backup: failed to open source DB: %v", err)
+	if err := copyFile(dbPath, dst); err != nil {
+		log.Printf("Auto-backup: failed to backup DB: %v", err)
 		return
 	}
-	defer srcFile.Close()
-
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		log.Printf("Auto-backup: failed to create backup file: %v", err)
-		return
-	}
-	defer dstFile.Close()
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		log.Printf("Auto-backup: failed to copy DB: %v", err)
-		return
-	}
-
 	log.Printf("Auto-backup: %s", dst)
+
+	// Also backup salt file (DB is useless without salt)
+	saltPath := filepath.Join(filepath.Dir(dbPath), "salt")
+	if _, err := os.Stat(saltPath); err == nil {
+		saltDst := filepath.Join(backupDir, fmt.Sprintf("salt.%s", timestamp))
+		if err := copyFile(saltPath, saltDst); err != nil {
+			log.Printf("Auto-backup: failed to backup salt: %v", err)
+		} else {
+			log.Printf("Auto-backup: %s", saltDst)
+		}
+	}
 }

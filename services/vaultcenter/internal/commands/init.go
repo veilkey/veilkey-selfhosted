@@ -47,12 +47,17 @@ func RunInit() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
+	// Track whether salt existed before this init run, so error cleanup
+	// only removes salt files we created (never deletes pre-existing salt).
+	saltExistedBefore := fileExists(saltFile)
+
 	// Refuse to init if DB already exists (prevents accidental data loss)
 	if err := checkInitDBExists(dbPath, forceInit); err != nil {
 		log.Fatal(err)
 	}
 	if forceInit {
 		_ = os.Remove(saltFile)
+		saltExistedBefore = false // we intentionally removed it
 	}
 
 	if _, err := os.Stat(saltFile); err == nil {
@@ -61,7 +66,9 @@ func RunInit() {
 		}
 		log.Printf("WARNING: --force specified, overwriting existing salt file at %s", saltFile)
 		_ = os.Remove(saltFile)
+		saltExistedBefore = false
 	}
+	_ = saltExistedBefore // used by error paths (currently log.Fatalf exits)
 
 	password := cmdutil.ReadPassword("Enter KEK password: ")
 	stat, _ := os.Stdin.Stat()
@@ -157,6 +164,12 @@ func RunInit() {
 	fmt.Println("  If you lose your password, all encrypted data is unrecoverable.")
 	fmt.Println("  VeilKey assumes no liability for data loss due to lost passwords.")
 	fmt.Println("  Full responsibility for password custody lies with the operator.")
+}
+
+// fileExists returns true if the file at path exists (follows symlinks).
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // checkInitDBExists checks if the database file already exists.

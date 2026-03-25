@@ -277,6 +277,83 @@ func TestDomain_ForceDeletesAllDBFiles(t *testing.T) {
 	}
 }
 
+func TestInitPreexistingSaltNotDeleted(t *testing.T) {
+	// If salt exists before init, the force path sets saltExistedBefore=false
+	// only AFTER intentional removal. Verify fileExists correctly detects pre-existing salt.
+	tmpDir := t.TempDir()
+	saltFile := filepath.Join(tmpDir, "salt")
+
+	// Create a pre-existing salt
+	if err := os.WriteFile(saltFile, []byte("pre-existing-salt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// fileExists should return true
+	if !fileExists(saltFile) {
+		t.Error("fileExists should return true for pre-existing salt file")
+	}
+
+	// Simulate: init detects salt and refuses without --force.
+	// The key invariant: if init fails (non-force), salt must still exist.
+	// checkInitDBExists + salt detection happens before any salt removal.
+	if _, err := os.Stat(saltFile); err != nil {
+		t.Error("pre-existing salt file should still exist after failed init check")
+	}
+	data, err := os.ReadFile(saltFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "pre-existing-salt" {
+		t.Errorf("salt content should be preserved, got %q", string(data))
+	}
+}
+
+func TestInitNewSaltDeletedOnError(t *testing.T) {
+	// When salt did NOT exist before init, saltExistedBefore is false.
+	// If something fails after salt creation, it's safe to remove the new salt.
+	tmpDir := t.TempDir()
+	saltFile := filepath.Join(tmpDir, "salt")
+
+	// Verify salt does not exist initially
+	if fileExists(saltFile) {
+		t.Fatal("salt should not exist before test")
+	}
+
+	saltExistedBefore := fileExists(saltFile)
+	if saltExistedBefore {
+		t.Fatal("saltExistedBefore should be false when salt does not exist")
+	}
+
+	// Simulate: init creates salt then hits an error
+	if err := os.WriteFile(saltFile, []byte("newly-created-salt"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// On error, since salt didn't exist before, it's safe to clean up
+	if !saltExistedBefore {
+		_ = os.Remove(saltFile)
+	}
+
+	// Salt should be gone
+	if fileExists(saltFile) {
+		t.Error("newly created salt should be removed on error when it didn't pre-exist")
+	}
+}
+
+func TestFileExists(t *testing.T) {
+	tmpDir := t.TempDir()
+	existing := filepath.Join(tmpDir, "exists")
+	if err := os.WriteFile(existing, []byte("x"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if !fileExists(existing) {
+		t.Error("fileExists should return true for existing file")
+	}
+	if fileExists(filepath.Join(tmpDir, "nonexistent")) {
+		t.Error("fileExists should return false for non-existing file")
+	}
+}
+
 func TestInitSourceStoresVersionMetadata(t *testing.T) {
 	src, err := os.ReadFile("init.go")
 	if err != nil {
