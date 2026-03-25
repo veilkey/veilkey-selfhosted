@@ -148,14 +148,14 @@ When running AI coding tools (Claude Code, Cursor, etc.) inside a `veil` session
 | Service management | `docker compose restart localvault` |
 | Log viewing | `tail -f .localvault/localvault.log` |
 | VK ref usage in code | `export DB_PASSWORD=VK:LOCAL:xxx` |
-| Secret status check | `veilkey-cli status` |
+| Secret status check | `veilkey status` |
 
 ### Forbidden
 
 | Action | Reason |
 |--------|--------|
 | Read `.env` files directly | Contains infra config + VaultCenter URL |
-| Run `veilkey-cli resolve` | Decrypts secret to plaintext |
+| Run `veilkey resolve` | Decrypts secret to plaintext |
 | Read `/proc/*/environ` | Exposes resolved env vars |
 | Access `~/.bash_history` | May contain unmasked commands |
 | Read session log plaintext | `$TMPDIR/veilkey-cli/session.log` |

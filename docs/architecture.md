@@ -70,7 +70,7 @@ Single Rust package, 4 binaries:
 | `veilkey-cli` | CLI tools: scan, filter, wrap-pty, exec, resolve |
 | `veilkey-session-config` | Session TOML config loader |
 
-**veilkey-cli commands:**
+**veilkey commands:**
 
 | Command | Description | API Required |
 |---------|-------------|:---:|
