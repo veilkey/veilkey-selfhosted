@@ -115,7 +115,10 @@ func TestLogin_SuccessTransitionsToKeycenter(t *testing.T) {
 	m.activePage = pageLogin
 
 	result, _ := m.Update(loginSuccessMsg{})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected result to be Model")
+	}
 	if model.activePage != pageKeycenter {
 		t.Fatalf("expected keycenter page, got %d", model.activePage)
 	}
@@ -1223,13 +1226,19 @@ func TestSettings_LanguageToggleInModel(t *testing.T) {
 	SetLang(LangEN)
 
 	result, _ := m.Update(langToggleMsg{})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected result to be Model")
+	}
 	if model.lang != LangKO {
 		t.Fatalf("expected LangKO, got %v", model.lang)
 	}
 
 	result2, _ := model.Update(langToggleMsg{})
-	model2 := result2.(Model)
+	model2, ok := result2.(Model)
+	if !ok {
+		t.Fatal("expected result2 to be Model")
+	}
 	if model2.lang != LangEN {
 		t.Fatalf("expected LangEN, got %v", model2.lang)
 	}

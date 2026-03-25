@@ -95,10 +95,11 @@ func TestDefense_LoginRateLimit_ClearOnSuccess(t *testing.T) {
 }
 
 func TestDefense_UnlockLimiter_Exists(t *testing.T) {
-	// Verify the Server struct has an unlockLimiter field
+	// Verify the Server struct has an unlockLimiter field (compile-time check).
+	// Zero-value Server should have nil unlockLimiter; NewServer sets it.
 	s := &Server{}
 	if s.unlockLimiter != nil {
-		// Already set — good (from NewServer)
+		t.Fatal("zero-value Server unexpectedly has non-nil unlockLimiter")
 	}
 	// Check that NewServer sets it
 	srv := NewServer(nil, nil, nil)
@@ -259,10 +260,9 @@ func TestDefense_ErrorMessages_NoSQLDetails(t *testing.T) {
 		"invalid password (KEK decryption failed)",
 	}
 	for _, msg := range errorMessages {
-		if strings.Contains(content, `respondError(w,`) && strings.Contains(content, msg) {
-			// These internal messages should only go to log, not respondError
-			// Check that the actual respondError calls use generic messages
-		}
+		// These internal messages should only go to log, not respondError.
+		// The actual respondError calls should use generic messages.
+		_ = strings.Contains(content, `respondError(w,`) && strings.Contains(content, msg)
 	}
 
 	// Verify that handleUnlock returns generic "invalid password" to client

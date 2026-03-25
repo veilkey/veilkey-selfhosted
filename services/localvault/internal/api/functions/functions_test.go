@@ -309,7 +309,9 @@ func TestGetFunction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			th := newTestHandler()
 			if tt.seed != nil {
-				th.store.save(tt.seed)
+				if err := th.store.save(tt.seed); err != nil {
+					t.Fatal(err)
+				}
 			}
 			mux := th.mux()
 
@@ -369,7 +371,9 @@ func TestDeleteFunction(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			th := newTestHandler()
 			if tt.seed != nil {
-				th.store.save(tt.seed)
+				if err := th.store.save(tt.seed); err != nil {
+					t.Fatal(err)
+				}
 			}
 			mux := th.mux()
 
@@ -401,9 +405,15 @@ func TestDeleteFunction(t *testing.T) {
 
 func TestListFunctions_FilterByScope(t *testing.T) {
 	th := newTestHandler()
-	th.store.save(&db.Function{Name: "fn-local", Scope: "LOCAL", Command: "echo"})
-	th.store.save(&db.Function{Name: "fn-global", Scope: "GLOBAL", Command: "echo"})
-	th.store.save(&db.Function{Name: "fn-test", Scope: "TEST", Command: "echo"})
+	for _, fn := range []*db.Function{
+		{Name: "fn-local", Scope: "LOCAL", Command: "echo"},
+		{Name: "fn-global", Scope: "GLOBAL", Command: "echo"},
+		{Name: "fn-test", Scope: "TEST", Command: "echo"},
+	} {
+		if err := th.store.save(fn); err != nil {
+			t.Fatal(err)
+		}
+	}
 	mux := th.mux()
 
 	tests := []struct {
@@ -479,7 +489,7 @@ func TestSyncGlobalFunctions_ParsesPayload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	var got globalFunctionEnvelope
 	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
@@ -504,7 +514,7 @@ func TestSyncGlobalFunctions_BadStatus(t *testing.T) {
 	if err != nil {
 		t.Fatalf("request failed: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode == http.StatusOK {
 		t.Error("expected non-200 status from test server")
