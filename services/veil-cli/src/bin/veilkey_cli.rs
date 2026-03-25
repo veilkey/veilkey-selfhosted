@@ -349,11 +349,15 @@ fn main() {
                     }
                 }
                 "list" => {
-                    // SSH keys are secrets with VK:SSH scope — list via mask_map
+                    // SSH keys are secrets with VK:SSH scope — list via mask_map, deduplicated
                     match client.fetch_all_secrets_mask_map() {
                         Some(map) => {
-                            let ssh_keys: Vec<_> =
-                                map.iter().filter(|(_, r)| r.contains(":SSH:")).collect();
+                            let mut seen = std::collections::HashSet::new();
+                            let ssh_keys: Vec<_> = map
+                                .iter()
+                                .filter(|(_, r)| r.contains(":SSH:"))
+                                .filter(|(_, r)| seen.insert(r.clone()))
+                                .collect();
                             if ssh_keys.is_empty() {
                                 println!("No SSH keys registered");
                             } else {

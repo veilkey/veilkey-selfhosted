@@ -108,6 +108,34 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Add SSH keys stored directly on VaultCenter (not via agent heartbeat)
+	sshRefs, _ := h.deps.DB().ListRefs()
+	for _, ref := range sshRefs {
+		if ref.RefScope != db.RefScopeSSH || string(ref.Status) != string(db.RefStatusActive) {
+			continue
+		}
+		localDEK, dekErr := h.deps.GetLocalDEK()
+		if dekErr != nil {
+			break // DEK not available, skip all SSH refs
+		}
+		ct, nonce, decodeErr := crypto.DecodeCiphertext(ref.Ciphertext)
+		if decodeErr != nil {
+			continue
+		}
+		plaintext, decErr := crypto.Decrypt(localDEK, ct, nonce)
+		if decErr != nil {
+			continue
+		}
+		pt := strings.TrimRight(string(plaintext), "\r\n")
+		if pt != "" {
+			entries = append(entries, maskEntry{
+				Ref:   ref.RefCanonical,
+				Value: pt,
+				Vault: "vaultcenter",
+			})
+		}
+	}
+
 	// Add VE (config) entries — deduplicated by value to avoid repeated tagging
 	veSeenValues := make(map[string]bool)
 	// Also skip values that already appear as VK secrets (avoid double masking)
