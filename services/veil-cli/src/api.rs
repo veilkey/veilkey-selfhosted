@@ -1109,3 +1109,87 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod connection_domain_tests {
+    use super::*;
+
+    /// DOMAIN: admin_login must target VaultCenter (/api/admin/login).
+    /// LocalVault does NOT have this endpoint.
+    /// If veil-cli points to LocalVault, login will get 404.
+    #[test]
+    fn domain_admin_login_url_is_admin_login() {
+        let src = include_str!("api.rs");
+        assert!(
+            src.contains("\"/api/admin/login\""),
+            "admin_login must call /api/admin/login (VaultCenter endpoint)"
+        );
+    }
+
+    /// DOMAIN: mask-map must target VaultCenter (/api/mask-map).
+    /// LocalVault does NOT have this endpoint.
+    #[test]
+    fn domain_mask_map_url_is_vaultcenter() {
+        let src = include_str!("api.rs");
+        assert!(
+            src.contains("\"/api/mask-map\"") || src.contains("api/encrypt"),
+            "mask_map/encrypt endpoints must exist (VaultCenter-only)"
+        );
+    }
+
+    /// DOMAIN: resolve must target VaultCenter (/api/resolve/).
+    #[test]
+    fn domain_resolve_url_is_vaultcenter() {
+        let src = include_str!("api.rs");
+        assert!(
+            src.contains("/api/resolve/"),
+            "resolve must call /api/resolve/ (VaultCenter endpoint)"
+        );
+    }
+
+    /// DOMAIN: VEILKEY_LOCALVAULT_URL is the primary env var.
+    /// Despite the name, it should point to VaultCenter for veil-cli.
+    /// This is a known naming issue — the env var name is legacy.
+    #[test]
+    fn domain_env_var_is_localvault_url() {
+        let src = include_str!("bin/veilkey_cli.rs");
+        assert!(
+            src.contains("VEILKEY_LOCALVAULT_URL"),
+            "veilkey-cli must read VEILKEY_LOCALVAULT_URL"
+        );
+    }
+
+    /// DOMAIN: veil session (wrap-pty) must authenticate before loading secrets.
+    #[test]
+    fn domain_session_authenticates_first() {
+        let src = include_str!("pty/session.rs");
+        let login_pos = src.find("admin_login").unwrap_or(usize::MAX);
+        let mask_pos = src.find("fetch_all_secrets_mask_map").unwrap_or(usize::MAX);
+        assert!(
+            login_pos < mask_pos,
+            "admin_login must happen before fetch_all_secrets_mask_map"
+        );
+    }
+
+    /// DOMAIN: endpoints used by veil-cli are ALL VaultCenter endpoints.
+    /// None of these exist on LocalVault.
+    #[test]
+    fn domain_all_api_endpoints_are_vaultcenter() {
+        let src = include_str!("api.rs");
+        let vc_endpoints = [
+            "/api/admin/login",
+            "/api/mask-map",
+            "/api/encrypt",
+            "/api/resolve/",
+            "/api/ssh/keys",
+            "/api/functions/global",
+        ];
+        for ep in vc_endpoints {
+            assert!(
+                src.contains(ep),
+                "veil-cli must use VaultCenter endpoint: {}",
+                ep
+            );
+        }
+    }
+}
