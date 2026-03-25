@@ -1123,7 +1123,10 @@ mod tests {
     #[test]
     fn edge_mask_output_overlapping_secrets_containment() {
         let map = vec![
-            ("password123456".to_string(), "VK:LOCAL:long1111".to_string()),
+            (
+                "password123456".to_string(),
+                "VK:LOCAL:long1111".to_string(),
+            ),
             ("password".to_string(), "VK:LOCAL:med11111".to_string()),
             ("pass".to_string(), "VK:LOCAL:shrt1111".to_string()),
         ];
@@ -1198,7 +1201,10 @@ mod tests {
                 )
             })
             .collect();
-        map.push(("target-secret-val".to_string(), "VK:LOCAL:target01".to_string()));
+        map.push((
+            "target-secret-val".to_string(),
+            "VK:LOCAL:target01".to_string(),
+        ));
         let start = std::time::Instant::now();
         let result = find_cross_chunk_mask("target-secret-", "val", &map);
         let elapsed = start.elapsed();

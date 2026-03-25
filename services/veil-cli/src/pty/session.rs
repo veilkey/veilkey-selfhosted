@@ -960,7 +960,11 @@ mod tests {
         // The function already returned, let's test directly
         let mut buf2 = String::new();
         let result = check_stdin_for_secrets(b"\tabc\r", &mut buf2, &map);
-        assert_eq!(result, StdinGuardResult::Blocked, "secret after tab must be caught");
+        assert_eq!(
+            result,
+            StdinGuardResult::Blocked,
+            "secret after tab must be caught"
+        );
     }
 
     #[test]

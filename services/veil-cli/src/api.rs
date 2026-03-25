@@ -894,10 +894,7 @@ mod tests {
 
     #[test]
     fn edge_secret_with_leading_trailing_newlines() {
-        let mut map = vec![(
-            "\nhello\n".to_string(),
-            "VK:LOCAL:nl123456".to_string(),
-        )];
+        let mut map = vec![("\nhello\n".to_string(), "VK:LOCAL:nl123456".to_string())];
         enrich_mask_map(&mut map);
         assert!(
             map.iter().any(|(p, _)| p == "\nhello\n"),
@@ -957,8 +954,12 @@ mod tests {
         let start = std::time::Instant::now();
         enrich_mask_map(&mut map);
         let elapsed = start.elapsed();
-        assert!(map.iter().any(|(p, _)| p == "secret-value-0000-padding-extra"));
-        assert!(map.iter().any(|(p, _)| p == "secret-value-0999-padding-extra"));
+        assert!(map
+            .iter()
+            .any(|(p, _)| p == "secret-value-0000-padding-extra"));
+        assert!(map
+            .iter()
+            .any(|(p, _)| p == "secret-value-0999-padding-extra"));
         assert!(map.len() > 1000, "encoded variants must be added");
         let lens: Vec<usize> = map.iter().map(|(p, _)| p.len()).collect();
         for w in lens.windows(2) {
