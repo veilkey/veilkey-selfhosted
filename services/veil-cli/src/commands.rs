@@ -207,19 +207,89 @@ pub fn cmd_scan(
     let mut detector = SecretDetector::new(&cfg, &client, &logger, true);
     let mut formatter = Formatter::new(output_format, io::stdout());
 
-    let (reader, file_name): (Box<dyn Read>, String) = if file == "-" {
-        (Box::new(io::stdin()), "<stdin>".to_string())
+    formatter.header();
+
+    if file == "-" {
+        scan_reader(&mut detector, &mut formatter, Box::new(io::stdin()), "<stdin>");
     } else {
-        match std::fs::File::open(file) {
-            Ok(f) => (Box::new(f), file.to_string()),
-            Err(_) => {
-                eprintln!("ERROR: file not found: {}", file);
-                process::exit(1);
+        let path = std::path::Path::new(file);
+        if path.is_dir() {
+            scan_dir_recursive(&mut detector, &mut formatter, path);
+        } else {
+            match std::fs::File::open(file) {
+                Ok(f) => scan_reader(&mut detector, &mut formatter, Box::new(f), file),
+                Err(_) => {
+                    eprintln!("ERROR: file not found: {}", file);
+                    process::exit(1);
+                }
             }
         }
-    };
+    }
 
-    formatter.header();
+    formatter.format_summary(&detector.stats);
+    formatter.footer();
+
+    if exit_code_flag && detector.stats.detections > 0 {
+        process::exit(1);
+    }
+}
+
+fn scan_dir_recursive(
+    detector: &mut SecretDetector,
+    formatter: &mut Formatter<impl io::Write>,
+    dir: &std::path::Path,
+) {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(e) => {
+            eprintln!("WARNING: cannot read directory {}: {}", dir.display(), e);
+            return;
+        }
+    };
+    let mut paths: Vec<std::path::PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    paths.sort();
+    for path in paths {
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+        // Skip hidden dirs, .git, node_modules, target, vendor
+        if name.starts_with('.') || name == "node_modules" || name == "target" || name == "vendor" {
+            continue;
+        }
+        if path.is_dir() {
+            scan_dir_recursive(detector, formatter, &path);
+        } else if path.is_file() {
+            // Skip binary-looking files
+            if is_likely_binary(&path) {
+                continue;
+            }
+            if let Ok(f) = std::fs::File::open(&path) {
+                scan_reader(detector, formatter, Box::new(f), &path.to_string_lossy());
+            }
+        }
+    }
+}
+
+fn is_likely_binary(path: &std::path::Path) -> bool {
+    let binary_exts = [
+        "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg",
+        "woff", "woff2", "ttf", "eot", "otf",
+        "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
+        "exe", "dll", "so", "dylib", "o", "a",
+        "pdf", "doc", "docx", "xls", "xlsx",
+        "db", "sqlite", "sqlite3",
+        "wasm", "class", "pyc",
+    ];
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| binary_exts.contains(&e.to_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+fn scan_reader(
+    detector: &mut SecretDetector,
+    formatter: &mut Formatter<impl io::Write>,
+    reader: Box<dyn Read>,
+    file_name: &str,
+) {
     let buf_reader = io::BufReader::new(reader);
     for (line_num, line) in buf_reader.lines().enumerate() {
         let line = match line {
@@ -243,20 +313,13 @@ pub fn cmd_scan(
                 det.value.clone()
             };
             formatter.format_finding(Finding {
-                file: file_name.clone(),
+                file: file_name.to_string(),
                 line: line_num,
                 pattern: det.pattern.clone(),
                 confidence: det.confidence,
                 r#match: preview,
             });
         }
-    }
-
-    formatter.format_summary(&detector.stats);
-    formatter.footer();
-
-    if exit_code_flag && detector.stats.detections > 0 {
-        process::exit(1);
     }
 }
 

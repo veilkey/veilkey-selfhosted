@@ -695,9 +695,16 @@ patterns:
     confidence: 55
 
   # ── Private Key ──
+  # Detects the BEGIN header line (multiline body handled by scan engine)
   - name: private-key
-    regex: '(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----[\s\S-]{64,}?KEY(?: BLOCK)?-----'
+    regex: '(?i)-----BEGIN[ A-Z0-9_-]{0,100}PRIVATE KEY(?: BLOCK)?-----'
+    confidence: 90
+
+  # ── Connection String URI with embedded credentials ──
+  - name: connection-string-password
+    regex: '(?i)(?:mysql|postgres(?:ql)?|mongodb(?:\+srv)?|redis|amqp|mssql|mariadb|cockroachdb)://[^:/@\s]{0,100}:([^@\s]{6,200})@[^\s]+'
     confidence: 70
+    group: 1
 
   # ── Privateai ──
   - name: privateai-api-token
@@ -943,7 +950,8 @@ entropy:
 
 # Exclusion rules (matches to these patterns are excluded from detection)
 excludes:
-  - '(?i)example|test|dummy|placeholder|xxx|your[_\-]|changeme|fixme'
+  - '(?i)\b(?:example|test|dummy|placeholder|your[_\-]|changeme|fixme)\b'
+  - '(?i)^(?:x{3,}|X{3,})$'
   - '(?i)^(true|false|null|none|undefined|localhost|127\.0\.0\.1|0\.0\.0\.0)$'
   - '^\*+$'
   - '(?i)^(todo|n\/a|tbd|na|disabled|enabled)$'
