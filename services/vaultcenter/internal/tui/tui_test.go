@@ -2101,7 +2101,10 @@ func TestMouse_ClickTabBarSwitchesPage(t *testing.T) {
 	}
 
 	result, _ := m.Update(mouseMsg)
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected result to be Model")
+	}
 	if model.activePage != pageVaults {
 		t.Fatalf("expected pageVaults, got %d", model.activePage)
 	}
@@ -2181,7 +2184,10 @@ func TestMouse_ClickOnLoginPageIgnored(t *testing.T) {
 		Button: tea.MouseButtonLeft,
 	}
 	result, _ := m.Update(mouseMsg)
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected result to be Model")
+	}
 	if model.activePage != pageLogin {
 		t.Fatal("mouse click should not switch page on login")
 	}
@@ -2443,7 +2449,10 @@ func TestModel_NumberKeySwitchesPage(t *testing.T) {
 
 	// Press "2" to switch to vaults
 	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected result to be Model")
+	}
 	if model.activePage != pageVaults {
 		t.Fatalf("expected pageVaults, got %d", model.activePage)
 	}

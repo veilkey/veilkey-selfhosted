@@ -3,6 +3,7 @@ package api
 import (
 	"net/http"
 	"net/http/httptest"
+	"bytes"
 	"os"
 	"strings"
 	"testing"
@@ -414,8 +415,8 @@ func TestLVChainStoreAdapterSaltParam(t *testing.T) {
 
 func TestBulkApplyValidatesAllBeforeExecution(t *testing.T) {
 	s, _ := os.ReadFile("bulk/apply.go")
-	phase1 := strings.Index(string(s), "Phase 1: Validate ALL")
-	phase2 := strings.Index(string(s), "Phase 2: Execute")
+	phase1 := bytes.Index(s, []byte("Phase 1: Validate ALL"))
+	phase2 := bytes.Index(s, []byte("Phase 2: Execute"))
 	if phase1 < 0 || phase2 < 0 {
 		t.Fatal("bulk apply must have Phase 1 (validate) and Phase 2 (execute)")
 	}
@@ -537,9 +538,3 @@ func TestSubpackageJSONDecodersHaveMaxBytes(t *testing.T) {
 	}
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
