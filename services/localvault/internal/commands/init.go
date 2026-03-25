@@ -24,12 +24,15 @@ import (
 
 func RunInit() {
 	isRoot := false
+	forceInit := false
 	tokenStr := ""
 	centerURL := ""
 	for i := 2; i < len(os.Args); i++ {
 		switch {
 		case os.Args[i] == "--root":
 			isRoot = true
+		case os.Args[i] == "--force":
+			forceInit = true
 		case os.Args[i] == "--token" && i+1 < len(os.Args):
 			i++
 			tokenStr = os.Args[i]
@@ -46,8 +49,9 @@ func RunInit() {
 	}
 
 	if !isRoot {
-		fmt.Println("Usage: veilkey-localvault init --root [--token vk_reg_...] [--center https://vc.example.com]")
+		fmt.Println("Usage: veilkey-localvault init --root [--force] [--token vk_reg_...] [--center https://vc.example.com]")
 		fmt.Println("  --root      Initialize as HKM node")
+		fmt.Println("  --force     Force re-initialization (WARNING: destroys existing data)")
 		fmt.Println("  --token     Registration token from VaultCenter")
 		fmt.Println("  --center    VaultCenter URL (alternative to token)")
 		fmt.Println("  Password is read from stdin (pipe) or interactive TTY prompt.")
@@ -88,8 +92,20 @@ func RunInit() {
 	}
 	saltFile := filepath.Join(dataDir, "salt")
 
+	// Refuse to init if DB already exists (prevents accidental data loss)
+	if err := checkInitDBExists(dbPath, forceInit); err != nil {
+		log.Fatal(err)
+	}
+	if forceInit {
+		_ = os.Remove(saltFile)
+	}
+
 	if _, err := os.Stat(saltFile); err == nil {
-		log.Fatal("Already initialized. Salt file exists: " + saltFile)
+		if !forceInit {
+			log.Fatal("Already initialized. Salt file exists: " + saltFile)
+		}
+		log.Printf("WARNING: --force specified, overwriting existing salt file at %s", saltFile)
+		_ = os.Remove(saltFile)
 	}
 
 	// Auto-generate password for VC-managed unlock (no user prompt needed).
@@ -109,7 +125,7 @@ func RunInit() {
 	// Derive DB encryption key from KEK (not from salt)
 	_ = os.Setenv("VEILKEY_DB_KEY", api.DeriveDBKeyFromKEK(kek))
 
-	// Remove any existing unencrypted DB (from setup mode)
+	// Remove any existing DB (from setup mode or --force)
 	_ = os.Remove(dbPath)
 	_ = os.Remove(dbPath + "-shm")
 	_ = os.Remove(dbPath + "-wal")
@@ -210,5 +226,26 @@ func validateTokenRemote(vcURL, tokenID string) error {
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("token rejected by VaultCenter (HTTP %d)", resp.StatusCode)
 	}
+	return nil
+}
+
+// checkInitDBExists checks if the database file already exists.
+// If force is false and the DB exists, it returns an error.
+// If force is true and the DB exists, it removes the DB files and returns nil.
+func checkInitDBExists(dbPath string, force bool) error {
+	if _, err := os.Stat(dbPath); err != nil {
+		return nil // DB does not exist, safe to proceed
+	}
+	if !force {
+		return fmt.Errorf("ABORT: Database already exists at %s\n"+
+			"  This would destroy all existing secrets.\n"+
+			"  To force re-init, delete the file first:\n"+
+			"    rm %s %s-shm %s-wal\n"+
+			"  Or use --force flag.", dbPath, dbPath, dbPath, dbPath)
+	}
+	log.Printf("WARNING: --force specified, overwriting existing database at %s", dbPath)
+	_ = os.Remove(dbPath)
+	_ = os.Remove(dbPath + "-shm")
+	_ = os.Remove(dbPath + "-wal")
 	return nil
 }
