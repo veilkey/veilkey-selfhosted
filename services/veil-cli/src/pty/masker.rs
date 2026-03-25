@@ -1183,6 +1183,143 @@ mod tests {
         assert!(!src.contains("stdin_ve_map"));
     }
 
+    // ── VE + ANSI interaction ─────────────────────────────────────
+
+    #[test]
+    fn test_ve_value_in_ansi_colored_output() {
+        let ve = vec![("config-value".to_string(), "VE:LOCAL:CFG".to_string())];
+        let input = format!("{}config-value{}", "\x1b[1m", "\x1b[0m");
+        let (output, _) = mask_with_ve(&input, &[], &ve, "");
+        assert!(output.contains(GREEN), "VE must be green even inside ANSI");
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("config-value"));
+    }
+
+    #[test]
+    fn test_ve_value_with_embedded_ansi_no_panic() {
+        let ve = vec![("\x1b[31mred\x1b[0m".to_string(), "VE:LOCAL:COLOR".to_string())];
+        let (output, _) = mask_with_ve("show \x1b[31mred\x1b[0m here", &[], &ve, "");
+        let _ = strip_ansi(&output); // must not panic
+    }
+
+    #[test]
+    fn test_ve_after_vk_no_ref_corruption() {
+        // VK replaces "db-password" → colorized ref. VE "LOCAL" must not
+        // colorize inside the ref (ansi_aware_replace skips ANSI segments).
+        let map = vec![("db-password".to_string(), "VK:LOCAL:dbp12345".to_string())];
+        let ve = vec![("LOCAL".to_string(), "VE:LOCAL:SCOPE".to_string())];
+        let (output, _) = mask_with_ve("db-password here", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("db-password"));
+    }
+
+    // ── VE + cross-chunk ─────────────────────────────────────────────
+
+    #[test]
+    fn test_ve_split_across_chunks_not_detected() {
+        // VE has no cross-chunk detection — split values are NOT colorized
+        let ve = vec![("database".to_string(), "VE:LOCAL:DB_TYPE".to_string())];
+        let (output1, tail1) = mask_with_ve("data", &[], &ve, "");
+        assert!(!output1.contains(GREEN));
+        let (output2, _) = mask_with_ve("base-server", &[], &ve, &tail1);
+        assert!(!output2.contains(GREEN),
+            "VE split across chunks should not be detected (by design)");
+    }
+
+    #[test]
+    fn test_ve_full_value_in_single_chunk() {
+        let ve = vec![("database".to_string(), "VE:LOCAL:DB_TYPE".to_string())];
+        let (output, _) = mask_with_ve("type=database", &[], &ve, "");
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_in_second_chunk_fully() {
+        let ve = vec![("production".to_string(), "VE:LOCAL:ENV".to_string())];
+        let (_, tail) = mask_with_ve("env=", &[], &ve, "");
+        let (output, _) = mask_with_ve("production ready", &[], &ve, &tail);
+        assert!(output.contains(GREEN));
+    }
+
+    // ── VE + VK overlap edge cases ───────────────────────────────────
+
+    #[test]
+    fn test_ve_substring_of_vk_secret() {
+        // VE "db-host" is substring of VK "my-db-host-password" — VK masks first
+        let map = vec![("my-db-host-password".to_string(), "VK:LOCAL:dbh12345".to_string())];
+        let ve = vec![("db-host".to_string(), "VE:LOCAL:DB_HOST".to_string())];
+        let (output, _) = mask_with_ve("cred=my-db-host-password", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("my-db-host-password"));
+        assert!(!visible.contains("db-host"),
+            "VE substring vanishes when VK masks the containing secret");
+    }
+
+    #[test]
+    fn test_vk_substring_of_ve_value() {
+        // VK "prod" is substring of VE "production"
+        let map = vec![("prod".to_string(), "VK:LOCAL:prd12345".to_string())];
+        let ve = vec![("production".to_string(), "VE:LOCAL:ENV".to_string())];
+        let (output, _) = mask_with_ve("env=production", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("prod"), "VK masks 'prod' even inside 'production'");
+    }
+
+    #[test]
+    fn test_ve_and_vk_same_value() {
+        // Same value as both VK and VE — VK takes precedence
+        let map = vec![("shared-value-1234".to_string(), "VK:LOCAL:sh123456".to_string())];
+        let ve = vec![("shared-value-1234".to_string(), "VE:LOCAL:SHARED".to_string())];
+        let (output, _) = mask_with_ve("data=shared-value-1234", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("shared-value-1234"), "VK takes precedence");
+    }
+
+    #[test]
+    fn test_ve_adjacent_to_vk() {
+        let map = vec![("SECRET".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let ve = vec![("CONFIG".to_string(), "VE:LOCAL:CFG".to_string())];
+        let (output, _) = mask_with_ve("SECRETCONFIG", &map, &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(!visible.contains("SECRET"));
+        assert!(visible.contains("CONFIG"));
+    }
+
+    // ── colorize_ve_ref unit tests ───────────────────────────────────
+
+    #[test]
+    fn test_colorize_ve_ref_format() {
+        let result = colorize_ve_ref("my-config", "VE:LOCAL:CFG");
+        assert_eq!(result, format!("{}my-config{}", GREEN, RESET));
+    }
+
+    #[test]
+    fn test_colorize_ve_ref_empty() {
+        let result = colorize_ve_ref("", "VE:LOCAL:CFG");
+        assert_eq!(result, format!("{}{}", GREEN, RESET));
+    }
+
+    #[test]
+    fn test_colorize_ve_ref_ignores_ref_param() {
+        let r1 = colorize_ve_ref("val", "VE:LOCAL:A");
+        let r2 = colorize_ve_ref("val", "VE:HOST:B");
+        assert_eq!(r1, r2, "VE ref param must not affect output color");
+    }
+
+    #[test]
+    fn test_colorize_ve_ref_unicode() {
+        let result = colorize_ve_ref("한글설정", "VE:LOCAL:KR");
+        assert!(result.contains("한글설정"));
+        assert!(result.starts_with(GREEN));
+        assert!(result.ends_with(RESET));
+    }
+
+    #[test]
+    fn test_colorize_ve_ref_special_chars() {
+        let result = colorize_ve_ref("p@ss/w0rd!#$", "VE:LOCAL:SP");
+        assert!(result.contains("p@ss/w0rd!#$"));
+    }
+
     #[test]
     fn test_mask_output_recent_input_skips() {
         // When the secret was recently typed as input, masking is skipped
