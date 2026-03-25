@@ -1,6 +1,7 @@
 export const pageConfig = {
     keycenter: { labelKey: 'page_keycenter', tabs: ['TEMP_REFS'] },
     vaults: { labelKey: 'page_vaults', tabs: ['ALL_VAULTS', 'VAULT_ITEMS', 'BULK_APPLY'] },
+    ssh: { labelKey: 'page_ssh', tabs: ['SSH_KEYS'] },
     functions: { labelKey: 'page_functions', tabs: ['FUNCTION_LIST', 'FUNCTION_BINDINGS', 'FUNCTION_IMPACT', 'FUNCTION_RUN'] },
     audit: { labelKey: 'page_audit', tabs: ['AUDIT_LOG'] },
     plugins: { labelKey: 'page_plugins', tabs: ['PLUGIN_LIST'] },
@@ -10,6 +11,7 @@ export const pageConfig = {
 export const routeEntries = [
     { page: 'keycenter', tab: 'TEMP_REFS', path: '/keycenter' },
     { page: 'vaults', tab: 'ALL_VAULTS', path: '/vaults/all' },
+    { page: 'ssh', tab: 'SSH_KEYS', path: '/ssh' },
     { page: 'functions', tab: 'FUNCTION_LIST', path: '/functions/list' },
     { page: 'functions', tab: 'FUNCTION_BINDINGS', path: '/functions/bindings' },
     { page: 'functions', tab: 'FUNCTION_IMPACT', path: '/functions/impact' },

@@ -30,6 +30,7 @@ const state = reactive({
     activeTabByPage: {
         keycenter: 'TEMP_REFS',
         vaults: 'ALL_VAULTS',
+        ssh: 'SSH_KEYS',
         functions: 'FUNCTION_LIST',
         audit: 'AUDIT_LOG',
         plugins: 'PLUGIN_LIST',
@@ -80,6 +81,7 @@ const state = reactive({
     functionSummary: null,
     functionImpact: null,
     functionRunResult: null,
+    sshKeys: [],
     plugins: [],
     selectedPlugin: null,
     auditVault: null,
@@ -276,6 +278,7 @@ function matchesQuery(text) {
 function navCount(page) {
     if (page === 'keycenter') return state.keycenterTempRefs.length || '';
     if (page === 'vaults') return state.vaults.length;
+    if (page === 'ssh') return state.sshKeys.length || '';
     if (page === 'functions') return state.functions.length;
     if (page === 'audit') return auditTotalCount();
     if (page === 'settings') return state.uiConfig ? 3 : 0;
@@ -393,6 +396,7 @@ function renderSidebar() {
     const sections = [
         { page: 'keycenter', label: pageLabel('keycenter') },
         { page: 'vaults', label: pageLabel('vaults') },
+        { page: 'ssh', label: pageLabel('ssh') },
         { page: 'functions', label: pageLabel('functions') },
         { page: 'audit', label: pageLabel('audit') },
         { page: 'settings', label: pageLabel('settings') }
@@ -450,6 +454,7 @@ function renderTopbarStatus() {
 function pageContextText() {
     if (state.activePage === 'keycenter') return t('tab_temp_refs');
     if (state.activePage === 'vaults') return t('vault_inventory');
+    if (state.activePage === 'ssh') return t('tab_ssh_keys');
     if (state.activePage === 'functions') return t('function_list');
     if (state.activePage === 'audit') return t('tab_audit_log');
     return t('ui_settings');
@@ -556,6 +561,10 @@ function renderSecondarySidebar() {
         return;
     }
 
+    if (state.activePage === 'ssh') {
+        renderSSHPage();
+        return;
+    }
     if (state.activePage === 'plugins') {
         state.ui.secondarySidebarHidden = true;
         return;
@@ -1560,12 +1569,67 @@ function render() {
         renderKeycenterPage();
         return;
     }
+    if (state.activePage === 'ssh') {
+        renderSSHPage();
+        return;
+    }
     if (state.activePage === 'plugins') {
         renderPluginsPage();
         return;
     }
     renderSecondarySidebar();
     if (state.activePage === 'configs') renderConfigs();
+}
+
+function renderSSHPage() {
+    state.ui.leftHTML = '';
+    state.ui.leftVisible = false;
+    state.ui.twoPane = true;
+    state.ui.secondarySidebarHidden = true;
+    state.ui.rightHTML = '';
+    const keys = state.sshKeys || [];
+    state.ui.centerHTML = `
+        <div class="pane-header">
+            <div class="pane-title"><strong>${escapeHTML(t('ssh_title'))}</strong></div>
+            <div class="toolbar">
+                <span class="pill">${keys.length}</span>
+                <button class="btn btn-soft" data-action="refresh-ssh" style="margin-left:8px;font-size:0.8rem">${escapeHTML(t('refresh') || 'Refresh')}</button>
+            </div>
+        </div>
+        ${keys.length === 0 ? `<div class="empty">${escapeHTML(t('ssh_no_keys'))}<br><small style="color:#888">${escapeHTML(t('ssh_add_hint'))}</small></div>` :
+        renderTable([
+            { label: t('ssh_ref'), render: (row) => `<code>${escapeHTML(row.ref_canonical || row.ref)}</code>` },
+            { label: t('ssh_name'), render: (row) => `<strong>${escapeHTML(row.secret_name || row.ref_id || '-')}</strong>` },
+            { label: t('ssh_status'), render: (row) => row.status === 'active' ? '<span class="status-pill ok">active</span>' : `<span class="status-pill">${escapeHTML(row.status)}</span>` },
+            { label: t('ssh_created'), render: (row) => escapeHTML(row.created_at ? new Date(row.created_at).toLocaleString() : '-') },
+            { label: '', render: (row) => `<button class="btn btn-soft btn-xs btn-danger" data-action="delete-ssh-key" data-ref="${escapeHTML(row.ref_canonical || row.ref)}">${escapeHTML(t('delete') || 'Delete')}</button>` }
+        ], keys)}
+    `;
+}
+
+async function loadSSHKeys() {
+    try {
+        const resp = await fetch(apiURL('/api/ssh/keys'), { credentials: 'include' });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        state.sshKeys = data.ssh_keys || [];
+    } catch (e) {
+        state.sshKeys = [];
+    }
+}
+
+async function deleteSSHKey(ref) {
+    if (!confirm(t('ssh_delete_confirm'))) return;
+    try {
+        const resp = await fetch(apiURL('/api/ssh/keys/' + encodeURIComponent(ref)), { method: 'DELETE', credentials: 'include' });
+        if (resp.ok) {
+            state.message = { kind: 'ok', text: t('ssh_deleted') };
+            await loadSSHKeys();
+            render();
+        }
+    } catch (e) {
+        state.message = { kind: 'error', text: String(e) };
+    }
 }
 
 function renderPluginsPage() {
@@ -2616,6 +2680,8 @@ async function syncPageData() {
                     }
                 }
             }
+        } else if (state.activePage === 'ssh') {
+            await loadSSHKeys();
         } else if (state.activePage === 'functions') {
             await loadFunctions();
             if (state.selectedFunction) {
@@ -2632,6 +2698,10 @@ async function syncPageData() {
             await loadAuditCountsPerVault();
             if (!state.auditVault && state.vaults.length) state.auditVault = state.vaults[0].vault_runtime_hash;
             await loadAuditVaultFeed();
+    if (state.activePage === 'ssh') {
+        renderSSHPage();
+        return;
+    }
         } else if (state.activePage === 'plugins') {
             await loadPlugins();
         } else if (state.activePage === 'settings') {
@@ -3110,6 +3180,14 @@ async function handleAction(action, dataset) {
         if (action === 'refresh-functions') {
             await loadFunctions();
             return syncPageData();
+        }
+        if (action === 'refresh-ssh') {
+            await loadSSHKeys();
+            return render();
+        }
+        if (action === 'delete-ssh-key') {
+            await deleteSSHKey(dataset.ref);
+            return;
         }
         if (action === 'refresh-ssh') {
             await loadSSHKeys();
