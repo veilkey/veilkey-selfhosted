@@ -1813,4 +1813,101 @@ mod connection_domain_tests {
     fn guard_session_ve_count_uses_len() {
         assert!(include_str!("pty/session.rs").contains("ve_entries.len()"));
     }
+
+    // ── resolve_candidates with VE refs ──────────────────────────────
+
+    #[test]
+    fn test_resolve_candidates_ve_ref_returns_full_token() {
+        // VE refs are NOT resolvable secrets, but resolve_candidates handles
+        // them without panic. For VE:, it returns the full token (no hash split).
+        let candidates = super::resolve_candidates("VE:LOCAL:DB_HOST");
+        assert_eq!(candidates, vec!["VE:LOCAL:DB_HOST"]);
+    }
+
+    #[test]
+    fn test_resolve_candidates_ve_no_hash_extraction() {
+        // VK refs get hash extracted: VK:LOCAL:abc → ["VK:LOCAL:abc", "abc"]
+        // VE refs should NOT — only the full token is returned.
+        let vk = super::resolve_candidates("VK:LOCAL:abc12345");
+        assert_eq!(vk.len(), 2, "VK gets full + hash");
+        let ve = super::resolve_candidates("VE:LOCAL:abc12345");
+        assert_eq!(ve.len(), 1, "VE gets only full token (not resolvable)");
+        assert_eq!(ve[0], "VE:LOCAL:abc12345");
+    }
+
+    #[test]
+    fn test_resolve_candidates_ve_host_scope() {
+        let candidates = super::resolve_candidates("VE:HOST:APP_ENV");
+        assert_eq!(candidates, vec!["VE:HOST:APP_ENV"]);
+    }
+
+    #[test]
+    fn test_resolve_candidates_ve_single_colon() {
+        // "VE:something" (only 1 colon) — special path in resolve_candidates
+        let candidates = super::resolve_candidates("VE:something");
+        assert_eq!(candidates, vec!["something"]);
+    }
+
+    // ── env var resolution regex excludes VE ─────────────────────────
+
+    #[test]
+    fn guard_veilkey_regex_does_not_match_ve_refs() {
+        // The VEILKEY_RE_STR regex (used in session env var resolution)
+        // must NOT match VE: refs — only VK: refs should be resolved.
+        let re = regex::Regex::new(crate::detector::VEILKEY_RE_STR)
+            .expect("regex must compile");
+        assert!(!re.is_match("VE:LOCAL:DB_HOST"), "VE refs must not match env var regex");
+        assert!(!re.is_match("VE:HOST:APP_ENV"), "VE:HOST must not match");
+        assert!(re.is_match("VK:LOCAL:abc12345"), "VK refs must match");
+        assert!(re.is_match("VK:TEMP:abc12345"), "VK:TEMP must match");
+    }
+
+    // ── session exit message only counts VK ──────────────────────────
+
+    #[test]
+    fn guard_session_exit_message_counts_mask_map_only() {
+        // The exit message uses mask.read() (mask_map), not ve_map.
+        // This is correct: VE entries are "tagged", not "masked".
+        let src = include_str!("pty/session.rs");
+        // Exit message reads from "mask" (the mask_map RwLock)
+        assert!(
+            src.contains("mask.read()"),
+            "exit message must read from mask_map"
+        );
+        // Exit message says "secret(s) masked in session" — no mention of configs
+        assert!(
+            src.contains("secret(s) masked in session"),
+            "exit message should only mention secrets, not configs"
+        );
+    }
+
+    #[test]
+    fn guard_session_exit_message_does_not_read_ve_map() {
+        // The exit block must NOT read ve_map — configs are not "masked"
+        let src = include_str!("pty/session.rs");
+        // Find the exit block (after waitpid)
+        let waitpid_pos = src.find("waitpid").unwrap_or(0);
+        let exit_block = &src[waitpid_pos..];
+        assert!(
+            !exit_block.contains("ve_map.read()") && !exit_block.contains("ve.read()"),
+            "exit block must not read ve_map"
+        );
+    }
+
+    // ── plain_tail uses original text, not masked ────────────────────
+
+    #[test]
+    fn guard_plain_tail_uses_new_text_not_output() {
+        // The plain_tail must track ORIGINAL text (new_text), not masked output.
+        // This ensures future cross-chunk matching works on plaintext.
+        let src = include_str!("pty/masker.rs");
+        // After the VE loop, tail computation uses new_text
+        let ve_loop_pos = src.find("for (plaintext, ve_ref) in ve_map").unwrap_or(0);
+        let after_ve = &src[ve_loop_pos..];
+        assert!(
+            after_ve.contains("new_text.len() > PLAIN_TAIL_SIZE")
+                || after_ve.contains("new_text[start..]"),
+            "plain_tail must use new_text (original), not output (masked)"
+        );
+    }
 }
