@@ -1709,4 +1709,108 @@ mod connection_domain_tests {
     fn guard_session_passes_ve_map_to_sync() {
         assert!(include_str!("pty/session.rs").contains("ve_map.clone()"));
     }
+
+    // ── parse edge cases: extra/malformed fields ─────────────────────
+
+    #[test]
+    fn test_parse_entry_extra_fields_ignored() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VK:LOCAL:a","value":"secret","vault":"v1","extra":"ignored","num":99}
+        ]});
+        let (s, _) = super::parse_mask_map_entries(&data);
+        assert_eq!(s.len(), 1);
+        assert_eq!(s[0].0, "secret");
+    }
+
+    #[test]
+    fn test_parse_entry_ref_is_number() {
+        let data = serde_json::json!({"entries":[{"ref":123,"value":"secret","vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty());
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_ref_is_boolean() {
+        let data = serde_json::json!({"entries":[{"ref":true,"value":"secret","vault":"v1"}]});
+        let (s, c) = super::parse_mask_map_entries(&data);
+        assert!(s.is_empty());
+        assert!(c.is_empty());
+    }
+
+    #[test]
+    fn test_parse_entry_deeply_nested_extra() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:X","value":"cfg","vault":"v1","nested":{"deep":{"a":1}}}
+        ]});
+        let (_, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(c.len(), 1);
+        assert_eq!(c[0].0, "cfg");
+    }
+
+    // ── parse: VE short values survive (no length filter) ────────────
+
+    #[test]
+    fn test_parse_ve_short_values_accepted() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:A","value":"a","vault":"v1"},
+            {"ref":"VE:LOCAL:B","value":"ab","vault":"v1"},
+            {"ref":"VE:LOCAL:C","value":"on","vault":"v1"}
+        ]});
+        let (_, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(c.len(), 3, "short VE values must survive parse");
+    }
+
+    #[test]
+    fn test_parse_same_ve_value_different_scopes() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:HOST","value":"10.0.0.5","vault":"v1"},
+            {"ref":"VE:TEMP:HOST","value":"10.0.0.5","vault":"v1"}
+        ]});
+        let (_, c) = super::parse_mask_map_entries(&data);
+        assert_eq!(c.len(), 2);
+    }
+
+    // ── pipeline: VE bypasses enrich edge cases ──────────────────────
+
+    #[test]
+    fn pipeline_ve_short_value_survives_because_no_enrich() {
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:F","value":"on","vault":"v1"},
+            {"ref":"VK:LOCAL:b","value":"secret-long-enough","vault":"v1"}
+        ]});
+        let (mut secrets, configs) = super::parse_mask_map_entries(&data);
+        super::enrich_mask_map(&mut secrets);
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].0, "on", "2-char VE value safe from enrich filter");
+    }
+
+    #[test]
+    fn pipeline_ve_ref_keyword_value_survives_because_no_enrich() {
+        // "LOCAL" would be removed by enrich (ref keyword), but VE bypasses enrich
+        let data = serde_json::json!({"entries":[
+            {"ref":"VE:LOCAL:SCOPE","value":"LOCAL","vault":"v1"}
+        ]});
+        let (mut secrets, configs) = super::parse_mask_map_entries(&data);
+        super::enrich_mask_map(&mut secrets);
+        assert_eq!(configs.len(), 1);
+        assert_eq!(configs[0].0, "LOCAL");
+    }
+
+    // ── guard: session startup prints correct counts ──────────────────
+
+    #[test]
+    fn guard_session_calls_get_ve_entries() {
+        assert!(include_str!("pty/session.rs").contains("get_ve_entries()"));
+    }
+
+    #[test]
+    fn guard_session_prints_config_count() {
+        assert!(include_str!("pty/session.rs").contains("config(s) tagged"));
+    }
+
+    #[test]
+    fn guard_session_ve_count_uses_len() {
+        assert!(include_str!("pty/session.rs").contains("ve_entries.len()"));
+    }
 }

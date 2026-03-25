@@ -236,3 +236,90 @@ func TestSource_MaskMap_TrustedIPOnly(t *testing.T) {
 		t.Error("mask-map endpoint must be wrapped in trusted() middleware")
 	}
 }
+
+// --- VE ref construction: scope and key edge cases ---
+
+// Guarantees: VE ref is built by concatenating "VE:" + Scope + ":" + Key.
+// If Scope or Key contains colons, the ref becomes ambiguous for the client
+// parser (which splits on ":"). The server does NOT validate this.
+func TestSource_MaskMap_VE_RefConcatenation(t *testing.T) {
+	src := readMaskMapSource(t)
+	// Must use simple string concatenation (no escaping)
+	if !strings.Contains(src, `"VE:" + cfg.Scope + ":" + cfg.Key`) {
+		t.Error("VE ref must be built from scope and key via concatenation")
+	}
+}
+
+// Guarantees: The config struct expects Scope as a string field.
+// Empty scope would produce "VE::KEY" which is still parseable by
+// the client (starts_with "VE:").
+func TestSource_MaskMap_VE_ConfigStructHasScopeField(t *testing.T) {
+	src := readMaskMapSource(t)
+	if !strings.Contains(src, `Scope  string`) {
+		t.Error("config struct must have Scope string field")
+	}
+	if !strings.Contains(src, `json:"scope"`) {
+		t.Error("Scope field must have json tag")
+	}
+}
+
+// Guarantees: The config struct expects Key as a string field.
+func TestSource_MaskMap_VE_ConfigStructHasKeyField(t *testing.T) {
+	src := readMaskMapSource(t)
+	if !strings.Contains(src, `Key    string`) {
+		t.Error("config struct must have Key string field")
+	}
+	if !strings.Contains(src, `json:"key"`) {
+		t.Error("Key field must have json tag")
+	}
+}
+
+// --- VE entries: ordering relative to VK ---
+
+// Guarantees: VE entries are appended AFTER VK secrets in the entries array.
+// The client processes entries in order, so VK secrets get masked first.
+func TestSource_MaskMap_VE_AppendedAfterSecrets(t *testing.T) {
+	src := readMaskMapSource(t)
+	// VE section must come after the secret catalog loop
+	secretLoopIdx := strings.Index(src, "ListSecretCatalog")
+	veLoopIdx := strings.Index(src, "veSeenValues")
+	if secretLoopIdx == -1 || veLoopIdx == -1 {
+		t.Fatal("could not find secret catalog or VE section")
+	}
+	if veLoopIdx < secretLoopIdx {
+		t.Error("VE entries must be appended AFTER VK secrets")
+	}
+}
+
+// --- Agent iteration uses all agents ---
+
+// Guarantees: VE config fetch iterates over the same agent list used
+// for secret collection. No separate agent query.
+func TestSource_MaskMap_VE_UsesAgentListFromSecrets(t *testing.T) {
+	src := readMaskMapSource(t)
+	// Both secret and VE loops use "for i := range agents"
+	count := strings.Count(src, "for i := range agents")
+	if count < 2 {
+		t.Errorf("must iterate agents at least twice (secrets + VE), found %d", count)
+	}
+}
+
+// --- HTTP method for config fetch ---
+
+// Guarantees: Config fetch uses GET method.
+func TestSource_MaskMap_VE_ConfigFetchUsesGET(t *testing.T) {
+	src := readMaskMapSource(t)
+	if !strings.Contains(src, "http.MethodGet") {
+		t.Error("config fetch must use GET method")
+	}
+}
+
+// --- Config endpoint path ---
+
+// Guarantees: Config fetch hits /api/configs on the agent.
+func TestSource_MaskMap_VE_ConfigEndpointPath(t *testing.T) {
+	src := readMaskMapSource(t)
+	if !strings.Contains(src, `"/api/configs"`) {
+		t.Error("config fetch must target /api/configs endpoint")
+	}
+}

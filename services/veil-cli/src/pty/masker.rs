@@ -1320,6 +1320,96 @@ mod tests {
         assert!(result.contains("p@ss/w0rd!#$"));
     }
 
+    // ── VE: newlines, paths, short values, substring chains ─────────
+
+    #[test]
+    fn test_ve_value_with_newlines() {
+        let ve = vec![("line1\nline2".to_string(), "VE:LOCAL:MULTI".to_string())];
+        let (output, _) = mask_with_ve("data: line1\nline2 end", &[], &ve, "");
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_value_file_path() {
+        let ve = vec![("/etc/config/app.toml".to_string(), "VE:HOST:CFG_PATH".to_string())];
+        let (output, _) = mask_with_ve("loading /etc/config/app.toml ...", &[], &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("/etc/config/app.toml"));
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_value_url() {
+        let ve = vec![("https://db.internal:5432".to_string(), "VE:LOCAL:DB_URL".to_string())];
+        let (output, _) = mask_with_ve("connecting to https://db.internal:5432", &[], &ve, "");
+        assert!(output.contains(GREEN));
+        assert!(strip_ansi(&output).contains("https://db.internal:5432"));
+    }
+
+    #[test]
+    fn test_ve_very_short_value_2_chars() {
+        let ve = vec![("on".to_string(), "VE:LOCAL:FLAG".to_string())];
+        let (output, _) = mask_with_ve("debug=on", &[], &ve, "");
+        assert!(output.contains(GREEN), "2-char VE value must be colorized");
+    }
+
+    #[test]
+    fn test_ve_single_char_value() {
+        let ve = vec![("y".to_string(), "VE:LOCAL:CONFIRM".to_string())];
+        let (output, _) = mask_with_ve("confirm: y", &[], &ve, "");
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_substring_chain_longer_first() {
+        // "localhost" contains "local". Longer listed first → matches fully.
+        let ve = vec![
+            ("localhost".to_string(), "VE:LOCAL:FULL".to_string()),
+            ("local".to_string(), "VE:LOCAL:SHORT".to_string()),
+        ];
+        let (output, _) = mask_with_ve("host=localhost", &[], &ve, "");
+        let visible = strip_ansi(&output);
+        assert!(visible.contains("localhost"));
+    }
+
+    #[test]
+    fn test_ve_substring_chain_shorter_first() {
+        // Shorter listed first → "local" matches inside "localhost" first
+        let ve = vec![
+            ("local".to_string(), "VE:LOCAL:SHORT".to_string()),
+            ("localhost".to_string(), "VE:LOCAL:FULL".to_string()),
+        ];
+        let (output, _) = mask_with_ve("host=localhost", &[], &ve, "");
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_identical_values_different_refs() {
+        let ve = vec![
+            ("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string()),
+            ("10.0.0.5".to_string(), "VE:TEMP:CACHE_HOST".to_string()),
+        ];
+        let (output, _) = mask_with_ve("host=10.0.0.5", &[], &ve, "");
+        assert!(output.contains(GREEN));
+        assert!(strip_ansi(&output).contains("10.0.0.5"));
+    }
+
+    #[test]
+    fn test_ve_value_very_long() {
+        let long_val = "x".repeat(10_000);
+        let ve = vec![(long_val.clone(), "VE:LOCAL:HUGE".to_string())];
+        let (output, _) = mask_with_ve(&format!("cfg={}", long_val), &[], &ve, "");
+        assert!(output.contains(GREEN));
+    }
+
+    #[test]
+    fn test_ve_value_with_spaces() {
+        let ve = vec![("my app config".to_string(), "VE:LOCAL:APP".to_string())];
+        let (output, _) = mask_with_ve("name=my app config", &[], &ve, "");
+        assert!(strip_ansi(&output).contains("my app config"));
+        assert!(output.contains(GREEN));
+    }
+
     #[test]
     fn test_mask_output_recent_input_skips() {
         // When the secret was recently typed as input, masking is skipped
