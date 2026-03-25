@@ -77,7 +77,7 @@ func (h *Handler) Register(
 ) {
 	ready := requireReadyForOps
 	trusted := requireTrustedIP
-	_ = requireAdminAuth // registered via admin handler
+	admin := requireAdminAuth
 
 	// Parent API (called by root/parent to manage this node's children)
 	mux.HandleFunc("POST /api/register", trusted(ready(h.handleRegister)))
@@ -179,6 +179,14 @@ func (h *Handler) Register(
 	mux.HandleFunc("POST /api/agents/{agent}/configs", agentAuth(trusted(ready(h.handleAgentSaveConfig))))
 	mux.HandleFunc("PUT /api/agents/{agent}/configs/bulk", agentAuth(trusted(ready(h.handleAgentSaveConfigsBulk))))
 	mux.HandleFunc("DELETE /api/agents/{agent}/configs/{key}", agentAuth(trusted(ready(h.handleAgentDeleteConfig))))
+
+	// SSH key management
+	mux.HandleFunc("POST /api/ssh/keys", trusted(ready(h.handleSSHKeysCollection)))
+	mux.HandleFunc("GET /api/ssh/keys", trusted(ready(h.handleSSHKeysCollection)))
+	mux.HandleFunc("GET /api/ssh/keys/{ref}", trusted(ready(h.handleSSHKeyByRef)))
+	mux.HandleFunc("DELETE /api/ssh/keys/{ref}", trusted(ready(h.handleSSHKeyByRef)))
+	mux.HandleFunc("POST /api/ssh/keys/{ref}/decrypt", admin(trusted(ready(h.handleSSHKeyDecrypt))))
+	mux.HandleFunc("PUT /api/ssh/keys/{ref}/hosts", trusted(ready(h.handleSSHKeyHosts)))
 
 	// Identity aliases
 
