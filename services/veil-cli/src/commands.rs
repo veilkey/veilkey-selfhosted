@@ -210,7 +210,12 @@ pub fn cmd_scan(
     formatter.header();
 
     if file == "-" {
-        scan_reader(&mut detector, &mut formatter, Box::new(io::stdin()), "<stdin>");
+        scan_reader(
+            &mut detector,
+            &mut formatter,
+            Box::new(io::stdin()),
+            "<stdin>",
+        );
     } else {
         let path = std::path::Path::new(file);
         if path.is_dir() {
@@ -246,7 +251,8 @@ fn scan_dir_recursive(
             return;
         }
     };
-    let mut paths: Vec<std::path::PathBuf> = entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
+    let mut paths: Vec<std::path::PathBuf> =
+        entries.filter_map(|e| e.ok().map(|e| e.path())).collect();
     paths.sort();
     for path in paths {
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -270,13 +276,9 @@ fn scan_dir_recursive(
 
 fn is_likely_binary(path: &std::path::Path) -> bool {
     let binary_exts = [
-        "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg",
-        "woff", "woff2", "ttf", "eot", "otf",
-        "zip", "tar", "gz", "bz2", "xz", "7z", "rar",
-        "exe", "dll", "so", "dylib", "o", "a",
-        "pdf", "doc", "docx", "xls", "xlsx",
-        "db", "sqlite", "sqlite3",
-        "wasm", "class", "pyc",
+        "png", "jpg", "jpeg", "gif", "bmp", "ico", "webp", "svg", "woff", "woff2", "ttf", "eot",
+        "otf", "zip", "tar", "gz", "bz2", "xz", "7z", "rar", "exe", "dll", "so", "dylib", "o", "a",
+        "pdf", "doc", "docx", "xls", "xlsx", "db", "sqlite", "sqlite3", "wasm", "class", "pyc",
     ];
     path.extension()
         .and_then(|e| e.to_str())
