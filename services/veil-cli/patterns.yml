@@ -956,6 +956,15 @@ excludes:
   - '^\*+$'
   - '(?i)^(todo|n\/a|tbd|na|disabled|enabled)$'
   - '<[^>]+>'
+  # URLs and common protocol prefixes
+  - '(?i)^https?://'
+  - '(?i)^(ssh|ftp|s3|redis|postgres|mysql|mongodb|amqp)://'
+  # Pure hex hashes commonly used as non-secret identifiers (commit SHAs, checksums)
+  - '^[0-9a-f]{7,40}$'
+  # Common config value patterns (key=value where value is clearly not a secret)
+  - '(?i)^(utf-?8|ascii|iso-8859-1|latin-?1)$'
+  - '(?i)^(json|xml|yaml|toml|csv|text|html|binary)$'
+  - '(?i)^(get|post|put|delete|patch|head|options)$'
 
 # Sensitive variable names (extra confidence boost when these keywords appear nearby)
 sensitive_context:

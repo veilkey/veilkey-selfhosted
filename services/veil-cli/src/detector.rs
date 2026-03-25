@@ -15,6 +15,63 @@ const PREVIEW_LEN: usize = 4;
 const WATCHLIST_CONFIDENCE: i32 = 100;
 const SCAN_ONLY_PLACEHOLDER: &str = "[detected]";
 
+/// Values that should never be treated as secrets, regardless of pattern match.
+/// Covers: pure digits, booleans, common config values, file paths, repetitive chars.
+fn is_trivial_value(value: &str) -> bool {
+    let v = value.trim();
+    if v.is_empty() {
+        return true;
+    }
+
+    // Pure digits (e.g. "1", "8080", "3600")
+    if v.chars().all(|c| c.is_ascii_digit()) {
+        return true;
+    }
+
+    // Digits with dots — version numbers or IPs (e.g. "1.0.0", "10.50.0.110")
+    if v.chars().all(|c| c.is_ascii_digit() || c == '.') && v.contains('.') {
+        return true;
+    }
+
+    // Common boolean/config words (case-insensitive)
+    let lower = v.to_lowercase();
+    const TRIVIAL_WORDS: &[&str] = &[
+        "yes", "no", "on", "off", "auto", "always", "never",
+        "debug", "info", "warn", "error", "trace", "fatal",
+        "development", "production", "staging", "testing",
+        "default", "custom", "manual", "inherit",
+    ];
+    if TRIVIAL_WORDS.contains(&lower.as_str()) {
+        return true;
+    }
+
+    // File paths (starts with / or ./ or ~/ or drive letter like C:\)
+    if v.starts_with('/') || v.starts_with("./") || v.starts_with("~/")
+        || (v.len() >= 3 && v.as_bytes()[1] == b':' && (v.as_bytes()[2] == b'\\' || v.as_bytes()[2] == b'/'))
+    {
+        return true;
+    }
+
+    // Single repeated character (e.g. "aaaaaaaaaa", "0000000000")
+    let chars: Vec<char> = v.chars().collect();
+    if chars.len() >= MIN_SECRET_LEN && chars.iter().all(|&c| c == chars[0]) {
+        return true;
+    }
+
+    // Sequential digits from 0 (e.g. "0123456789", "1234567890")
+    if chars.len() >= MIN_SECRET_LEN && chars.iter().all(|c| c.is_ascii_digit()) {
+        let digits: Vec<u32> = chars.iter().filter_map(|c| c.to_digit(10)).collect();
+        if digits.len() >= 2 {
+            let all_sequential = digits.windows(2).all(|w| w[1] == (w[0] + 1) % 10);
+            if all_sequential {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
 fn min_confidence() -> i32 {
     std::env::var("VEILKEY_MIN_CONFIDENCE")
         .ok()
@@ -201,6 +258,9 @@ impl<'a> SecretDetector<'a> {
                 };
 
                 if value.len() < MIN_SECRET_LEN {
+                    continue;
+                }
+                if is_trivial_value(&value) {
                     continue;
                 }
                 if self.is_excluded(&value) {
@@ -648,5 +708,231 @@ mod tests {
             detections.is_empty(),
             "values shorter than MIN_SECRET_LEN should not be detected"
         );
+    }
+
+    // ── Trivial value filtering ─────────────────────────────────────
+
+    #[test]
+    fn trivial_pure_digits_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "token=1234567890",
+            "key=00000000",
+            "secret=9999999999",
+            "password=080808080808",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "pure digit values should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn trivial_version_numbers_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "key=1.0.0.0.0.0",
+            "token=10.50.0.110",
+            "secret=255.255.255.0",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "version/IP values should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn trivial_boolean_words_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "key=production",
+            "secret=development",
+            "token=staging",
+            "password=default",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "common config words should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn trivial_file_paths_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "key=/usr/local/bin/veilkey",
+            "secret=./config/settings.toml",
+            "token=~/documents/notes.txt",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "file paths should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn trivial_repeated_chars_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "key=aaaaaaaaaaaa",
+            "token=zzzzzzzzzz",
+            "secret=0000000000",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "single repeated char values should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    #[test]
+    fn trivial_sequential_digits_not_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "key=01234567890123",
+            "token=1234567890",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "sequential digit values should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    // ── Environment variable false positives ────────────────────────
+
+    #[test]
+    fn defense_env_export_with_trivial_values() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "export VEILKEY_TLS_INSECURE=1",
+            "export API_KEY_TIMEOUT=3600",
+            "export SECRET_STORE_PATH=/var/lib/secrets",
+            "export AUTH_TOKEN_EXPIRY=86400",
+            "export PASSWORD_MIN_LENGTH=12",
+            "export ACCESS_KEY_ROTATION=always",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                detections.is_empty(),
+                "env vars with trivial values should not be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    // ── Real secrets should still be detected ───────────────────────
+
+    #[test]
+    fn real_secrets_still_detected() {
+        let config = generic_secret_config();
+        init_crypto();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new("/dev/null");
+        let det = SecretDetector::new(&config, &client, &logger, true);
+
+        let cases = vec![
+            "secret=sk_live_abc123XYZ789def456",
+            "token=ghp_ABCDEFghijklmnopqrstuv",
+            "password=MyS3cur3P@ssw0rd!2026",
+            "key=AKIAIOSFODNN7EXAMPLE",
+        ];
+        for line in cases {
+            let detections = det.detect_secrets(line);
+            assert!(
+                !detections.is_empty(),
+                "real secrets must still be detected: {:?}",
+                line
+            );
+        }
+    }
+
+    // ── is_trivial_value unit tests ─────────────────────────────────
+
+    #[test]
+    fn test_is_trivial_value_comprehensive() {
+        // Should be trivial
+        assert!(is_trivial_value("1"), "pure digit");
+        assert!(is_trivial_value("8080"), "port number");
+        assert!(is_trivial_value("3600"), "timeout");
+        assert!(is_trivial_value("86400"), "seconds in day");
+        assert!(is_trivial_value("1.0.0"), "version");
+        assert!(is_trivial_value("10.50.0.110"), "IP address");
+        assert!(is_trivial_value("yes"), "boolean yes");
+        assert!(is_trivial_value("OFF"), "boolean off (case insensitive)");
+        assert!(is_trivial_value("production"), "environment name");
+        assert!(is_trivial_value("DEBUG"), "log level");
+        assert!(is_trivial_value("/usr/local/bin"), "unix path");
+        assert!(is_trivial_value("./relative/path"), "relative path");
+        assert!(is_trivial_value("~/home/dir"), "home path");
+        assert!(is_trivial_value("aaaaaaaaaa"), "repeated char");
+        assert!(is_trivial_value("0123456789"), "sequential digits");
+        assert!(is_trivial_value(""), "empty string");
+        assert!(is_trivial_value("  "), "whitespace only");
+
+        // Should NOT be trivial (actual secrets)
+        assert!(!is_trivial_value("sk_live_abc123XYZ"), "API key");
+        assert!(!is_trivial_value("ghp_ABCDEFghijklm"), "GitHub token");
+        assert!(!is_trivial_value("MyP@ssw0rd2026"), "password");
+        assert!(!is_trivial_value("a1b2c3d4e5f6g7h8"), "mixed alphanum");
+        assert!(!is_trivial_value("abcdefghij"), "non-repeated alpha (not sequential)");
     }
 }
