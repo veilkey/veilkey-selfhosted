@@ -114,8 +114,8 @@ func TestSource_CookieFlags_HttpOnly_Secure_SameSiteStrict(t *testing.T) {
 	if !strings.Contains(fnBody, "HttpOnly: true") {
 		t.Error("session cookie must have HttpOnly: true")
 	}
-	if !strings.Contains(fnBody, "Secure:   true") && !strings.Contains(fnBody, "Secure: true") {
-		t.Error("session cookie must have Secure: true")
+	if !strings.Contains(fnBody, "httputil.IsSecureRequest(r)") {
+		t.Error("session cookie Secure flag must use httputil.IsSecureRequest(r), not hardcoded")
 	}
 	if !strings.Contains(fnBody, "SameSite: http.SameSiteStrictMode") {
 		t.Error("session cookie must have SameSite: http.SameSiteStrictMode")

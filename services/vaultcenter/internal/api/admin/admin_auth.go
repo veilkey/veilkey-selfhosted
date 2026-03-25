@@ -297,7 +297,7 @@ func (h *Handler) handleAdminSessionLogin(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusInternalServerError, "failed to create admin session")
 		return
 	}
-	setAdminSessionCookie(w, token, session.ExpiresAt)
+	setAdminSessionCookie(w, r, token, session.ExpiresAt)
 	h.deps.SaveAuditEvent("admin_session", session.SessionID, "session_login", "api", httputil.ActorIDForRequest(r), "", "admin_auth", nil, map[string]any{
 		"auth_method":     session.AuthMethod,
 		"expires_at":      session.ExpiresAt.Format(time.RFC3339),
@@ -321,7 +321,7 @@ func (h *Handler) handleAdminSessionDelete(w http.ResponseWriter, r *http.Reques
 		_ = h.deps.DB().RevokeAdminSession(session.SessionID, time.Now().UTC())
 		h.deps.SaveAuditEvent("admin_session", session.SessionID, "session_logout", "api", httputil.ActorIDForRequest(r), "", "admin_auth", nil, nil)
 	}
-	clearAdminSessionCookie(w)
+	clearAdminSessionCookie(w, r)
 	respondJSON(w, http.StatusOK, map[string]any{"status": "logged_out"})
 }
 
@@ -739,25 +739,25 @@ func formatOptionalTime(ts *time.Time) any {
 	return ts.UTC().Format(time.RFC3339)
 }
 
-func setAdminSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+func setAdminSessionCookie(w http.ResponseWriter, r *http.Request, token string, expiresAt time.Time) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   httputil.IsSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 		Expires:  expiresAt.UTC(),
 	})
 }
 
-func clearAdminSessionCookie(w http.ResponseWriter) {
+func clearAdminSessionCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     adminSessionCookieName,
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   httputil.IsSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0).UTC(),

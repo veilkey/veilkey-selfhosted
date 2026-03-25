@@ -151,6 +151,52 @@ func TestParseListWindow(t *testing.T) {
 	}
 }
 
+func TestIsSecureRequest(t *testing.T) {
+	tests := []struct {
+		name  string
+		setup func(r *http.Request)
+		want  bool
+	}{
+		{
+			"plain http is not secure",
+			func(r *http.Request) {},
+			false,
+		},
+		{
+			"x-forwarded-proto https is secure",
+			func(r *http.Request) {
+				r.Header.Set("X-Forwarded-Proto", "https")
+			},
+			true,
+		},
+		{
+			"x-forwarded-proto http is not secure",
+			func(r *http.Request) {
+				r.Header.Set("X-Forwarded-Proto", "http")
+			},
+			false,
+		},
+		{
+			"x-forwarded-proto HTTPS (case insensitive)",
+			func(r *http.Request) {
+				r.Header.Set("X-Forwarded-Proto", "HTTPS")
+			},
+			true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			r := httptest.NewRequest("GET", "/", nil)
+			tt.setup(r)
+			got := IsSecureRequest(r)
+			if got != tt.want {
+				t.Errorf("IsSecureRequest() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAgentScheme(t *testing.T) {
 	t.Setenv("VEILKEY_AGENT_SCHEME", "")
 	t.Setenv("VEILKEY_TLS_CERT", "")

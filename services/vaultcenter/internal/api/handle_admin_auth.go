@@ -195,7 +195,7 @@ func (s *Server) handleAdminLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   httputil.IsSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   int(adminSessionDuration.Seconds()),
 	})
@@ -218,7 +218,7 @@ func (s *Server) handleAdminLogout(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   httputil.IsSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 		MaxAge:   -1,
 	})
