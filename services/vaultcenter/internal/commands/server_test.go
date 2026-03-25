@@ -1,9 +1,13 @@
 package commands
 
 import (
+	"bytes"
+	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"sync"
 	"testing"
 )
 
@@ -145,6 +149,214 @@ func TestAutoBackupDBKeepsMax5(t *testing.T) {
 	}
 	if count > 5 {
 		t.Errorf("expected at most 5 backups, got %d", count)
+	}
+}
+
+func TestAutoBackupDBContentMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+	content := []byte("exact-content-check-12345")
+
+	if err := os.WriteFile(dbPath, content, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir not created: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 backup, got %d", len(entries))
+	}
+
+	backupData, err := os.ReadFile(filepath.Join(backupDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(backupData, content) {
+		t.Errorf("backup content does not match source: got %q, want %q", backupData, content)
+	}
+}
+
+func TestAutoBackupDBRotation(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+
+	if err := os.WriteFile(dbPath, []byte("db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-create 6 old backups (plus 1 new from autoBackupDB = 7 total created)
+	backupDir := filepath.Join(tmpDir, "backups")
+	if err := os.MkdirAll(backupDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 6; i++ {
+		name := fmt.Sprintf("veilkey.db.2026010%d-120000", i)
+		if err := os.WriteFile(filepath.Join(backupDir, name), []byte("old"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	autoBackupDB(dbPath)
+
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := 0
+	for _, e := range entries {
+		if len(e.Name()) > 10 && e.Name()[:10] == "veilkey.db" {
+			count++
+		}
+	}
+	if count > 5 {
+		t.Errorf("expected at most 5 backups after rotation, got %d", count)
+	}
+}
+
+func TestAutoBackupDBBackupDirPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("permission check not reliable on Windows")
+	}
+
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+	if err := os.WriteFile(dbPath, []byte("db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	info, err := os.Stat(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir not created: %v", err)
+	}
+	perm := info.Mode().Perm()
+	if perm != 0700 {
+		t.Errorf("backup dir permissions should be 0700, got %04o", perm)
+	}
+}
+
+func TestAutoBackupDBConcurrentSafe(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+	if err := os.WriteFile(dbPath, []byte("concurrent-db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	for i := 0; i < 2; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			autoBackupDB(dbPath)
+		}()
+	}
+	wg.Wait()
+
+	// Should not panic; backup dir should exist with at least 1 file
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir should exist after concurrent calls: %v", err)
+	}
+	if len(entries) == 0 {
+		t.Error("expected at least 1 backup after concurrent calls")
+	}
+}
+
+func TestAutoBackupDBLargeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+
+	// Create a 10MB file
+	largeData := make([]byte, 10*1024*1024)
+	if _, err := rand.Read(largeData); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbPath, largeData, 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir not created: %v", err)
+	}
+	if len(entries) != 1 {
+		t.Fatalf("expected 1 backup, got %d", len(entries))
+	}
+
+	backupData, err := os.ReadFile(filepath.Join(backupDir, entries[0].Name()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(backupData, largeData) {
+		t.Error("10MB backup content does not match source")
+	}
+}
+
+func TestAutoBackupDBReadOnlyDir(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("chmod not reliable on Windows")
+	}
+	if os.Getuid() == 0 {
+		t.Skip("root can write to read-only dirs; skipping")
+	}
+
+	tmpDir := t.TempDir()
+	innerDir := filepath.Join(tmpDir, "data")
+	if err := os.MkdirAll(innerDir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dbPath := filepath.Join(innerDir, "veilkey.db")
+	if err := os.WriteFile(dbPath, []byte("db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	// Make directory read-only so MkdirAll for "backups" subdir fails
+	if err := os.Chmod(innerDir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chmod(innerDir, 0700) }()
+
+	// Should not panic — autoBackupDB gracefully handles unwritable dir
+	autoBackupDB(dbPath)
+
+	// Backup dir should not exist
+	backupDir := filepath.Join(innerDir, "backups")
+	if _, err := os.Stat(backupDir); !os.IsNotExist(err) {
+		t.Errorf("backup dir should not be created in read-only parent dir")
+	}
+}
+
+// TestDomain_BackupAlwaysCreated verifies that after autoBackupDB, backup dir always
+// has at least 1 file when source DB exists.
+func TestDomain_BackupAlwaysCreated(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "veilkey.db")
+
+	if err := os.WriteFile(dbPath, []byte("source-db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	autoBackupDB(dbPath)
+
+	backupDir := filepath.Join(tmpDir, "backups")
+	entries, err := os.ReadDir(backupDir)
+	if err != nil {
+		t.Fatalf("backup dir should exist when source DB exists: %v", err)
+	}
+	if len(entries) < 1 {
+		t.Error("backup dir should have at least 1 file after autoBackupDB")
 	}
 }
 
