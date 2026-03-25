@@ -2463,7 +2463,10 @@ func TestModel_NumberKeyIgnoredOnLogin(t *testing.T) {
 	m.activePage = pageLogin
 
 	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected Model type")
+	}
 	if model.activePage != pageLogin {
 		t.Fatal("number keys should not switch page on login")
 	}
@@ -2475,7 +2478,10 @@ func TestModel_NumberKeyIgnoredWhileEditing(t *testing.T) {
 	m.keycenter.creating = true
 
 	result, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'2'}})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected Model type")
+	}
 	if model.activePage != pageKeycenter {
 		t.Fatal("number keys should not switch page while editing")
 	}
@@ -2484,7 +2490,10 @@ func TestModel_NumberKeyIgnoredWhileEditing(t *testing.T) {
 func TestModel_WindowSizeMsg(t *testing.T) {
 	m := NewModel("http://localhost:1")
 	result, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected Model type")
+	}
 	if model.width != 120 || model.height != 40 {
 		t.Fatalf("expected 120x40, got %dx%d", model.width, model.height)
 	}
@@ -2493,7 +2502,10 @@ func TestModel_WindowSizeMsg(t *testing.T) {
 func TestModel_ErrMsgSetsErr(t *testing.T) {
 	m := NewModel("http://localhost:1")
 	result, _ := m.Update(errMsg{fmt.Errorf("test error")})
-	model := result.(Model)
+	model, ok := result.(Model)
+	if !ok {
+		t.Fatal("expected Model type")
+	}
 	if model.err == nil || model.err.Error() != "test error" {
 		t.Fatal("errMsg should set m.err")
 	}
