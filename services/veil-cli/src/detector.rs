@@ -7,7 +7,8 @@ use crate::config::CompiledConfig;
 use crate::logger::SessionLogger;
 use crate::state::state_dir;
 
-pub const VEILKEY_RE_STR: &str = r"VK:(?:(?:TEMP|LOCAL|EXTERNAL):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})";
+pub const VEILKEY_RE_STR: &str =
+    r"VK:(?:(?:TEMP|LOCAL|EXTERNAL|SSH):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})";
 
 const MIN_SECRET_LEN: usize = 6;
 const PREVIEW_LEN: usize = 4;
@@ -647,5 +648,34 @@ mod tests {
             detections.is_empty(),
             "values shorter than MIN_SECRET_LEN should not be detected"
         );
+    }
+
+    // ── VK:SSH ref matching ─────────────────────────────────────────
+
+    #[test]
+    fn veilkey_re_matches_ssh_ref() {
+        let re = Regex::new(VEILKEY_RE_STR).unwrap();
+        assert!(
+            re.is_match("VK:SSH:abc12345"),
+            "VEILKEY_RE_STR must match VK:SSH:abc12345"
+        );
+    }
+
+    #[test]
+    fn veilkey_re_matches_ssh_ref_uppercase() {
+        let re = Regex::new(VEILKEY_RE_STR).unwrap();
+        assert!(
+            re.is_match("VK:SSH:ABCD1234"),
+            "VEILKEY_RE_STR must match VK:SSH:ABCD1234"
+        );
+    }
+
+    #[test]
+    fn veilkey_re_still_matches_other_scopes() {
+        let re = Regex::new(VEILKEY_RE_STR).unwrap();
+        assert!(re.is_match("VK:LOCAL:abc12345"));
+        assert!(re.is_match("VK:TEMP:abc12345"));
+        assert!(re.is_match("VK:EXTERNAL:abc12345"));
+        assert!(re.is_match("VK:abcd1234"));
     }
 }
