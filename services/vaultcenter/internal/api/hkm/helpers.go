@@ -52,8 +52,27 @@ func (h *Handler) authenticateAgentBySecret(token string) (*db.Agent, error) {
 	return h.deps.DB().GetAgentBySecretHash(secretHash)
 }
 
+// vaultProxyContextKey marks a request as proxied from a /api/vaults/ handler.
+type vaultProxyContextKey struct{}
+
+// vaultProxyKey is the context key for vault-proxy bypass.
+var vaultProxyKey = vaultProxyContextKey{}
+
+// asVaultProxy injects the vault-proxy flag and sets the "agent" path value,
+// so that agent handlers accept the request without Bearer-token auth.
+func asVaultProxy(r *http.Request) *http.Request {
+	vault := r.PathValue("vault")
+	r.SetPathValue("agent", vault)
+	ctx := context.WithValue(r.Context(), vaultProxyKey, true)
+	return r.WithContext(ctx)
+}
+
 // verifyAgentAccess checks that the authenticated agent matches the URL path agent.
+// Requests flagged by asVaultProxy() are always allowed (admin-initiated via vault route).
 func (h *Handler) verifyAgentAccess(r *http.Request) bool {
+	if bypass, _ := r.Context().Value(vaultProxyKey).(bool); bypass {
+		return true
+	}
 	authedAgent, ok := r.Context().Value(agentAuthKey).(string)
 	if !ok {
 		return false

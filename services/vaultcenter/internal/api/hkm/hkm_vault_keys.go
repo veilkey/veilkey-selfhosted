@@ -396,8 +396,7 @@ func (h *Handler) handleVaultAudit(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleVaultKeys(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentSecrets(w, r)
+	h.handleAgentSecrets(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyMeta(w http.ResponseWriter, r *http.Request) {
@@ -927,8 +926,7 @@ func (h *Handler) lookupVaultKeyForBindingWrite(ctx context.Context, w http.Resp
 }
 
 func (h *Handler) handleVaultKeyGet(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentGetSecret(w, r)
+	h.handleAgentGetSecret(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultPatch(w http.ResponseWriter, r *http.Request) {
@@ -1043,8 +1041,7 @@ func (h *Handler) handleVaultKeySummary(w http.ResponseWriter, r *http.Request) 
 }
 
 func (h *Handler) handleVaultKeySave(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentSaveSecret(w, r)
+	h.handleAgentSaveSecret(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
@@ -1069,20 +1066,19 @@ func (h *Handler) handleVaultKeyUpdate(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "body name must match path name")
 		return
 	}
-	r.SetPathValue("agent", r.PathValue("vault"))
+	pr := asVaultProxy(r)
 	payload, _ := json.Marshal(map[string]string{
 		"name":  name,
 		"value": req.Value,
 	})
-	r.Body = ioNopCloser{bytes.NewReader(payload)}
-	r.ContentLength = int64(len(payload))
-	r.Header.Set("Content-Type", httputil.ContentTypeJSON)
-	h.handleAgentSaveSecret(w, r)
+	pr.Body = ioNopCloser{bytes.NewReader(payload)}
+	pr.ContentLength = int64(len(payload))
+	pr.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	h.handleAgentSaveSecret(w, pr)
 }
 
 func (h *Handler) handleVaultKeyDelete(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentDeleteSecret(w, r)
+	h.handleAgentDeleteSecret(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
@@ -1129,13 +1125,11 @@ func (h *Handler) handleVaultKeyFields(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) handleVaultKeyFieldsUpdate(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentSaveSecretFields(w, r)
+	h.handleAgentSaveSecretFields(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyFieldGet(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentGetSecretField(w, r)
+	h.handleAgentGetSecretField(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Request) {
@@ -1162,7 +1156,7 @@ func (h *Handler) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Reque
 		respondError(w, http.StatusBadRequest, "body key must match path field")
 		return
 	}
-	r.SetPathValue("agent", r.PathValue("vault"))
+	pr := asVaultProxy(r)
 	payload, _ := json.Marshal(map[string]any{
 		"fields": []map[string]string{{
 			"key":   fieldKey,
@@ -1170,15 +1164,14 @@ func (h *Handler) handleVaultKeyFieldUpdate(w http.ResponseWriter, r *http.Reque
 			"value": req.Value,
 		}},
 	})
-	r.Body = ioNopCloser{bytes.NewReader(payload)}
-	r.ContentLength = int64(len(payload))
-	r.Header.Set("Content-Type", httputil.ContentTypeJSON)
-	h.handleAgentSaveSecretFields(w, r)
+	pr.Body = ioNopCloser{bytes.NewReader(payload)}
+	pr.ContentLength = int64(len(payload))
+	pr.Header.Set("Content-Type", httputil.ContentTypeJSON)
+	h.handleAgentSaveSecretFields(w, pr)
 }
 
 func (h *Handler) handleVaultKeyFieldDelete(w http.ResponseWriter, r *http.Request) {
-	r.SetPathValue("agent", r.PathValue("vault"))
-	h.handleAgentDeleteSecretField(w, r)
+	h.handleAgentDeleteSecretField(w, asVaultProxy(r))
 }
 
 func (h *Handler) handleVaultKeyActivate(w http.ResponseWriter, r *http.Request) {
