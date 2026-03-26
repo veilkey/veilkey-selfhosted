@@ -482,8 +482,12 @@ impl VeilKeyClient {
     /// List agents (vaults) from VaultCenter.
     pub fn agents_list(&self) -> Result<Vec<serde_json::Value>, String> {
         let url = format!("{}/api/agents", self.base_url);
-        let resp = self.raw_get(&url).map_err(|e| format!("agents list failed: {}", e))?;
-        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("agents list failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("decode failed: {}", e))?;
         result["agents"]
             .as_array()
             .cloned()
@@ -491,25 +495,39 @@ impl VeilKeyClient {
     }
 
     /// Promote a temp ref to a vault (LOCAL scope).
-    pub fn promote(&self, temp_ref: &str, name: &str, agent_hash: &str) -> Result<serde_json::Value, String> {
+    pub fn promote(
+        &self,
+        temp_ref: &str,
+        name: &str,
+        agent_hash: &str,
+    ) -> Result<serde_json::Value, String> {
         let url = format!("{}/api/keycenter/promote", self.base_url);
         let body = serde_json::json!({
             "ref": temp_ref,
             "name": name,
             "vault_hash": agent_hash,
         });
-        let resp = self.raw_post(&url, &body).map_err(|e| format!("promote failed: {}", e))?;
-        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("promote failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
     }
 
     /// One-step secret add: create temp ref → auto-select vault → promote.
-    pub fn secret_add(&self, name: &str, value: &str, vault_label: Option<&str>) -> Result<serde_json::Value, String> {
+    pub fn secret_add(
+        &self,
+        name: &str,
+        value: &str,
+        vault_label: Option<&str>,
+    ) -> Result<serde_json::Value, String> {
         // 1. Create temp ref
         let temp_ref = self.issue(value)?;
 
         // 2. Get agents and select vault
         let agents = self.agents_list()?;
-        let active_agents: Vec<&serde_json::Value> = agents.iter()
+        let active_agents: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
 
@@ -518,21 +536,23 @@ impl VeilKeyClient {
         }
 
         let agent = if let Some(label) = vault_label {
-            active_agents.iter()
-                .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label))
+            active_agents
+                .iter()
+                .find(|a| {
+                    a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label)
+                })
                 .ok_or_else(|| format!("vault '{}' not found", label))?
         } else if active_agents.len() == 1 {
             active_agents[0]
         } else {
             // Default: pick the one with most secrets (likely the main vault)
-            active_agents.iter()
+            active_agents
+                .iter()
                 .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
                 .unwrap()
         };
 
-        let agent_hash = agent["agent_hash"]
-            .as_str()
-            .ok_or("missing agent_hash")?;
+        let agent_hash = agent["agent_hash"].as_str().ok_or("missing agent_hash")?;
 
         // 3. Promote
         self.promote(&temp_ref, name, agent_hash)
@@ -541,8 +561,12 @@ impl VeilKeyClient {
     /// List secrets from a LocalVault.
     pub fn secret_list(&self, lv_url: &str) -> Result<Vec<serde_json::Value>, String> {
         let url = format!("{}/api/secrets", lv_url.trim_end_matches('/'));
-        let resp = self.raw_get(&url).map_err(|e| format!("secret list failed: {}", e))?;
-        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("secret list failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("decode failed: {}", e))?;
         result["secrets"]
             .as_array()
             .cloned()
@@ -551,9 +575,17 @@ impl VeilKeyClient {
 
     /// Delete a secret from a LocalVault by name.
     pub fn secret_delete(&self, lv_url: &str, name: &str) -> Result<String, String> {
-        let url = format!("{}/api/secrets/{}", lv_url.trim_end_matches('/'), urlencoding::encode(name));
-        let resp = self.raw_delete(&url).map_err(|e| format!("delete failed: {}", e))?;
-        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        let url = format!(
+            "{}/api/secrets/{}",
+            lv_url.trim_end_matches('/'),
+            urlencoding::encode(name)
+        );
+        let resp = self
+            .raw_delete(&url)
+            .map_err(|e| format!("delete failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("decode failed: {}", e))?;
         result["deleted"]
             .as_str()
             .map(|s| s.to_string())
@@ -563,22 +595,37 @@ impl VeilKeyClient {
     /// Search configs across all agents by key name.
     /// GET /api/configs/search/{key}
     pub fn configs_search(&self, key: &str) -> Result<serde_json::Value, String> {
-        let url = format!("{}/api/configs/search/{}", self.base_url, urlencoding::encode(key));
-        let resp = self.raw_get(&url).map_err(|e| format!("configs search failed: {}", e))?;
-        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+        let url = format!(
+            "{}/api/configs/search/{}",
+            self.base_url,
+            urlencoding::encode(key)
+        );
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("configs search failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
     }
 
     /// Bulk-update a config value across all agents where it matches old_value.
     /// POST /api/configs/bulk-update
-    pub fn configs_bulk_update(&self, key: &str, old_value: &str, new_value: &str) -> Result<serde_json::Value, String> {
+    pub fn configs_bulk_update(
+        &self,
+        key: &str,
+        old_value: &str,
+        new_value: &str,
+    ) -> Result<serde_json::Value, String> {
         let url = format!("{}/api/configs/bulk-update", self.base_url);
         let body = serde_json::json!({
             "key": key,
             "old_value": old_value,
             "new_value": new_value,
         });
-        let resp = self.raw_post(&url, &body).map_err(|e| format!("bulk-update failed: {}", e))?;
-        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("bulk-update failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
     }
 
     /// Bulk-set a config value on all agents (all-or-nothing).
@@ -589,8 +636,11 @@ impl VeilKeyClient {
             "key": key,
             "value": value,
         });
-        let resp = self.raw_post(&url, &body).map_err(|e| format!("bulk-set failed: {}", e))?;
-        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("bulk-set failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
     }
 }
 
@@ -2078,10 +2128,12 @@ mod connection_domain_tests {
             serde_json::json!({"label": "soulflow", "agent_hash": "aaa", "secrets_count": 2, "archived": false}),
             serde_json::json!({"label": "host-lv", "agent_hash": "bbb", "secrets_count": 13, "archived": false}),
         ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
-        let selected = active.iter()
+        let selected = active
+            .iter()
             .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
             .unwrap();
         assert_eq!(selected["agent_hash"].as_str().unwrap(), "bbb");
@@ -2092,7 +2144,8 @@ mod connection_domain_tests {
         let agents = vec![
             serde_json::json!({"label": "host-lv", "agent_hash": "bbb", "secrets_count": 5, "archived": false}),
         ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
         assert_eq!(active.len(), 1);
@@ -2105,7 +2158,8 @@ mod connection_domain_tests {
             serde_json::json!({"label": "old", "agent_hash": "aaa", "secrets_count": 50, "archived": true}),
             serde_json::json!({"label": "active", "agent_hash": "bbb", "secrets_count": 3, "archived": false}),
         ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
         assert_eq!(active.len(), 1);
@@ -2119,11 +2173,13 @@ mod connection_domain_tests {
             serde_json::json!({"label": "host-localvault", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
         ];
         let label = "host-localvault";
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
-        let found = active.iter()
-            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        let found = active.iter().find(|a| {
+            a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label)
+        });
         assert!(found.is_some());
         assert_eq!(found.unwrap()["agent_hash"].as_str().unwrap(), "bbb");
     }
@@ -2134,11 +2190,13 @@ mod connection_domain_tests {
             serde_json::json!({"label": "host-localvault", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
         ];
         let label = "host-lv";
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
-        let found = active.iter()
-            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        let found = active.iter().find(|a| {
+            a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label)
+        });
         assert!(found.is_some());
     }
 
@@ -2148,20 +2206,22 @@ mod connection_domain_tests {
             serde_json::json!({"label": "host-lv", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
         ];
         let label = "nonexistent";
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
-        let found = active.iter()
-            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        let found = active.iter().find(|a| {
+            a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label)
+        });
         assert!(found.is_none());
     }
 
     #[test]
     fn secret_add_no_active_vaults() {
-        let agents: Vec<serde_json::Value> = vec![
-            serde_json::json!({"label": "old", "agent_hash": "aaa", "archived": true}),
-        ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let agents: Vec<serde_json::Value> =
+            vec![serde_json::json!({"label": "old", "agent_hash": "aaa", "archived": true})];
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
         assert!(active.is_empty());
@@ -2170,7 +2230,8 @@ mod connection_domain_tests {
     #[test]
     fn secret_add_empty_agents() {
         let agents: Vec<serde_json::Value> = vec![];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
         assert!(active.is_empty());
@@ -2178,10 +2239,10 @@ mod connection_domain_tests {
 
     #[test]
     fn secret_add_missing_archived_defaults_false() {
-        let agents = vec![
-            serde_json::json!({"label": "no-field", "agent_hash": "aaa", "secrets_count": 5}),
-        ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let agents =
+            vec![serde_json::json!({"label": "no-field", "agent_hash": "aaa", "secrets_count": 5})];
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
         assert_eq!(active.len(), 1);
@@ -2192,10 +2253,12 @@ mod connection_domain_tests {
         let agents = vec![
             serde_json::json!({"label": "empty", "agent_hash": "aaa", "secrets_count": 0, "archived": false}),
         ];
-        let active: Vec<&serde_json::Value> = agents.iter()
+        let active: Vec<&serde_json::Value> = agents
+            .iter()
             .filter(|a| !a["archived"].as_bool().unwrap_or(false))
             .collect();
-        let selected = active.iter()
+        let selected = active
+            .iter()
             .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
             .unwrap();
         assert_eq!(selected["agent_hash"].as_str().unwrap(), "aaa");
@@ -2361,7 +2424,10 @@ mod connection_domain_tests {
     #[test]
     fn guard_cli_secret_subcommand() {
         let src = include_str!("bin/veilkey_cli.rs");
-        assert!(src.contains(r#""secret""#), "CLI must route secret subcommand");
+        assert!(
+            src.contains(r#""secret""#),
+            "CLI must route secret subcommand"
+        );
     }
 
     #[test]
@@ -2378,7 +2444,10 @@ mod connection_domain_tests {
     fn guard_cli_secret_vault_flag() {
         let src = include_str!("bin/veilkey_cli.rs");
         let block = &src[src.find(r#""secret""#).unwrap()..];
-        assert!(block.contains("--vault"), "secret add must support --vault flag");
+        assert!(
+            block.contains("--vault"),
+            "secret add must support --vault flag"
+        );
     }
 
     #[test]

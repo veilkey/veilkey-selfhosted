@@ -1029,12 +1029,20 @@ mod tests {
         }
         // Append \n if not present — tests verify completed-line masking
         let added_nl = !data.contains('\n');
-        let input = if added_nl { format!("{}\n", data) } else { data.to_string() };
+        let input = if added_nl {
+            format!("{}\n", data)
+        } else {
+            data.to_string()
+        };
         let (bytes, new_tail) =
             mask_output(input.as_bytes(), mask_map, ve_map, &[], &client, "", tail);
         let out = String::from_utf8_lossy(&bytes).to_string();
         // Strip the appended \n from output for backward compatibility
-        let out = if added_nl { out.trim_end_matches('\n').to_string() } else { out };
+        let out = if added_nl {
+            out.trim_end_matches('\n').to_string()
+        } else {
+            out
+        };
         (out, new_tail)
     }
 
@@ -1595,8 +1603,10 @@ mod tests {
         let map = vec![("typed-secret-12".to_string(), "VK:LOCAL:skip1".to_string())];
         let (output, _) = mask_with_input("typed-secret-12", &map, "typed-secret-12", "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("typed-secret-12"),
-            "same-width masking must apply even with recent_input");
+        assert!(
+            !visible.contains("typed-secret-12"),
+            "same-width masking must apply even with recent_input"
+        );
     }
 
     #[test]
@@ -1604,7 +1614,11 @@ mod tests {
         let map = vec![("secret12345678".to_string(), "VK:LOCAL:t1".to_string())];
         let (_, tail1) = mask_with_ve("hello ", &map, &[], "");
         // mask_with_ve appends \n for completed-line testing
-        assert!(tail1.starts_with("hello "), "tail must start with input: {}", tail1);
+        assert!(
+            tail1.starts_with("hello "),
+            "tail must start with input: {}",
+            tail1
+        );
         let (_, tail2) = mask_with_ve("world", &map, &[], &tail1);
         assert!(tail2.contains("world"), "tail must accumulate: {}", tail2);
     }
@@ -2672,7 +2686,10 @@ mod re_masking_tests {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
     fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
     }
     fn strip(s: &str) -> String {
         let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
@@ -2695,8 +2712,11 @@ mod re_masking_tests {
         let (out, _) = call("bash: VK:LOCAL:6da25530: not found", &map, "", "");
         let v = strip(&out);
         // Must preserve VK:LOCAL: — must NOT re-mask to VK:6da25530
-        assert!(v.contains("VK:LOCAL:6da25530"),
-            "already-masked VK:LOCAL ref must not be re-masked, got: {}", v);
+        assert!(
+            v.contains("VK:LOCAL:6da25530"),
+            "already-masked VK:LOCAL ref must not be re-masked, got: {}",
+            v
+        );
     }
 
     /// Arrow up shows previous command with masked ref — must stay full
@@ -2706,14 +2726,20 @@ mod re_masking_tests {
         // First: bash error outputs full ref
         let (out1, tail) = call("bash: VK:LOCAL:6da25530: not found\n", &map, "", "");
         let v1 = strip(&out1);
-        assert!(v1.contains("VK:LOCAL:6da25530"), "initial output must have full ref");
+        assert!(
+            v1.contains("VK:LOCAL:6da25530"),
+            "initial output must have full ref"
+        );
 
         // Arrow up: readline redraws the command (no \n)
         let (out2, _) = call("VK:LOCAL:6da25530", &map, "", &tail);
         let v2 = strip(&out2);
         // Must NOT truncate to VK:6da25530
-        assert!(!v2.contains("VK:6da25530") || v2.contains("VK:LOCAL:6da25530"),
-            "arrow recall must not truncate VK:LOCAL to VK:, got: {}", v2);
+        assert!(
+            !v2.contains("VK:6da25530") || v2.contains("VK:LOCAL:6da25530"),
+            "arrow recall must not truncate VK:LOCAL to VK:, got: {}",
+            v2
+        );
     }
 
     /// Text starting with "VK:" must not be treated as a secret
@@ -2722,8 +2748,11 @@ mod re_masking_tests {
         let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
         let (out, _) = call("VK:LOCAL:6da25530 is a reference", &map, "", "");
         let v = strip(&out);
-        assert!(v.contains("VK:LOCAL:6da25530"),
-            "VK: prefixed text must pass through, got: {}", v);
+        assert!(
+            v.contains("VK:LOCAL:6da25530"),
+            "VK: prefixed text must pass through, got: {}",
+            v
+        );
     }
 
     /// Multiple VK refs in output must all be preserved
@@ -2735,8 +2764,16 @@ mod re_masking_tests {
         ]);
         let (out, _) = call("VK:LOCAL:aaa11111 and VK:LOCAL:bbb22222", &map, "", "");
         let v = strip(&out);
-        assert!(v.contains("VK:LOCAL:aaa11111"), "first ref truncated: {}", v);
-        assert!(v.contains("VK:LOCAL:bbb22222"), "second ref truncated: {}", v);
+        assert!(
+            v.contains("VK:LOCAL:aaa11111"),
+            "first ref truncated: {}",
+            v
+        );
+        assert!(
+            v.contains("VK:LOCAL:bbb22222"),
+            "second ref truncated: {}",
+            v
+        );
     }
 
     /// Compact VK ref (VK:hash) in output must not be further truncated
@@ -2747,12 +2784,13 @@ mod re_masking_tests {
         let (out, _) = call("VK:6da25530", &map, "", "");
         let v = strip(&out);
         // Must not lose the hash
-        assert!(v.contains("6da25530"),
-            "hash must survive in any ref form, got: {}", v);
+        assert!(
+            v.contains("6da25530"),
+            "hash must survive in any ref form, got: {}",
+            v
+        );
     }
 }
-
-
 
 #[cfg(test)]
 mod masking_robustness_tests {
@@ -2762,10 +2800,16 @@ mod masking_robustness_tests {
         let _ = rustls::crypto::ring::default_provider().install_default();
     }
     fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+        pairs
+            .iter()
+            .map(|(a, b)| (a.to_string(), b.to_string()))
+            .collect()
     }
     fn strip(s: &str) -> String {
-        regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap().replace_all(s, "").to_string()
+        regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]")
+            .unwrap()
+            .replace_all(s, "")
+            .to_string()
     }
     fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
         init_crypto();
@@ -2786,8 +2830,14 @@ mod masking_robustness_tests {
             let (out, _) = call(&secret, &map, "", "");
             let v = strip(&out);
             if v != secret {
-                assert_eq!(v.chars().count(), secret.chars().count(),
-                    "width mismatch at len={}: got '{}' ({})", len, v, v.chars().count());
+                assert_eq!(
+                    v.chars().count(),
+                    secret.chars().count(),
+                    "width mismatch at len={}: got '{}' ({})",
+                    len,
+                    v,
+                    v.chars().count()
+                );
             }
         }
     }
@@ -2795,14 +2845,24 @@ mod masking_robustness_tests {
     /// Same-width must hold for all scope types
     #[test]
     fn same_width_all_scopes() {
-        for vk_ref in &["VK:LOCAL:abc", "VK:SSH:def", "VK:TEMP:ghi", "VK:EXTERNAL:jkl"] {
+        for vk_ref in &[
+            "VK:LOCAL:abc",
+            "VK:SSH:def",
+            "VK:TEMP:ghi",
+            "VK:EXTERNAL:jkl",
+        ] {
             let secret = "test_secret!";
             let map = mk(&[(secret, vk_ref)]);
             let (out, _) = call(secret, &map, "", "");
             let v = strip(&out);
             if v != secret {
-                assert_eq!(v.chars().count(), secret.chars().count(),
-                    "width mismatch for {}: '{}'", vk_ref, v);
+                assert_eq!(
+                    v.chars().count(),
+                    secret.chars().count(),
+                    "width mismatch for {}: '{}'",
+                    vk_ref,
+                    v
+                );
             }
         }
     }
@@ -2820,8 +2880,11 @@ mod masking_robustness_tests {
         }
         let (raw, _) = call("4", &map, "", &tail);
         let v = strip(&raw);
-        assert!(v.contains("VK:") || v.contains("ccc33333"),
-            "cross-chunk must catch: '{}'", v);
+        assert!(
+            v.contains("VK:") || v.contains("ccc33333"),
+            "cross-chunk must catch: '{}'",
+            v
+        );
     }
 
     /// 2-char chunks
@@ -2835,8 +2898,11 @@ mod masking_robustness_tests {
         }
         let (raw, _) = call("5!", &map, "", &tail);
         let v = strip(&raw);
-        assert!(v.contains("VK:") || v.contains("eee55555"),
-            "2-char cross-chunk: '{}'", v);
+        assert!(
+            v.contains("VK:") || v.contains("eee55555"),
+            "2-char cross-chunk: '{}'",
+            v
+        );
     }
 
     /// Cross-chunk must skip escape sequences
@@ -2844,8 +2910,10 @@ mod masking_robustness_tests {
     fn cross_chunk_skip_escape() {
         let map = mk(&[("password1234", "VK:LOCAL:ddd44444")]);
         let (raw, _) = call("4\x1b[A", &map, "", "password123");
-        assert!(String::from_utf8_lossy(&raw.as_bytes()).contains("\x1b[A"),
-            "escape must pass through");
+        assert!(
+            String::from_utf8_lossy(&raw.as_bytes()).contains("\x1b[A"),
+            "escape must pass through"
+        );
     }
 
     // ═══ Masking correctness ═══
@@ -2902,7 +2970,8 @@ mod masking_robustness_tests {
     /// SSH key multiline
     #[test]
     fn ssh_key_masked() {
-        let key = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----";
+        let key =
+            "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----";
         let map = mk(&[(key, "VK:SSH:sshkey01")]);
         let (out, _) = call(&format!("{}\n", key), &map, "", "");
         let v = strip(&out);
@@ -2926,8 +2995,11 @@ mod masking_robustness_tests {
             let (_, t) = call("\x1b[B", &map, "", &tail);
             tail = t;
         }
-        assert!(!combined.contains("VK:LOCVK:"),
-            "VK:LOC fragment: {}", &combined[..combined.len().min(100)]);
+        assert!(
+            !combined.contains("VK:LOCVK:"),
+            "VK:LOC fragment: {}",
+            &combined[..combined.len().min(100)]
+        );
     }
 
     /// Rapid arrows
@@ -2993,21 +3065,37 @@ mod masking_robustness_tests {
     fn coalesce_at_least_30ms() {
         let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        let line = prod.lines().find(|l| l.contains("from_millis") && l.contains("sleep")).unwrap();
-        let ms: u64 = line.split("from_millis(").nth(1)
+        let line = prod
+            .lines()
+            .find(|l| l.contains("from_millis") && l.contains("sleep"))
+            .unwrap();
+        let ms: u64 = line
+            .split("from_millis(")
+            .nth(1)
             .and_then(|s| s.split(')').next())
-            .and_then(|s| s.trim().parse().ok()).unwrap();
-        assert!(ms >= 30, "coalesce {}ms too short — secrets leak through readline echo", ms);
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap();
+        assert!(
+            ms >= 30,
+            "coalesce {}ms too short — secrets leak through readline echo",
+            ms
+        );
     }
 
     #[test]
     fn coalesce_at_most_200ms() {
         let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        let line = prod.lines().find(|l| l.contains("from_millis") && l.contains("sleep")).unwrap();
-        let ms: u64 = line.split("from_millis(").nth(1)
+        let line = prod
+            .lines()
+            .find(|l| l.contains("from_millis") && l.contains("sleep"))
+            .unwrap();
+        let ms: u64 = line
+            .split("from_millis(")
+            .nth(1)
             .and_then(|s| s.split(')').next())
-            .and_then(|s| s.trim().parse().ok()).unwrap();
+            .and_then(|s| s.trim().parse().ok())
+            .unwrap();
         assert!(ms <= 200, "coalesce {}ms too long — laggy", ms);
     }
 
@@ -3016,8 +3104,10 @@ mod masking_robustness_tests {
     #[test]
     fn patterns_loaded_async() {
         let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
-        assert!(src.contains("patterns_handle") && src.contains("thread::spawn"),
-            "patterns must be compiled in background thread");
+        assert!(
+            src.contains("patterns_handle") && src.contains("thread::spawn"),
+            "patterns must be compiled in background thread"
+        );
     }
 
     // ═══ Sync no terminal output ═══
@@ -3026,7 +3116,9 @@ mod masking_robustness_tests {
     fn sync_no_eprintln() {
         let src = std::fs::read_to_string("src/pty/sync.rs").expect("read");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        assert!(!prod.contains("eprintln!"),
-            "sync must not print to terminal");
+        assert!(
+            !prod.contains("eprintln!"),
+            "sync must not print to terminal"
+        );
     }
 }

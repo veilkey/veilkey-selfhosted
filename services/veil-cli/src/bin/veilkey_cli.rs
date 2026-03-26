@@ -360,7 +360,8 @@ fn main() {
                         // Default: get agents list and pick the main vault's URL
                         match client.agents_list() {
                             Ok(agents) => {
-                                let active: Vec<&serde_json::Value> = agents.iter()
+                                let active: Vec<&serde_json::Value> = agents
+                                    .iter()
                                     .filter(|a| !a["archived"].as_bool().unwrap_or(false))
                                     .collect();
                                 if active.is_empty() {
@@ -421,7 +422,9 @@ fn main() {
                     match client.agents_list() {
                         Ok(agents) => {
                             for agent in &agents {
-                                if agent["archived"].as_bool().unwrap_or(false) { continue; }
+                                if agent["archived"].as_bool().unwrap_or(false) {
+                                    continue;
+                                }
                                 let ip = agent["ip"].as_str().unwrap_or("?");
                                 let port = agent["port"].as_u64().unwrap_or(10180);
                                 let url = format!("https://{}:{}", ip, port);
@@ -468,12 +471,17 @@ fn main() {
                             Ok(agents) => {
                                 let mut found_url = None;
                                 for agent in &agents {
-                                    if agent["archived"].as_bool().unwrap_or(false) { continue; }
+                                    if agent["archived"].as_bool().unwrap_or(false) {
+                                        continue;
+                                    }
                                     let ip = agent["ip"].as_str().unwrap_or("?");
                                     let port = agent["port"].as_u64().unwrap_or(10180);
                                     let url = format!("https://{}:{}", ip, port);
                                     if let Ok(secrets) = client.secret_list(&url) {
-                                        if secrets.iter().any(|s| s["name"].as_str() == Some(name.as_str())) {
+                                        if secrets
+                                            .iter()
+                                            .any(|s| s["name"].as_str() == Some(name.as_str()))
+                                        {
                                             found_url = Some(url);
                                             break;
                                         }
@@ -650,10 +658,7 @@ fn main() {
                                 .as_str()
                                 .or_else(|| agent["last_heartbeat"].as_str())
                                 .unwrap_or("-");
-                            println!(
-                                "{:<20} {:<10} {:>8} {}",
-                                label, status, secrets, last_seen
-                            );
+                            println!("{:<20} {:<10} {:>8} {}", label, status, secrets, last_seen);
                         }
                         println!("\nTotal: {} agent(s)", agents.len());
                     }
@@ -706,7 +711,8 @@ fn main() {
                                     println!("No configs found for '{}'", key);
                                 } else {
                                     for entry in entries {
-                                        let agent = entry["agent"].as_str()
+                                        let agent = entry["agent"]
+                                            .as_str()
                                             .or_else(|| entry["label"].as_str())
                                             .unwrap_or("?");
                                         let value = entry["value"].as_str().unwrap_or("?");
@@ -715,7 +721,10 @@ fn main() {
                                     println!("\nTotal: {} agent(s)", entries.len());
                                 }
                             } else {
-                                println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&result).unwrap_or_default()
+                                );
                             }
                         }
                         Err(e) => {
@@ -726,7 +735,9 @@ fn main() {
                 }
                 "bulk-update" => {
                     if cmd_args.len() < 4 {
-                        eprintln!("Usage: veilkey config bulk-update <key> <old_value> <new_value>");
+                        eprintln!(
+                            "Usage: veilkey config bulk-update <key> <old_value> <new_value>"
+                        );
                         process::exit(1);
                     }
                     let key = &cmd_args[1];
@@ -736,7 +747,10 @@ fn main() {
                         Ok(result) => {
                             let updated = result["updated"].as_u64().unwrap_or(0);
                             let total = result["total"].as_u64().unwrap_or(0);
-                            println!("[veilkey] bulk-update: {}/{} agents updated", updated, total);
+                            println!(
+                                "[veilkey] bulk-update: {}/{} agents updated",
+                                updated, total
+                            );
                             if let Some(errors) = result["errors"].as_array() {
                                 for err in errors {
                                     let agent = err["agent"].as_str().unwrap_or("?");

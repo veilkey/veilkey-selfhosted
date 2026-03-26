@@ -62,12 +62,16 @@ mod sync_tests {
         let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
         // Only check non-test code (before #[cfg(test)])
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        assert!(prod.contains("new_version > version"),
-            "sync must use strict > comparison to prevent spam");
+        assert!(
+            prod.contains("new_version > version"),
+            "sync must use strict > comparison to prevent spam"
+        );
         // >= would cause spam on every long-poll
         let ge = format!("new_version {} version", ">=");
-        assert!(!prod.contains(&ge),
-            "SPAM BUG: >= causes message on every poll response");
+        assert!(
+            !prod.contains(&ge),
+            "SPAM BUG: >= causes message on every poll response"
+        );
     }
 
     /// Sync message must only appear when count changes, not on every update.
@@ -76,15 +80,19 @@ mod sync_tests {
         // Sync must not print to terminal (disrupts prompt layout)
         let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        assert!(!prod.contains("eprintln!"),
-            "sync must not use eprintln! (disrupts active terminal)");
+        assert!(
+            !prod.contains("eprintln!"),
+            "sync must not use eprintln! (disrupts active terminal)"
+        );
     }
 
     /// Version must be tracked and updated after successful sync.
     #[test]
     fn sync_updates_version_after_change() {
         let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
-        assert!(src.contains("version = new_version"),
-            "version must be updated after successful sync");
+        assert!(
+            src.contains("version = new_version"),
+            "version must be updated after successful sync"
+        );
     }
 }
