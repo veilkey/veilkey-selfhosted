@@ -2273,3 +2273,378 @@ mod readline_safety_tests {
             visible.chars().count(), visible, "Ghdrhkdgh1@".chars().count());
     }
 }
+
+#[cfg(test)]
+mod readline_edge_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Complete line masking — \n present → MUST use full ref
+    // ══════════════════════════════════════════════════════════════
+
+    /// cat output with secret must show VK:LOCAL:
+    #[test]
+    fn cat_output_uses_full_ref() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("DB_PASSWORD=Ghdrhkdgh1@\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:6da25530"),
+            "cat output must use full ref, got: {}", v);
+    }
+
+    /// Multi-line output — each line with secret must be masked
+    #[test]
+    fn multi_line_output_all_masked() {
+        let map = mk(&[("secret12345!", "VK:LOCAL:aaa11111")]);
+        let (out, _) = call(
+            "line1: secret12345!\nline2: secret12345!\nline3: ok\n",
+            &map, "", ""
+        );
+        let v = strip(&out);
+        assert!(!v.contains("secret12345!"), "all lines must be masked, got: {}", v);
+        assert_eq!(v.matches("VK:LOCAL:aaa11111").count(), 2,
+            "two occurrences must be replaced");
+    }
+
+    /// echo command output (has \n) must be masked
+    #[test]
+    fn echo_command_output_masked() {
+        let map = mk(&[("apikey99xyz!", "VK:LOCAL:bbb22222")]);
+        let (out, _) = call("apikey99xyz!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:bbb22222"), "echo output must be full ref, got: {}", v);
+    }
+
+    /// Error message with secret must be masked with full ref
+    #[test]
+    fn error_message_full_ref() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call(
+            "bash: Ghdrhkdgh1@: command not found\r\n",
+            &map, "", ""
+        );
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:6da25530"), "error must use full ref, got: {}", v);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Readline echo — no \n, in recent_input → MUST NOT mask
+    // ══════════════════════════════════════════════════════════════
+
+    /// Partial typing (no enter yet) must not be masked
+    #[test]
+    fn partial_typing_not_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("Ghdrhkdg", &map, "Ghdrhkdg", "");
+        let v = strip(&out);
+        assert_eq!(v, "Ghdrhkdg", "partial input must pass through");
+    }
+
+    /// Full secret typed but no enter — still readline echo
+    #[test]
+    fn full_secret_no_newline_not_masked() {
+        let map = mk(&[("password1234", "VK:LOCAL:ccc33333")]);
+        let (out, _) = call("password1234", &map, "password1234", "");
+        let v = strip(&out);
+        assert_eq!(v, "password1234",
+            "full secret without newline must not be masked (readline echo)");
+    }
+
+    /// Secret followed by \r (enter key, no \n yet) — still readline
+    #[test]
+    fn secret_with_cr_only_not_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("Ghdrhkdgh1@\r", &map, "Ghdrhkdgh1@\r", "");
+        let v = strip(&out);
+        // \r without \n is still readline territory
+        assert!(!v.contains("VK:LOCAL:"),
+            "CR-only must not trigger full ref masking, got: {}", v);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Mixed scenarios — \n determines masking boundary
+    // ══════════════════════════════════════════════════════════════
+
+    /// Chunk with both echo and output: "typed\nbash: typed: not found\n"
+    /// First part (before \n) may be echo, second part is output
+    #[test]
+    fn mixed_echo_and_output() {
+        let map = mk(&[("secret_val!", "VK:LOCAL:ddd44444")]);
+        let (out, _) = call(
+            "secret_val!\nbash: secret_val!: not found\n",
+            &map, "secret_val!", ""
+        );
+        let v = strip(&out);
+        // The bash error line must be masked
+        assert!(v.contains("VK:LOCAL:ddd44444"),
+            "output portion must be masked, got: {}", v);
+    }
+
+    /// Command output NOT in recent_input must always be masked
+    #[test]
+    fn program_output_not_in_recent_input() {
+        let map = mk(&[("db_password!", "VK:LOCAL:eee55555")]);
+        // cat .env output — user didn't type the secret
+        let (out, _) = call("DB_PASS=db_password!\n", &map, "cat .env", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:eee55555"),
+            "program output must be masked, got: {}", v);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Escape sequences — readline control must pass through
+    // ══════════════════════════════════════════════════════════════
+
+    /// Arrow up with secret in redraw must not be masked
+    #[test]
+    fn arrow_up_redraw_not_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Arrow up: ESC[A followed by readline redraw
+        let (out, _) = call(
+            "\x1b[A\x1b[2K$ Ghdrhkdgh1@",
+            &map, "Ghdrhkdgh1@", ""
+        );
+        // Must not produce VK:LOC fragments
+        let v = strip(&out);
+        let has_fragment = v.contains("VK:LOCVK:")
+            || regex::Regex::new(r"VK:LOC[^A\s]").unwrap().is_match(&v);
+        assert!(!has_fragment, "arrow up must not produce fragments, got: {}", v);
+    }
+
+    /// Tab completion output must pass through
+    #[test]
+    fn tab_completion_passthrough() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("\x1b[?1h\x1b=", &map, "", "");
+        assert_eq!(out.as_bytes(), b"\x1b[?1h\x1b=",
+            "terminal mode sequences must pass through");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Width safety — no cursor desync
+    // ══════════════════════════════════════════════════════════════
+
+    /// If readline echo IS masked (as fallback), width MUST match exactly
+    #[test]
+    fn masked_echo_width_matches_original() {
+        let map = mk(&[("short_pw", "VK:LOCAL:fff66666")]);
+        let (out, _) = call("short_pw", &map, "", "");  // no recent_input → may mask
+        let v = strip(&out);
+        if v != "short_pw" {
+            // If masked, width must match original (8 chars)
+            assert_eq!(v.chars().count(), 8,
+                "if echo is masked, width must equal original (8), got {}: '{}'",
+                v.chars().count(), v);
+        }
+    }
+
+    /// Multiple secrets with different lengths — all width-safe
+    #[test]
+    fn multiple_secrets_width_safe() {
+        let map = mk(&[
+            ("short!", "VK:LOCAL:ggg77777"),
+            ("medium_secret!", "VK:LOCAL:hhh88888"),
+            ("very_long_password_value!", "VK:LOCAL:iii99999"),
+        ]);
+        for (secret, _) in &map {
+            let (out, _) = call(secret, &map, "", "");
+            let v = strip(&out);
+            if v != *secret {
+                assert_eq!(v.chars().count(), secret.chars().count(),
+                    "width mismatch for '{}': got {} '{}'",
+                    secret, v.chars().count(), v);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod masking_defense_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Defense: secrets must NEVER leak in completed output
+    // ══════════════════════════════════════════════════════════════
+
+    /// Secret in any \n-terminated line must be masked — no exceptions
+    #[test]
+    fn defense_secret_never_in_completed_line() {
+        let map = mk(&[("SuperSecret1", "VK:LOCAL:def00001")]);
+        let test_lines = [
+            "error: SuperSecret1 is invalid\n",
+            "curl: (401) SuperSecret1\n",
+            "export KEY=SuperSecret1\n",
+            "SuperSecret1\n",
+            "  SuperSecret1  \n",
+        ];
+        for line in &test_lines {
+            let (out, _) = call(line, &map, "", "");
+            let v = strip(&out);
+            assert!(!v.contains("SuperSecret1"),
+                "DEFENSE: secret leaked in completed line: {}", line.trim());
+        }
+    }
+
+    /// Secret must be masked even if surrounded by special chars
+    #[test]
+    fn defense_secret_with_special_chars() {
+        let map = mk(&[("p@ss!w0rd#$", "VK:LOCAL:def00002")]);
+        let (out, _) = call("value='p@ss!w0rd#$'\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("p@ss!w0rd#$"),
+            "DEFENSE: special char secret leaked: {}", v);
+    }
+
+    /// Multiple different secrets in one line must all be masked
+    #[test]
+    fn defense_multiple_different_secrets() {
+        let map = mk(&[
+            ("password123!", "VK:LOCAL:def00003"),
+            ("apikey_abc99", "VK:LOCAL:def00004"),
+        ]);
+        let (out, _) = call("user=password123! key=apikey_abc99\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("password123!"), "first secret leaked");
+        assert!(!v.contains("apikey_abc99"), "second secret leaked");
+    }
+
+    /// Secret in pipe/redirect output must be masked
+    #[test]
+    fn defense_pipe_output_masked() {
+        let map = mk(&[("token_xyz99!", "VK:LOCAL:def00005")]);
+        let (out, _) = call("token_xyz99!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("token_xyz99!"),
+            "DEFENSE: pipe output secret leaked");
+    }
+
+    /// Secret appearing in git diff output must be masked
+    #[test]
+    fn defense_git_diff_masked() {
+        let map = mk(&[("db_secret_42!", "VK:LOCAL:def00006")]);
+        let (out, _) = call("+DB_PASSWORD=db_secret_42!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("db_secret_42!"),
+            "DEFENSE: git diff secret leaked");
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Defense: readline cursor must NEVER desync
+    // ══════════════════════════════════════════════════════════════
+
+    /// After N rounds of type→error→arrow, no VK:LOC fragments
+    #[test]
+    fn defense_10_rounds_no_fragments() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut combined = String::new();
+        let mut tail = String::new();
+
+        for _ in 0..10 {
+            // type + error
+            let (out, t) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", &tail);
+            combined += &strip(&String::from_utf8_lossy(&out.as_bytes()));
+            tail = t;
+            // arrow up
+            let (out, t) = call("\x1b[A", &map, "Ghdrhkdgh1@", &tail);
+            combined += &strip(&String::from_utf8_lossy(&out.as_bytes()));
+            tail = t;
+            // arrow down
+            let (out, t) = call("\x1b[B", &map, "", &tail);
+            combined += &strip(&String::from_utf8_lossy(&out.as_bytes()));
+            tail = t;
+        }
+
+        let has_fragment = combined.contains("VK:LOCVK:")
+            || combined.contains("VK:LOC ")
+            || regex::Regex::new(r"VK:LOC[^A\s]").unwrap().is_match(&combined);
+        assert!(!has_fragment,
+            "DEFENSE: VK:LOC fragment after 10 rounds: {}",
+            &combined[..combined.len().min(200)]);
+    }
+
+    /// Rapid arrow key spam must not corrupt output
+    #[test]
+    fn defense_rapid_arrows_no_corruption() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = String::new();
+
+        // Simulate rapid ↑↑↑↓↓↓↑↓↑↓
+        let arrows = ["\x1b[A", "\x1b[A", "\x1b[A", "\x1b[B", "\x1b[B",
+                       "\x1b[B", "\x1b[A", "\x1b[B", "\x1b[A", "\x1b[B"];
+        for arrow in &arrows {
+            let (_, t) = call(arrow, &map, "", &tail);
+            tail = t;
+        }
+        // After all arrows, type and get error
+        let (out, _) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", &tail);
+        let v = strip(&String::from_utf8_lossy(&out.as_bytes()));
+        assert!(v.contains("VK:LOCAL:6da25530") || !v.contains("Ghdrhkdgh1@"),
+            "DEFENSE: after rapid arrows, output must be clean: {}", v);
+    }
+
+    // ══════════════════════════════════════════════════════════════
+    // Defense: scope information must be preserved
+    // ══════════════════════════════════════════════════════════════
+
+    /// Full ref in completed lines must preserve scope
+    #[test]
+    fn defense_scope_preserved_local() {
+        let map = mk(&[("secret_val!", "VK:LOCAL:def00007")]);
+        let (out, _) = call("val=secret_val!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:"),
+            "DEFENSE: LOCAL scope must be preserved, got: {}", v);
+    }
+
+    #[test]
+    fn defense_scope_preserved_ssh() {
+        let map = mk(&[("ssh_key_data!", "VK:SSH:def00008")]);
+        let (out, _) = call("key=ssh_key_data!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:SSH:"),
+            "DEFENSE: SSH scope must be preserved, got: {}", v);
+    }
+
+    #[test]
+    fn defense_scope_preserved_temp() {
+        let map = mk(&[("temp_token12!", "VK:TEMP:def00009")]);
+        let (out, _) = call("tok=temp_token12!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:TEMP:"),
+            "DEFENSE: TEMP scope must be preserved, got: {}", v);
+    }
+}
