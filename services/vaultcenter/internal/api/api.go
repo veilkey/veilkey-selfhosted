@@ -57,6 +57,15 @@ func DefaultTimeouts() Timeouts {
 	}
 }
 
+// maskMapCache holds a pre-built mask-map response so that repeated
+// GET /api/mask-map calls can be served without re-fetching every agent.
+type maskMapCache struct {
+	mu      sync.RWMutex
+	valid   bool
+	builtAt time.Time
+	data    []byte // JSON-encoded mask-map entries (version/count/entries)
+}
+
 type Server struct {
 	db              *db.DB
 	dbPath          string // for deferred DB opening (DB opens during Unlock)
@@ -79,6 +88,8 @@ type Server struct {
 	maskMapVersion  uint64
 	maskMapMu       sync.RWMutex
 	maskMapNotify   chan struct{}
+	maskCache       maskMapCache
+	maskCacheTTL    time.Duration
 	updateMu        sync.RWMutex
 	updateState     systemUpdateState
 	approvalHandler *approval.Handler
@@ -429,6 +440,7 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 		bulkApplyDir:   strings.TrimSpace(os.Getenv("VEILKEY_BULK_APPLY_DIR")),
 		pluginDir:      strings.TrimSpace(os.Getenv("VEILKEY_PLUGIN_DIR")),
 		maskMapNotify:  make(chan struct{}),
+		maskCacheTTL:   envDuration("VEILKEY_MASK_CACHE_TTL", 10*time.Minute),
 	}
 	if database != nil && database.HasNodeInfo() {
 		if info, err := database.GetNodeInfo(); err == nil {
@@ -542,6 +554,43 @@ func (s *Server) MaskMapWait() <-chan struct{} {
 	return s.maskMapNotify
 }
 
+// InvalidateMaskCache marks the cached mask-map as stale so the next
+// request rebuilds it. Also bumps the mask-map version to wake long-poll clients.
+func (s *Server) InvalidateMaskCache() {
+	s.maskCache.mu.Lock()
+	s.maskCache.valid = false
+	s.maskCache.mu.Unlock()
+	s.BumpMaskMapVersion()
+}
+
+// SetMaskCacheData stores a freshly built mask-map JSON snapshot in the cache.
+func (s *Server) SetMaskCacheData(data []byte) {
+	s.maskCache.mu.Lock()
+	s.maskCache.data = data
+	s.maskCache.valid = true
+	s.maskCache.builtAt = time.Now()
+	s.maskCache.mu.Unlock()
+}
+
+// GetMaskCacheData returns the cached mask-map data if it is still valid
+// and within TTL. Returns nil if the cache should be rebuilt.
+func (s *Server) GetMaskCacheData() []byte {
+	s.maskCache.mu.RLock()
+	defer s.maskCache.mu.RUnlock()
+	if !s.maskCache.valid {
+		return nil
+	}
+	if s.maskCacheTTL > 0 && time.Since(s.maskCache.builtAt) > s.maskCacheTTL {
+		return nil
+	}
+	return s.maskCache.data
+}
+
+// MaskCacheTTL returns the configured cache TTL for the mask-map.
+func (s *Server) MaskCacheTTL() time.Duration {
+	return s.maskCacheTTL
+}
+
 func (s *Server) Unlock(kek []byte) error {
 	// 1. Derive DB_KEY from KEK and open database
 	dbKey := deriveDBKeyFromKEK(kek)
@@ -593,7 +642,12 @@ func (s *Server) Unlock(kek []byte) error {
 		s.approvalHandler = approval.NewHandler(database, s.salt, s.httpClient)
 	}
 
-	// 5. Start background GC for expired temp refs, registration tokens, and stale agents
+	// 5. Invalidate mask-map cache — DB contents may have changed while locked
+	s.maskCache.mu.Lock()
+	s.maskCache.valid = false
+	s.maskCache.mu.Unlock()
+
+	// 6. Start background GC for expired temp refs, registration tokens, and stale agents
 	s.gcStop = make(chan struct{})
 	go StartTempRefGC(database, 5*time.Minute, s.gcStop)
 

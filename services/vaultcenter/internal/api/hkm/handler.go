@@ -53,6 +53,15 @@ type Deps interface {
 
 	// MaskMapWait returns a channel that closes when mask_map version changes.
 	MaskMapWait() <-chan struct{}
+
+	// InvalidateMaskCache marks the cached mask-map as stale and bumps the version.
+	InvalidateMaskCache()
+
+	// SetMaskCacheData stores a freshly built mask-map JSON snapshot.
+	SetMaskCacheData(data []byte)
+
+	// GetMaskCacheData returns cached mask-map data if valid and within TTL, or nil.
+	GetMaskCacheData() []byte
 }
 
 // Handler owns all HKM HTTP handlers.

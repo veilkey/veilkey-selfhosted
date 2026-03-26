@@ -15,6 +15,7 @@ import (
 
 // handleMaskMap serves the full mask_map for veil-cli PTY masking.
 // Supports long polling: if ?version=N matches current version, waits up to ?wait=Ns.
+// Phase 3: returns cached data when valid; rebuilds and caches on miss.
 func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 	clientVersion, _ := strconv.ParseUint(r.URL.Query().Get("version"), 10, 64)
 	waitSec, _ := strconv.Atoi(r.URL.Query().Get("wait"))
@@ -44,17 +45,42 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build mask_map from all active agents
-	agents, err := h.deps.DB().ListAgents()
-	if err != nil {
+	// Fast path: serve from cache if valid and within TTL
+	if cached := h.deps.GetMaskCacheData(); cached != nil {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write(cached)
+		return
+	}
+
+	// Cache miss — rebuild mask_map from all active agents
+	entries := h.buildMaskMapEntries()
+	if entries == nil {
 		respondError(w, http.StatusInternalServerError, "failed to list agents")
 		return
 	}
 
-	type maskEntry struct {
-		Ref   string `json:"ref"`
-		Value string `json:"value"`
-		Vault string `json:"vault"`
+	resp := map[string]any{
+		"version": serverVersion,
+		"changed": true,
+		"count":   len(entries),
+		"entries": entries,
+	}
+
+	// Store in cache for subsequent requests
+	if data, err := json.Marshal(resp); err == nil {
+		h.deps.SetMaskCacheData(data)
+	}
+
+	respondJSON(w, http.StatusOK, resp)
+}
+
+// buildMaskMapEntries constructs the full mask-map entry list from agents,
+// SSH keys, and VE configs. Returns nil on fatal error (e.g. DB failure).
+func (h *Handler) buildMaskMapEntries() []maskEntry {
+	agents, err := h.deps.DB().ListAgents()
+	if err != nil {
+		return nil
 	}
 
 	var entries []maskEntry
@@ -186,10 +212,12 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		configResp.Body.Close()
 	}
 
-	respondJSON(w, http.StatusOK, map[string]any{
-		"version": serverVersion,
-		"changed": true,
-		"count":   len(entries),
-		"entries": entries,
-	})
+	return entries
+}
+
+// maskEntry represents a single entry in the mask map.
+type maskEntry struct {
+	Ref   string `json:"ref"`
+	Value string `json:"value"`
+	Vault string `json:"vault"`
 }
