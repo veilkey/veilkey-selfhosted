@@ -641,7 +641,7 @@ fn main() {
                         println!("No agents registered");
                     } else {
                         println!(
-                            "{:<20} {:<10} {:>8} {}",
+                            "{:<20} {:<10} {:>8} {:<20}",
                             "AGENT", "STATUS", "SECRETS", "LAST_SEEN"
                         );
                         println!("{}", "-".repeat(60));
