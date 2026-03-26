@@ -44,7 +44,7 @@ echo "  Built"
 # [3/4] Install via npm + codesign (Gatekeeper-safe)
 echo "[3/4] Installing via npm + codesign..."
 mkdir -p "$REPO_ROOT/packages/veil-cli/native"
-for bin in veil veilkey veilkey-cli veilkey-session-config; do
+for bin in veil veilkey-cli veilkey-session-config; do
     if [ -f "$REPO_ROOT/target/release/$bin" ]; then
         cp "$REPO_ROOT/target/release/$bin" "$REPO_ROOT/packages/veil-cli/native/$bin"
     fi
@@ -53,7 +53,7 @@ npm install -g "$REPO_ROOT/packages/veil-cli" 2>&1 | tail -2
 
 NPM_NATIVE="$(npm prefix -g)/lib/node_modules/veilkey-cli/native"
 echo "  Signing binaries (sudo required)..."
-for bin in veil veilkey veilkey-cli veilkey-session-config; do
+for bin in veil veilkey-cli veilkey-session-config; do
     if [ -f "$NPM_NATIVE/$bin" ]; then
         sudo codesign --force --sign - "$NPM_NATIVE/$bin" 2>/dev/null || true
     fi

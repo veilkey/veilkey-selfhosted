@@ -162,7 +162,7 @@ cd C:\veilkey
 .\veil.ps1 wrap-pty python script.py
 
 # 또는 docker compose exec 직접 사용
-docker compose exec -it veil veilkey wrap-pty bash -c 'aws s3 ls'
+docker compose exec -it veil veilkey-cli wrap-pty bash -c 'aws s3 ls'
 ```
 
 ### 동작 원리
@@ -170,7 +170,7 @@ docker compose exec -it veil veilkey wrap-pty bash -c 'aws s3 ls'
 ```
 Windows PowerShell
     └─ veil.ps1
-          └─ docker compose exec -it veil veilkey wrap-pty <cmd>
+          └─ docker compose exec -it veil veilkey-cli wrap-pty <cmd>
                 └─ veil 컨테이너 (Linux Alpine)
                       └─ PTY 마스킹 적용 ✓
 ```

@@ -210,12 +210,12 @@ pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<VC_PORT>/api/key
 
 # Resolve
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
-  docker compose exec -T veil veilkey resolve VK:LOCAL:yyyyyyyy"
+  docker compose exec -T veil veilkey-cli resolve VK:LOCAL:yyyyyyyy"
 # Expected: hello-veilkey
 
 # PTY masking test
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
-  docker compose exec veil veilkey wrap-pty sh -c 'echo hello-veilkey'"
+  docker compose exec veil veilkey-cli wrap-pty sh -c 'echo hello-veilkey'"
 # Expected: VK:LOCAL:yyyyyyyy (masked!)
 ```
 

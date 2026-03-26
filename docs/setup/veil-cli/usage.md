@@ -3,14 +3,14 @@
 ## Resolve a secret
 
 ```bash
-veilkey resolve VK:LOCAL:yyyyyyyy
+veilkey-cli resolve VK:LOCAL:yyyyyyyy
 # Output: actual-secret-value
 ```
 
 ## Execute with ref replacement
 
 ```bash
-veilkey exec echo VK:LOCAL:yyyyyyyy
+veilkey-cli exec echo VK:LOCAL:yyyyyyyy
 # Output: actual-secret-value (ref replaced in args)
 ```
 
@@ -21,7 +21,7 @@ veilkey exec echo VK:LOCAL:yyyyyyyy
 veil
 
 # Docker Compose
-docker compose exec veil veilkey wrap-pty bash
+docker compose exec veil veilkey-cli wrap-pty bash
 ```
 
 Inside the veil shell:
@@ -32,21 +32,21 @@ Inside the veil shell:
 ## Verify masking
 
 ```bash
-veilkey wrap-pty sh -c "echo actual-secret-value"
+veilkey-cli wrap-pty sh -c "echo actual-secret-value"
 # Screen output: VK:LOCAL:yyyyyyyy  (masked!)
 ```
 
 ## Check connection
 
 ```bash
-veilkey status
+veilkey-cli status
 # Shows: API URL, connection status, pattern count
 ```
 
 ## Scan for secrets
 
 ```bash
-veilkey scan file.env
+veilkey-cli scan file.env
 # Detects secrets using 222 built-in patterns
 ```
 

@@ -72,9 +72,9 @@ services:
       VEILKEY_KEYCENTER_URL: "https://vaultcenter:10181"
       VEILKEY_LOCALVAULT_URL: "https://vaultcenter:10181"
       VEILKEY_TLS_INSECURE: "1"
-      VEILKEY_BIN: /usr/local/bin/veilkey
+      VEILKEY_BIN: /usr/local/bin/veilkey-cli
       VEILKEY_CLI_BIN: /usr/local/bin/veilkey-cli
-      VEILKEY_VK_BIN: /usr/local/bin/veilkey
+      VEILKEY_VK_BIN: /usr/local/bin/veilkey-cli
       VEILKEY_SESSION_CONFIG_BIN: /usr/local/bin/veilkey-session-config
       VEILKEY_CONFIG: /root/.veilkey.yml
     depends_on:

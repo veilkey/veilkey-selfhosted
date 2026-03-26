@@ -8,11 +8,11 @@ veil status                     # Check connection
 veil exec echo VK:LOCAL:xxx     # Run command with real values
 veil scan file.env              # Find secrets in files
 
-veilkey create [value]          # Create a temp ref (VK:TEMP:xxx)
-veilkey resolve VK:LOCAL:xxx    # Decrypt a reference
+veilkey-cli create [value]          # Create a temp ref (VK:TEMP:xxx)
+veilkey-cli resolve VK:LOCAL:xxx    # Decrypt a reference
 ```
 
-`veil` is a shorthand for `veilkey wrap-pty`. All commands below also work via `veilkey` directly.
+`veil` is a shorthand for `veilkey-cli wrap-pty`. All commands below also work via `veilkey-cli` directly.
 
 ## Usage via Docker
 
@@ -22,11 +22,11 @@ The veil container is included in docker-compose:
 # Enter protected session
 docker compose exec -it \
   -e DB_PASSWORD=VK:LOCAL:xxxx \
-  veil veilkey wrap-pty bash
+  veil veilkey-cli wrap-pty bash
 
 # Single command
-docker compose exec veil veilkey status
-docker compose exec veil veilkey resolve VK:LOCAL:xxxx
+docker compose exec veil veilkey-cli status
+docker compose exec veil veilkey-cli resolve VK:LOCAL:xxxx
 ```
 
 ## Configuration
@@ -51,13 +51,13 @@ Detect secrets in files or stdin. No API connection required.
 
 ```bash
 # Scan a file
-veilkey scan .env
+veilkey-cli scan .env
 
 # Scan stdin
-cat config.yaml | veilkey scan -
+cat config.yaml | veilkey-cli scan -
 
 # Scan multiple files
-veilkey scan .env config.yaml secrets.json
+veilkey-cli scan .env config.yaml secrets.json
 ```
 
 Output shows each detection with pattern name, confidence score, and matched value.
@@ -75,10 +75,10 @@ Replace detected secrets with `VK:` tokens. Requires API connection.
 
 ```bash
 # Filter a file
-veilkey filter .env
+veilkey-cli filter .env
 
 # Filter stdin
-echo "TOKEN=ghp_abc123..." | veilkey filter -
+echo "TOKEN=ghp_abc123..." | veilkey-cli filter -
 # Output: TOKEN=VK:LOCAL:a1b2c3d4
 ```
 
@@ -89,8 +89,8 @@ The original plaintext is encrypted and stored. The output contains only the `VK
 Execute a command with automatic output masking. Any secret that appears in stdout/stderr is replaced with its `VK:` reference.
 
 ```bash
-veilkey wrap ./deploy.sh
-veilkey wrap env | grep SECRET
+veilkey-cli wrap ./deploy.sh
+veilkey-cli wrap env | grep SECRET
 ```
 
 ### wrap-pty
@@ -98,7 +98,7 @@ veilkey wrap env | grep SECRET
 Allocates a PTY with **bidirectional masking**:
 
 ```bash
-veilkey wrap-pty bash
+veilkey-cli wrap-pty bash
 ```
 
 **Bidirectional masking:**
@@ -120,7 +120,7 @@ Resolve `VK:` tokens in environment variables before executing a command. The in
 ```bash
 # .env contains: API_KEY=VK:LOCAL:a1b2c3d4
 export $(cat .env | xargs)
-veilkey exec ./my-app
+veilkey-cli exec ./my-app
 # my-app sees the real API_KEY value in its environment
 ```
 
@@ -129,7 +129,7 @@ veilkey exec ./my-app
 Decrypt a single `VK:` token. Requires interactive terminal (TTY) and admin password:
 
 ```bash
-veilkey resolve VK:LOCAL:a1b2c3d4
+veilkey-cli resolve VK:LOCAL:a1b2c3d4
 # Prompts for admin password, then outputs plaintext
 ```
 
@@ -140,9 +140,9 @@ veilkey resolve VK:LOCAL:a1b2c3d4
 Manage function wrappers — shell functions that auto-resolve secrets:
 
 ```bash
-veilkey function list
-veilkey function add my-tool
-veilkey function remove my-tool
+veilkey-cli function list
+veilkey-cli function add my-tool
+veilkey-cli function remove my-tool
 ```
 
 ### list
@@ -150,7 +150,7 @@ veilkey function remove my-tool
 Show secrets detected in the current session:
 
 ```bash
-veilkey list
+veilkey-cli list
 ```
 
 ### status
@@ -158,7 +158,7 @@ veilkey list
 Show CLI version, API connection, and pattern count:
 
 ```bash
-veilkey status
+veilkey-cli status
 ```
 
 ### clear
@@ -166,7 +166,7 @@ veilkey status
 Clear the current session's detected secrets:
 
 ```bash
-veilkey clear
+veilkey-cli clear
 ```
 
 ## Project Config

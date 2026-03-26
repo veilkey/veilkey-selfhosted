@@ -32,7 +32,7 @@ echo "  URL: $VEILKEY_URL"
 if [[ -n "$BINARY_URL" ]]; then
     echo "[1/3] 바이너리 다운로드..."
     mkdir -p "$BIN_DIR"
-    for bin in veil veilkey veilkey-cli veilkey-session-config; do
+    for bin in veil veilkey-cli veilkey-session-config; do
         curl -sL "$BINARY_URL/$bin" -o "$BIN_DIR/$bin" && chmod +x "$BIN_DIR/$bin" 2>/dev/null || true
     done
 elif command -v cargo &>/dev/null; then
@@ -44,7 +44,7 @@ elif command -v cargo &>/dev/null; then
     fi
     cd "$REPO_ROOT"
     cargo build --release --quiet 2>&1 | tail -3
-    for bin in veil veilkey veilkey-cli veilkey-session-config; do
+    for bin in veil veilkey-cli veilkey-session-config; do
         [ -f "target/release/$bin" ] && cp "target/release/$bin" "$BIN_DIR/$bin"
     done
 else

@@ -46,7 +46,7 @@ try {
     }
 
     # wrap-pty 를 컨테이너 내부에서 실행
-    docker compose exec -it veil veilkey wrap-pty @VeilArgs
+    docker compose exec -it veil veilkey-cli wrap-pty @VeilArgs
 } finally {
     Pop-Location
 }
