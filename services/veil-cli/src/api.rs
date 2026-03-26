@@ -559,6 +559,24 @@ impl VeilKeyClient {
             .map(|s| s.to_string())
             .ok_or_else(|| result.to_string())
     }
+
+    /// Archive an agent by node_id.
+    /// POST /api/agents/by-node/{node_id}/archive
+    pub fn agents_archive(&self, node_id: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/agents/by-node/{}/archive", self.base_url, node_id);
+        let body = serde_json::json!({});
+        let resp = self.raw_post(&url, &body).map_err(|e| format!("archive failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Unarchive an agent by node_id.
+    /// POST /api/agents/by-node/{node_id}/unarchive
+    pub fn agents_unarchive(&self, node_id: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/agents/by-node/{}/unarchive", self.base_url, node_id);
+        let body = serde_json::json!({});
+        let resp = self.raw_post(&url, &body).map_err(|e| format!("unarchive failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
 }
 
 /// Build a JSON `{"password":"..."}` body with proper escaping.
