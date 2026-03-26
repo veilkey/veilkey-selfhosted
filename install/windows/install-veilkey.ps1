@@ -269,7 +269,7 @@ if ($health -and $health.status) {
     Write-Host "     cd $InstallDir"
     Write-Host "     powershell -File veil.ps1 wrap-pty bash -c 'aws s3 ls'"
     Write-Host "     # 또는 직접:"
-    Write-Host "     docker compose exec -it veil veilkey wrap-pty <명령어>"
+    Write-Host "     docker compose exec -it veil veilkey-cli wrap-pty <명령어>"
     Write-Host ""
     Write-Host "관리 명령 (설치 경로: $InstallDir):"
     Write-Host "  cd $InstallDir"

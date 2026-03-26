@@ -21,7 +21,7 @@ VK:SSH:abc12345      ← SSH 키 (신규)
 | 기능 | SSH 키 동작 |
 |------|-------------|
 | PTY 마스킹 | private key → `VK:SSH:{hash}` 치환 |
-| resolve | `veilkey resolve VK:SSH:xxx` → private key (TTY 필수) |
+| resolve | `veilkey-cli resolve VK:SSH:xxx` → private key (TTY 필수) |
 | mask_map | private key → VK:SSH 매핑 자동 등록 |
 | padded_colorize_ref | `VK:SSH:` → GREEN 색상 |
 | detector | SSH private key 패턴 자동 감지 |
@@ -29,15 +29,15 @@ VK:SSH:abc12345      ← SSH 키 (신규)
 ## CLI
 
 ```bash
-veilkey ssh add ~/.ssh/id_ed25519 --label "main-key"      # → VK:SSH:abc12345
-veilkey ssh add coworker.pub --external --label "coworker" # → VK:SSH:def67890 (public만)
-veilkey ssh generate --type ed25519 --label "deploy-key"   # → VK:SSH:ghi11111
-veilkey ssh list                                            # 전체 목록
-veilkey ssh pubkey VK:SSH:abc12345                          # public key 출력
-veilkey ssh connect root@<HOST_IP>                           # 자동 키 선택 + 접속
-veilkey ssh agent-add VK:SSH:abc12345                       # ssh-agent 로드
-veilkey ssh map VK:SSH:abc12345 --host github.com --user git
-veilkey ssh remove VK:SSH:abc12345
+veilkey-cli ssh add ~/.ssh/id_ed25519 --label "main-key"      # → VK:SSH:abc12345
+veilkey-cli ssh add coworker.pub --external --label "coworker" # → VK:SSH:def67890 (public만)
+veilkey-cli ssh generate --type ed25519 --label "deploy-key"   # → VK:SSH:ghi11111
+veilkey-cli ssh list                                            # 전체 목록
+veilkey-cli ssh pubkey VK:SSH:abc12345                          # public key 출력
+veilkey-cli ssh connect root@<HOST_IP>                           # 자동 키 선택 + 접속
+veilkey-cli ssh agent-add VK:SSH:abc12345                       # ssh-agent 로드
+veilkey-cli ssh map VK:SSH:abc12345 --host github.com --user git
+veilkey-cli ssh remove VK:SSH:abc12345
 ```
 
 ## DB 스키마

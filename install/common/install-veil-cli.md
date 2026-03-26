@@ -39,20 +39,20 @@ bash install/common/install-veil-cli.sh
 source ~/.veilkey/env
 
 # Check connection
-veilkey status
+veilkey-cli status
 
 # Enter protected shell
 veil
 
 # Create temp ref
-veilkey create myvalue
+veilkey-cli create myvalue
 
 # Resolve ref
-veilkey resolve VK:LOCAL:abc12345
+veilkey-cli resolve VK:LOCAL:abc12345
 
 # SSH key management
-veilkey ssh add ~/.ssh/id_ed25519 --label "main-key"
-veilkey ssh list
+veilkey-cli ssh add ~/.ssh/id_ed25519 --label "main-key"
+veilkey-cli ssh list
 ```
 
 ## Uninstall

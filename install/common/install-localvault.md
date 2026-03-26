@@ -59,7 +59,7 @@ veil localvault stop
 
 ```bash
 # From VaultCenter admin
-veilkey function list   # (admin commands)
+veilkey-cli function list   # (admin commands)
 
 # Or via API
 curl -X POST https://<vc>/api/admin/registration-tokens \
