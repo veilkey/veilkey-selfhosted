@@ -476,6 +476,89 @@ impl VeilKeyClient {
             Err(_) => Err("cannot reach VaultCenter".to_string()),
         }
     }
+
+    // ── secret management ──────────────────────────────────────
+
+    /// List agents (vaults) from VaultCenter.
+    pub fn agents_list(&self) -> Result<Vec<serde_json::Value>, String> {
+        let url = format!("{}/api/agents", self.base_url);
+        let resp = self.raw_get(&url).map_err(|e| format!("agents list failed: {}", e))?;
+        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        result["agents"]
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "missing agents in response".to_string())
+    }
+
+    /// Promote a temp ref to a vault (LOCAL scope).
+    pub fn promote(&self, temp_ref: &str, name: &str, agent_hash: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/keycenter/promote", self.base_url);
+        let body = serde_json::json!({
+            "ref": temp_ref,
+            "name": name,
+            "vault_hash": agent_hash,
+        });
+        let resp = self.raw_post(&url, &body).map_err(|e| format!("promote failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// One-step secret add: create temp ref → auto-select vault → promote.
+    pub fn secret_add(&self, name: &str, value: &str, vault_label: Option<&str>) -> Result<serde_json::Value, String> {
+        // 1. Create temp ref
+        let temp_ref = self.issue(value)?;
+
+        // 2. Get agents and select vault
+        let agents = self.agents_list()?;
+        let active_agents: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+
+        if active_agents.is_empty() {
+            return Err("no active vaults found".to_string());
+        }
+
+        let agent = if let Some(label) = vault_label {
+            active_agents.iter()
+                .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label))
+                .ok_or_else(|| format!("vault '{}' not found", label))?
+        } else if active_agents.len() == 1 {
+            active_agents[0]
+        } else {
+            // Default: pick the one with most secrets (likely the main vault)
+            active_agents.iter()
+                .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
+                .unwrap()
+        };
+
+        let agent_hash = agent["agent_hash"]
+            .as_str()
+            .ok_or("missing agent_hash")?;
+
+        // 3. Promote
+        self.promote(&temp_ref, name, agent_hash)
+    }
+
+    /// List secrets from a LocalVault.
+    pub fn secret_list(&self, lv_url: &str) -> Result<Vec<serde_json::Value>, String> {
+        let url = format!("{}/api/secrets", lv_url.trim_end_matches('/'));
+        let resp = self.raw_get(&url).map_err(|e| format!("secret list failed: {}", e))?;
+        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        result["secrets"]
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "missing secrets in response".to_string())
+    }
+
+    /// Delete a secret from a LocalVault by name.
+    pub fn secret_delete(&self, lv_url: &str, name: &str) -> Result<String, String> {
+        let url = format!("{}/api/secrets/{}", lv_url.trim_end_matches('/'), urlencoding::encode(name));
+        let resp = self.raw_delete(&url).map_err(|e| format!("delete failed: {}", e))?;
+        let result: serde_json::Value = resp.into_json().map_err(|e| format!("decode failed: {}", e))?;
+        result["deleted"]
+            .as_str()
+            .map(|s| s.to_string())
+            .ok_or_else(|| result.to_string())
+    }
 }
 
 /// Build a JSON `{"password":"..."}` body with proper escaping.

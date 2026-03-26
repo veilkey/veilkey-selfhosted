@@ -30,6 +30,10 @@ fn print_usage() {
   veilkey exec <command...>         Resolve VK: hashes + run command
   veilkey create [value]            Create a temp ref (VK:TEMP:xxx)
   veilkey resolve <VK:ref>          Decrypt and print a VeilKey reference
+  veilkey secret add <name> [val]   Create + promote to vault (one step)
+  veilkey secret list [--vault url] List secrets in vault
+  veilkey secret get <name>         Resolve secret value by name
+  veilkey secret delete <name>      Delete secret from vault
   veilkey function list             List all global functions
   veilkey function add <name>       Create a global function
   veilkey function remove <name>    Delete a global function
@@ -272,6 +276,224 @@ fn main() {
                 unknown => {
                     eprintln!("Unknown function subcommand: {}", unknown);
                     eprintln!("Usage: veilkey function <list|add|remove> [name]");
+                    process::exit(1);
+                }
+            }
+        }
+        "secret" => {
+            let subcmd = cmd_args.first().map(String::as_str).unwrap_or_else(|| {
+                eprintln!("Usage: veilkey secret <add|list|get|delete> [args]");
+                process::exit(1);
+            });
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&api_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match subcmd {
+                "add" => {
+                    // veilkey secret add <name> [value] [--vault label]
+                    let sub_args = &cmd_args[1..];
+                    if sub_args.is_empty() {
+                        eprintln!("Usage: veilkey secret add <name> [value] [--vault <label>]");
+                        process::exit(1);
+                    }
+                    let name = &sub_args[0];
+
+                    // Parse --vault flag
+                    let mut vault_label: Option<String> = None;
+                    let mut value_parts: Vec<&str> = Vec::new();
+                    let mut i = 1;
+                    while i < sub_args.len() {
+                        if sub_args[i] == "--vault" && i + 1 < sub_args.len() {
+                            vault_label = Some(sub_args[i + 1].clone());
+                            i += 2;
+                        } else {
+                            value_parts.push(&sub_args[i]);
+                            i += 1;
+                        }
+                    }
+
+                    let value = if !value_parts.is_empty() {
+                        value_parts.join(" ")
+                    } else {
+                        eprint!("Secret value: ");
+                        rpassword::read_password().unwrap_or_else(|e| {
+                            eprintln!("Failed to read input: {}", e);
+                            process::exit(1);
+                        })
+                    };
+                    let value = value.trim().to_string();
+                    if value.is_empty() {
+                        eprintln!("Value cannot be empty");
+                        process::exit(1);
+                    }
+
+                    match client.secret_add(name, &value, vault_label.as_deref()) {
+                        Ok(result) => {
+                            let token = result["token"].as_str().unwrap_or("?");
+                            let action = result["action"].as_str().unwrap_or("created");
+                            println!("[veilkey] {} {} → {}", action, name, token);
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] secret add failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "list" => {
+                    // veilkey secret list [--vault url]
+                    let sub_args = &cmd_args[1..];
+                    let lv_url = if sub_args.len() >= 2 && sub_args[0] == "--vault" {
+                        sub_args[1].clone()
+                    } else {
+                        // Default: get agents list and pick the main vault's URL
+                        match client.agents_list() {
+                            Ok(agents) => {
+                                let active: Vec<&serde_json::Value> = agents.iter()
+                                    .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+                                    .collect();
+                                if active.is_empty() {
+                                    eprintln!("[veilkey] no active vaults found");
+                                    process::exit(1);
+                                }
+                                // Print secrets for each vault
+                                for agent in &active {
+                                    let label = agent["label"].as_str().unwrap_or("unknown");
+                                    let ip = agent["ip"].as_str().unwrap_or("?");
+                                    let port = agent["port"].as_u64().unwrap_or(10180);
+                                    let url = format!("https://{}:{}", ip, port);
+                                    let count = agent["secrets_count"].as_u64().unwrap_or(0);
+                                    println!("[{}] ({} secrets)", label, count);
+                                    match client.secret_list(&url) {
+                                        Ok(secrets) => {
+                                            for s in &secrets {
+                                                let name = s["name"].as_str().unwrap_or("?");
+                                                let token = s["token"].as_str().unwrap_or("?");
+                                                let scope = s["scope"].as_str().unwrap_or("?");
+                                                println!("  {} {} ({})", token, name, scope);
+                                            }
+                                        }
+                                        Err(e) => eprintln!("  error: {}", e),
+                                    }
+                                }
+                                return;
+                            }
+                            Err(e) => {
+                                eprintln!("[veilkey] agents list failed: {}", e);
+                                process::exit(1);
+                            }
+                        }
+                    };
+                    match client.secret_list(&lv_url) {
+                        Ok(secrets) => {
+                            for s in &secrets {
+                                let name = s["name"].as_str().unwrap_or("?");
+                                let token = s["token"].as_str().unwrap_or("?");
+                                let scope = s["scope"].as_str().unwrap_or("?");
+                                println!("{} {} ({})", token, name, scope);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] secret list failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "get" => {
+                    // veilkey secret get <name> — resolve by name
+                    if cmd_args.len() < 2 {
+                        eprintln!("Usage: veilkey secret get <name>");
+                        process::exit(1);
+                    }
+                    let name = &cmd_args[1];
+                    // Find the ref for this name from agents/secrets
+                    match client.agents_list() {
+                        Ok(agents) => {
+                            for agent in &agents {
+                                if agent["archived"].as_bool().unwrap_or(false) { continue; }
+                                let ip = agent["ip"].as_str().unwrap_or("?");
+                                let port = agent["port"].as_u64().unwrap_or(10180);
+                                let url = format!("https://{}:{}", ip, port);
+                                if let Ok(secrets) = client.secret_list(&url) {
+                                    for s in &secrets {
+                                        if s["name"].as_str() == Some(name.as_str()) {
+                                            let token = s["token"].as_str().unwrap_or("?");
+                                            match client.resolve(token) {
+                                                Ok(value) => {
+                                                    println!("{}", value);
+                                                    return;
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("[veilkey] resolve failed: {}", e);
+                                                    process::exit(1);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            eprintln!("[veilkey] secret '{}' not found", name);
+                            process::exit(1);
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] agents list failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "delete" => {
+                    // veilkey secret delete <name> [--vault url]
+                    if cmd_args.len() < 2 {
+                        eprintln!("Usage: veilkey secret delete <name> [--vault <url>]");
+                        process::exit(1);
+                    }
+                    let name = &cmd_args[1];
+                    let sub_args = &cmd_args[2..];
+                    let lv_url = if sub_args.len() >= 2 && sub_args[0] == "--vault" {
+                        sub_args[1].clone()
+                    } else {
+                        // Find vault containing the secret
+                        match client.agents_list() {
+                            Ok(agents) => {
+                                let mut found_url = None;
+                                for agent in &agents {
+                                    if agent["archived"].as_bool().unwrap_or(false) { continue; }
+                                    let ip = agent["ip"].as_str().unwrap_or("?");
+                                    let port = agent["port"].as_u64().unwrap_or(10180);
+                                    let url = format!("https://{}:{}", ip, port);
+                                    if let Ok(secrets) = client.secret_list(&url) {
+                                        if secrets.iter().any(|s| s["name"].as_str() == Some(name.as_str())) {
+                                            found_url = Some(url);
+                                            break;
+                                        }
+                                    }
+                                }
+                                found_url.unwrap_or_else(|| {
+                                    eprintln!("[veilkey] secret '{}' not found in any vault", name);
+                                    process::exit(1);
+                                })
+                            }
+                            Err(e) => {
+                                eprintln!("[veilkey] agents list failed: {}", e);
+                                process::exit(1);
+                            }
+                        }
+                    };
+                    match client.secret_delete(&lv_url, name) {
+                        Ok(deleted) => println!("[veilkey] deleted: {}", deleted),
+                        Err(e) => {
+                            eprintln!("[veilkey] delete failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                unknown => {
+                    eprintln!("Unknown secret subcommand: {}", unknown);
+                    eprintln!("Usage: veilkey secret <add|list|get|delete> [args]");
                     process::exit(1);
                 }
             }
