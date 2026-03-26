@@ -75,6 +75,25 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, resp)
 }
 
+// RebuildMaskCache builds the mask-map and stores it in cache.
+// Called after unlock and on heartbeat dirty detection.
+func (h *Handler) RebuildMaskCache() {
+	entries := h.buildMaskMapEntries()
+	if entries == nil {
+		return
+	}
+	resp := map[string]any{
+		"version": h.deps.MaskMapVersion(),
+		"changed": true,
+		"count":   len(entries),
+		"entries": entries,
+	}
+	if data, err := json.Marshal(resp); err == nil {
+		h.deps.SetMaskCacheData(data)
+		h.deps.BumpMaskMapVersion()
+	}
+}
+
 // buildMaskMapEntries constructs the full mask-map entry list from agents,
 // SSH keys, and VE configs. Returns nil on fatal error (e.g. DB failure).
 func (h *Handler) buildMaskMapEntries() []maskEntry {

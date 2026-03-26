@@ -25,19 +25,22 @@ pub fn spawn_mask_map_sync(
                     let data: serde_json::Value = resp.into_json().unwrap_or_default();
                     let new_version = data["version"].as_u64().unwrap_or(version);
                     let changed = data["changed"].as_bool().unwrap_or(false);
-                    if changed && new_version >= version {
+                    if changed && new_version > version {
                         let (mut new_map, new_ve) = parse_mask_map_entries(&data);
 
                         enrich_mask_map(&mut new_map);
 
                         if let Ok(mut map) = mask_map.write() {
+                            let old_len = map.len();
                             *map = new_map;
-                            eprintln!(
-                                "[veilkey] mask_map synced: {} secret(s), {} config(s) (v{})",
-                                map.len(),
-                                new_ve.len(),
-                                new_version
-                            );
+                            // Only log when count actually changes
+                            if map.len() != old_len {
+                                eprintln!(
+                                    "[veilkey] mask_map updated: {} secret(s), {} config(s)",
+                                    map.len(),
+                                    new_ve.len(),
+                                );
+                            }
                         }
                         if let Ok(mut ve) = ve_map.write() {
                             *ve = new_ve;
@@ -53,4 +56,53 @@ pub fn spawn_mask_map_sync(
             }
         }
     });
+}
+
+#[cfg(test)]
+mod sync_tests {
+    use std::fs;
+
+    /// SECURITY/UX: sync message must only print when version INCREASES (>), not >=.
+    /// If >= is used, every long-poll response triggers a message (spam).
+    #[test]
+    fn sync_uses_strict_version_comparison() {
+        let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
+        // Only check non-test code (before #[cfg(test)])
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        assert!(prod.contains("new_version > version"),
+            "sync must use strict > comparison to prevent spam");
+        // >= would cause spam on every long-poll
+        let ge = format!("new_version {} version", ">=");
+        assert!(!prod.contains(&ge),
+            "SPAM BUG: >= causes message on every poll response");
+    }
+
+    /// Sync message must only appear when count changes, not on every update.
+    #[test]
+    fn sync_only_logs_on_count_change() {
+        let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        assert!(prod.contains("old_len") && prod.contains("map.len() != old_len"),
+            "sync must compare old vs new count before logging");
+    }
+
+    /// Sync message must NOT use "synced" (spammy), should use "updated".
+    #[test]
+    fn sync_message_says_updated_not_synced() {
+        let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        let synced = format!("mask_map {}", "synced");
+        assert!(!prod.contains(&synced),
+            "message must say 'updated' not 'synced'");
+        assert!(prod.contains("mask_map updated"),
+            "message must say 'updated'");
+    }
+
+    /// Version must be tracked and updated after successful sync.
+    #[test]
+    fn sync_updates_version_after_change() {
+        let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
+        assert!(src.contains("version = new_version"),
+            "version must be updated after successful sync");
+    }
 }

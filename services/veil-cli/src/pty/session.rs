@@ -419,9 +419,9 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                 }
                 let mut total = n as usize;
 
-                // Output coalesce: 5ms drain loop to collect char-by-char echo
+                // Output coalesce: 50ms drain loop to collect char-by-char echo
                 // into larger chunks, improving cross-chunk secret detection.
-                std::thread::sleep(Duration::from_millis(5));
+                std::thread::sleep(Duration::from_millis(50));
                 loop {
                     let mut pfd = libc::pollfd {
                         fd: master_fd,
