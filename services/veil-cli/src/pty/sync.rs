@@ -72,23 +72,12 @@ mod sync_tests {
 
     /// Sync message must only appear when count changes, not on every update.
     #[test]
-    fn sync_only_logs_on_count_change() {
+    fn sync_no_terminal_output() {
+        // Sync must not print to terminal (disrupts prompt layout)
         let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
         let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        assert!(prod.contains("old_len") && prod.contains("map.len() != old_len"),
-            "sync must compare old vs new count before logging");
-    }
-
-    /// Sync message must NOT use "synced" (spammy), should use "updated".
-    #[test]
-    fn sync_message_says_updated_not_synced() {
-        let src = fs::read_to_string("src/pty/sync.rs").expect("read sync.rs");
-        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
-        let synced = format!("mask_map {}", "synced");
-        assert!(!prod.contains(&synced),
-            "message must say 'updated' not 'synced'");
-        assert!(prod.contains("mask_map updated"),
-            "message must say 'updated'");
+        assert!(!prod.contains("eprintln!"),
+            "sync must not use eprintln! (disrupts active terminal)");
     }
 
     /// Version must be tracked and updated after successful sync.

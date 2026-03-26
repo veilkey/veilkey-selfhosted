@@ -229,7 +229,11 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
-    // Note: cross-chunk cursor erase disabled — breaks readline tracking.
+    // Cross-chunk mask_map: char-by-char echo accumulates in plain_tail.
+    // Same-width refs keep readline cursor in sync.
+    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+        output = m.output;
+    }
 
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
