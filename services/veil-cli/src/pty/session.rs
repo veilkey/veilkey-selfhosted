@@ -455,11 +455,11 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     unsafe { write_all_fd(stdout_fd, &masked); }
                     partial_buf.clear();
                 } else {
-                    // No newline — keep buffering. Poll with 500ms timeout
-                    // to wait for \n (bash error after Enter). If nothing comes
-                    // after 500ms, flush raw (prompt, tab completion, partial output).
+                    // No newline — wait 50ms for more data then flush.
+                    // 50ms coalesce catches most char-by-char echo into single chunks.
+                    std::thread::sleep(Duration::from_millis(50));
                     let mut pfd = libc::pollfd { fd: master_fd, events: libc::POLLIN, revents: 0 };
-                    let ready = unsafe { libc::poll(&mut pfd, 1, 500) }; // 500ms poll
+                    let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
                     if ready <= 0 {
                         let ri = input_ref.lock().unwrap().clone();
                         let (masked, new_tail) = masker::mask_output(
