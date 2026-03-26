@@ -664,6 +664,63 @@ impl VeilKeyClient {
         resp.into_json()
             .map_err(|e| format!("decode failed: {}", e))
     }
+
+    /// Fetch catalog audit log.
+    pub fn catalog_audit(&self, limit: u64) -> Result<Vec<serde_json::Value>, String> {
+        let url = format!("{}/api/catalog/audit?limit={}", self.base_url, limit);
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("catalog audit failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("decode failed: {}", e))?;
+        result["entries"]
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "missing entries in response".to_string())
+    }
+
+    /// Rotate all agent keys.
+    pub fn agents_rotate_all(&self) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/agents/rotate-all", self.base_url);
+        let body = serde_json::json!({});
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("rotate-all failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Clean up stale tracked refs.
+    pub fn tracked_refs_cleanup(&self) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/tracked-refs/cleanup", self.base_url);
+        let body = serde_json::json!({});
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("cleanup failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Audit tracked refs.
+    pub fn tracked_refs_audit(&self) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/tracked-refs/audit", self.base_url);
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("ref-audit failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Fetch vault inventory.
+    pub fn vault_inventory(&self) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/vault-inventory", self.base_url);
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("inventory failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
+    }
 }
 
 /// Build a JSON `{"password":"..."}` body with proper escaping.

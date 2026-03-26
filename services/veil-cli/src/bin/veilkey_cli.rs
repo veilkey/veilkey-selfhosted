@@ -47,6 +47,11 @@ fn print_usage() {
   veilkey config search <key>        Search config across all vaults
   veilkey config bulk-update <k> <old> <new>  Update matching config values
   veilkey config bulk-set <key> <val>  Set config on all agents
+  veilkey audit [--limit N] [--json] Show catalog audit log
+  veilkey rotate-all [--yes]        Rotate all agent keys
+  veilkey cleanup [--json]          Clean up stale tracked refs
+  veilkey ref-audit [--json]        Audit tracked refs
+  veilkey inventory [--json]        Show vault inventory
   veilkey traefik <sub>              Manage Traefik config (init|status|destroy)
   veilkey status                    Show status
   veilkey version                   Show version
@@ -99,6 +104,11 @@ fn main() {
         "config",
         "health",
         "agent",
+        "audit",
+        "rotate-all",
+        "cleanup",
+        "ref-audit",
+        "inventory",
     ];
 
     let subcmd = raw_args.get(1).map(String::as_str).unwrap_or("");
@@ -908,6 +918,198 @@ fn main() {
                 unknown => {
                     eprintln!("Unknown config subcommand: {}", unknown);
                     eprintln!("Usage: veilkey config <search|bulk-update|bulk-set> [args]");
+                    process::exit(1);
+                }
+            }
+        }
+        "audit" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for audit command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let limit: u64 = cmd_args
+                .iter()
+                .position(|a| a == "--limit")
+                .and_then(|i| cmd_args.get(i + 1))
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(20);
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.catalog_audit(limit) {
+                Ok(entries) => {
+                    if json_flag {
+                        let out = serde_json::json!({ "entries": entries });
+                        println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+                    } else if entries.is_empty() {
+                        println!("No audit entries");
+                    } else {
+                        println!("{:<24} {:<16} {:<16} TARGET", "TIME", "EVENT", "ACTOR");
+                        println!("{}", "-".repeat(72));
+                        for entry in &entries {
+                            let time = entry["time"]
+                                .as_str()
+                                .or_else(|| entry["timestamp"].as_str())
+                                .unwrap_or("-");
+                            let event = entry["event"]
+                                .as_str()
+                                .or_else(|| entry["action"].as_str())
+                                .unwrap_or("-");
+                            let actor = entry["actor"].as_str().unwrap_or("-");
+                            let target = entry["target"].as_str().unwrap_or("-");
+                            println!("{:<24} {:<16} {:<16} {}", time, event, actor, target);
+                        }
+                        println!("\nTotal: {} entry(ies)", entries.len());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] audit failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "rotate-all" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for rotate-all command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let yes_flag = cmd_args.iter().any(|a| a == "--yes" || a == "-y");
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            if !yes_flag {
+                eprint!("This will rotate ALL agent keys. Continue? [y/N] ");
+                let mut input = String::new();
+                std::io::stdin().read_line(&mut input).unwrap_or_default();
+                if !input.trim().eq_ignore_ascii_case("y") {
+                    eprintln!("Aborted.");
+                    process::exit(0);
+                }
+            }
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.agents_rotate_all() {
+                Ok(resp) => {
+                    if json_flag {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&resp).unwrap_or_default()
+                        );
+                    } else {
+                        let rotated = resp["rotated"].as_u64().unwrap_or(0);
+                        let msg = resp["message"].as_str().unwrap_or("done");
+                        println!(
+                            "[veilkey] rotate-all: {} agent(s) rotated — {}",
+                            rotated, msg
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] rotate-all failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "cleanup" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for cleanup command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.tracked_refs_cleanup() {
+                Ok(resp) => {
+                    if json_flag {
+                        println!(
+                            "{}",
+                            serde_json::to_string_pretty(&resp).unwrap_or_default()
+                        );
+                    } else {
+                        let removed = resp["removed"].as_u64().unwrap_or(0);
+                        let msg = resp["message"].as_str().unwrap_or("done");
+                        println!("[veilkey] cleanup: {} ref(s) removed — {}", removed, msg);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] cleanup failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "ref-audit" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for ref-audit command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.tracked_refs_audit() {
+                Ok(resp) => {
+                    let _ = json_flag; // always JSON for now
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&resp).unwrap_or_default()
+                    );
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] ref-audit failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "inventory" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for inventory command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.vault_inventory() {
+                Ok(resp) => {
+                    let _ = json_flag; // always JSON for now
+                    println!(
+                        "{}",
+                        serde_json::to_string_pretty(&resp).unwrap_or_default()
+                    );
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] inventory failed: {}", e);
                     process::exit(1);
                 }
             }
