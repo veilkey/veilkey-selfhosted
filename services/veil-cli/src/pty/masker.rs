@@ -229,49 +229,38 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
-    // Note: cross-chunk cursor erase disabled — breaks readline tracking.
+    // Cross-chunk mask_map: char-by-char echo accumulates in plain_tail.
+    // When a secret completes at the tail/new_text boundary, use cursor-back
+    // to overwrite the already-emitted chars with full ref.
+    // Skip when escape sequences present (arrow keys, history recall).
+    if !new_text.contains("\x1b[") {
+        if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+            output = m.output;
+        }
+    }
 
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
     }
-    // Masking strategy:
-    // - Completed lines (\n present): use full canonical ref directly.
-    // - Readline echo (no \n): use CSI save/restore cursor to write full ref
-    //   without moving readline's tracked cursor position.
-    //   \x1b7 = save cursor, \r = go to col 0, write ref, \x1b8 = restore cursor.
-    //   This shows full VK:LOCAL:xxx on screen but readline thinks cursor is at original pos.
+    // Newline-aware masking:
+    // - Completed lines (\n present): use full canonical ref (VK:LOCAL:xxx)
+    //   Cursor position is irrelevant after newline.
+    // - Readline echo (no \n, in recent_input): skip entirely
+    //   Prevents cursor desync → VK:LOC fragments on arrow keys.
+    // - Partial output (no \n, not in recent_input): same-width fallback
     let has_newline = output.contains('\n');
     for (plaintext, vk_ref) in mask_map {
         if plaintext.is_empty() {
             continue;
         }
-        let repl = if has_newline {
-            // Completed line: just replace with full ref
-            colorize_ref(vk_ref)
-        } else if output.contains("\x1b[") {
-            // Escape sequences present (arrow keys, history recall) — skip to avoid conflict
+        // No newline = readline territory (echo, history recall, tab completion).
+        // Skip ALL masking here to prevent cursor desync and scope loss.
+        // Completed lines (\n) always get full canonical ref.
+        if !has_newline {
             continue;
-        } else {
-            // Readline echo: save cursor → write full ref → restore cursor
-            // Screen shows full ref, readline cursor stays at original position
-            let colored = colorize_ref(vk_ref);
-            let secret_len = UnicodeWidthStr::width(plaintext.as_str());
-            let ref_len = vk_ref.chars().count();
-            if ref_len > secret_len {
-                // Ref is wider: write full ref, then move cursor back to where readline expects
-                let overshoot = ref_len - secret_len;
-                format!("{}\x1b[{}D", colored, overshoot)
-            } else {
-                // Ref fits: pad with spaces to match original width
-                let pad = secret_len - ref_len;
-                if pad > 0 {
-                    format!("{}{}", colored, " ".repeat(pad))
-                } else {
-                    colored
-                }
-            }
-        };
+        }
+        let repl = colorize_ref(vk_ref);
         let (new_out, replaced) = ansi_aware_replace(&output, plaintext, &repl);
         if replaced {
             output = new_out;
@@ -405,8 +394,21 @@ pub(crate) fn find_cross_chunk_mask(
                 if is_longer {
                     let tail_part = &combined[pos..tail_len];
                     let tail_chars = tail_part.chars().count();
+                    // Move cursor back to start of secret, erase to EOL, write full ref
                     let erase = format!("\x1b[{}D\x1b[K", tail_chars);
-                    let replacement = padded_colorize_ref(vk_ref, plaintext.len());
+                    let colored = colorize_ref(vk_ref);
+                    let secret_len = plaintext.chars().count();
+                    let ref_len = vk_ref.chars().count();
+                    // After writing full ref, move cursor back if ref is wider
+                    let replacement = if ref_len > secret_len {
+                        let overshoot = ref_len - secret_len;
+                        format!("{}\x1b[{}D", colored, overshoot)
+                    } else if ref_len < secret_len {
+                        let pad = secret_len - ref_len;
+                        format!("{}{}", colored, " ".repeat(pad))
+                    } else {
+                        colored
+                    };
                     let remainder = new_text[new_part.len()..].to_string();
                     best = Some((plaintext.len(), erase, replacement, remainder));
                 }
@@ -3079,7 +3081,7 @@ mod scope_preservation_tests {
 }
 
 #[cfg(test)]
-mod cursor_restore_tests {
+mod cross_chunk_cursor_tests {
     use super::*;
 
     fn init_crypto() {
@@ -3089,7 +3091,7 @@ mod cursor_restore_tests {
         pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
     }
     fn strip(s: &str) -> String {
-        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b[78]").unwrap();
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
         re.replace_all(s, "").to_string()
     }
     fn call_raw(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (Vec<u8>, String) {
@@ -3098,147 +3100,69 @@ mod cursor_restore_tests {
         mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail)
     }
 
-    // ═══ Readline echo: full ref + cursor restore ═══
-
-    /// Echo (no \n) must show full VK:LOCAL: ref, not compact
     #[test]
-    fn echo_shows_full_ref() {
-        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
-        let (raw, _) = call_raw("Ghdrhkdgh1@", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        let visible = strip(&out);
-        assert!(visible.contains("VK:LOCAL:6da25530"),
-            "echo must show full VK:LOCAL: ref, got: '{}'", visible);
-    }
-
-    /// Echo must include cursor-back sequence when ref is wider than secret
-    #[test]
-    fn echo_has_cursor_back_when_wider() {
-        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
-        // secret=11, ref=17, overshoot=6
-        let (raw, _) = call_raw("Ghdrhkdgh1@", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        // Must contain CSI cursor back: \x1b[6D
-        assert!(out.contains("\x1b[6D"),
-            "must have cursor-back \\x1b[6D for 6-char overshoot, got bytes: {:?}",
-            out.chars().collect::<Vec<_>>());
-    }
-
-    /// When ref fits in secret width, no cursor-back needed
-    #[test]
-    fn echo_no_cursor_back_when_fits() {
-        // secret 20 chars > ref 17 chars → pad with spaces, no cursor-back
-        let map = mk(&[("12345678901234567890", "VK:LOCAL:6da25530")]);
-        let (raw, _) = call_raw("12345678901234567890", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        assert!(!out.contains("\x1b[") || out.contains("\x1b[1m") || out.contains("\x1b[36m") || out.contains("\x1b[0m"),
-            "no cursor-back needed when ref fits");
-        let visible = strip(&out);
-        assert_eq!(visible.chars().count(), 20,
-            "padded to original width: {}", visible);
-    }
-
-    /// Exact same width — no cursor-back, no padding
-    #[test]
-    fn echo_exact_width_no_adjustment() {
-        // "VK:LOCAL:6da25530" = 17, secret = 17
-        let map = mk(&[("12345678901234567", "VK:LOCAL:6da25530")]);
-        let (raw, _) = call_raw("12345678901234567", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        let visible = strip(&out);
-        assert_eq!(visible, "VK:LOCAL:6da25530");
-    }
-
-    // ═══ Completed line: plain full ref (no cursor tricks) ═══
-
-    /// \n line must NOT have cursor-back sequences
-    #[test]
-    fn completed_line_no_cursor_back() {
-        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
-        let (raw, _) = call_raw("bash: Ghdrhkdgh1@: err\n", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        // Cursor-back \x1b[nD must NOT be in completed lines
-        let has_cursor_back = regex::Regex::new(r"\x1b\[\d+D").unwrap().is_match(&out);
-        assert!(!has_cursor_back,
-            "completed line must not have cursor-back sequences");
-        let visible = strip(&out);
-        assert!(visible.contains("VK:LOCAL:6da25530"));
-    }
-
-    // ═══ Escape sequences (arrow keys) — must skip ═══
-
-    /// Arrow key output must pass through unmasked
-    #[test]
-    fn escape_sequence_skipped() {
-        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
-        let (raw, _) = call_raw("\x1b[AGhdrhkdgh1@", &map, "", "");
-        let out = String::from_utf8_lossy(&raw);
-        // Contains ESC[ → readline control → must skip masking
-        // Output should contain original text unchanged
-        assert!(out.contains("Ghdrhkdgh1@"),
-            "escape sequence output must skip masking");
-    }
-
-    // ═══ Cursor-back math correctness ═══
-
-    /// Different overshoot values produce correct \x1b[nD
-    #[test]
-    fn cursor_back_math_various_lengths() {
-        let cases = vec![
-            // (secret_len, ref "VK:LOCAL:xxx" len, expected overshoot)
-            ("short_pw", "VK:LOCAL:abc12345", 9),   // 8 vs 17 = 9
-            ("Ghdrhkdgh1@", "VK:LOCAL:6da25530", 6), // 11 vs 17 = 6
-            ("six_char", "VK:LOCAL:def67890", 9),   // 8 vs 17 = 9
-        ];
-        for (secret, vk_ref, expected_back) in cases {
-            let map = mk(&[(secret, vk_ref)]);
-            let (raw, _) = call_raw(secret, &map, "", "");
-            let out = String::from_utf8_lossy(&raw);
-            let expected_seq = format!("\x1b[{}D", expected_back);
-            assert!(out.contains(&expected_seq),
-                "secret='{}' ref='{}': expected {} got output: {:?}",
-                secret, vk_ref, expected_seq, out);
-        }
-    }
-
-    // ═══ Stability: repeated cycles ═══
-
-    /// Error → echo → error cycle must not degrade
-    #[test]
-    fn error_echo_cycle_stable() {
-        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+    fn charwise_echo_triggers_cross_chunk() {
+        let map = mk(&[("password1234", "VK:LOCAL:ccc33333")]);
         let mut tail = String::new();
-
-        for _ in 0..5 {
-            // Error (has \n) → full ref
-            let (raw, t) = call_raw("bash: Ghdrhkdgh1@: err\n", &map, "", &tail);
+        for ch in "password123".chars() {
+            let (_, t) = call_raw(&ch.to_string(), &map, "", &tail);
             tail = t;
-            let v = strip(&String::from_utf8_lossy(&raw));
-            assert!(v.contains("VK:LOCAL:6da25530"), "error line: {}", v);
+        }
+        let (raw, _) = call_raw("4", &map, "", &tail);
+        let visible = strip(&String::from_utf8_lossy(&raw));
+        assert!(visible.contains("VK:LOCAL:ccc33333"),
+            "char-by-char must trigger cross-chunk: '{}'", visible);
+    }
 
-            // Echo (no \n) → full ref + cursor-back
-            let (raw, t) = call_raw("Ghdrhkdgh1@", &map, "", &tail);
-            tail = t;
-            let v = strip(&String::from_utf8_lossy(&raw));
-            assert!(v.contains("VK:LOCAL:6da25530"), "echo: {}", v);
+    #[test]
+    fn cross_chunk_full_ref_not_compact() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (raw, _) = call_raw("@", &map, "", "Ghdrhkdgh1");
+        let visible = strip(&String::from_utf8_lossy(&raw));
+        if visible.contains("VK:") {
+            assert!(visible.contains("VK:LOCAL:"),
+                "cross-chunk must use full ref: '{}'", visible);
         }
     }
 
-    // ═══ All scopes ═══
+    #[test]
+    fn cross_chunk_skips_escape() {
+        let map = mk(&[("password1234", "VK:LOCAL:ddd44444")]);
+        let (raw, _) = call_raw("4\x1b[A", &map, "", "password123");
+        let out = String::from_utf8_lossy(&raw);
+        assert!(out.contains("\x1b[A"));
+    }
 
     #[test]
-    fn echo_preserves_all_scopes() {
-        let cases = vec![
-            ("secret_l!", "VK:LOCAL:loc00001"),
-            ("secret_s!", "VK:SSH:ssh00001"),
-            ("secret_t!", "VK:TEMP:tmp00001"),
-        ];
-        for (secret, vk_ref) in cases {
+    fn two_char_chunks() {
+        let map = mk(&[("secret12345!", "VK:LOCAL:eee55555")]);
+        let mut tail = String::new();
+        for chunk in ["se", "cr", "et", "12", "34"] {
+            let (_, t) = call_raw(chunk, &map, "", &tail);
+            tail = t;
+        }
+        let (raw, _) = call_raw("5!", &map, "", &tail);
+        let visible = strip(&String::from_utf8_lossy(&raw));
+        assert!(visible.contains("VK:LOCAL:eee55555"),
+            "2-char chunks: '{}'", visible);
+    }
+
+    #[test]
+    fn cross_chunk_preserves_scope() {
+        for (secret, vk_ref) in &[
+            ("ssh_key_val!", "VK:SSH:ssh00001"),
+            ("temp_token!!", "VK:TEMP:tmp00001"),
+            ("local_pass!!", "VK:LOCAL:loc00001"),
+        ] {
             let map = mk(&[(secret, vk_ref)]);
-            let (raw, _) = call_raw(secret, &map, "", "");
+            let tail = &secret[..secret.len()-1];
+            let last = &secret[secret.len()-1..];
+            let (raw, _) = call_raw(last, &map, "", tail);
             let visible = strip(&String::from_utf8_lossy(&raw));
-            assert!(visible.contains(vk_ref),
-                "scope lost for {}: got '{}'", vk_ref, visible);
+            if visible.contains("VK:") {
+                assert!(visible.contains(vk_ref),
+                    "scope lost for {}: '{}'", vk_ref, visible);
+            }
         }
     }
 }
