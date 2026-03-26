@@ -141,6 +141,20 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
     let client = VeilKeyClient::new(api_url);
 
+    // If server is locked, prompt for master password and unlock first
+    if client.is_locked() {
+        let master = read_secret("VEILKEY_MASTER_PASSWORD_FILE", "Master password (unlock): ");
+        if master.is_empty() {
+            eprintln!("[veilkey] master password is required to unlock");
+            std::process::exit(1);
+        }
+        if let Err(e) = client.unlock(&master) {
+            eprintln!("[veilkey] unlock failed: {}", e);
+            std::process::exit(1);
+        }
+        eprintln!("[veilkey] server unlocked");
+    }
+
     // Authenticate with admin password
     let password = read_secret("VEILKEY_PASSWORD_FILE", "VeilKey password: ");
     if password.is_empty() {

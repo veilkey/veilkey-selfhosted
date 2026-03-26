@@ -36,18 +36,39 @@ fn is_trivial_value(value: &str) -> bool {
     // Common boolean/config words (case-insensitive)
     let lower = v.to_lowercase();
     const TRIVIAL_WORDS: &[&str] = &[
-        "yes", "no", "on", "off", "auto", "always", "never",
-        "debug", "info", "warn", "error", "trace", "fatal",
-        "development", "production", "staging", "testing",
-        "default", "custom", "manual", "inherit",
+        "yes",
+        "no",
+        "on",
+        "off",
+        "auto",
+        "always",
+        "never",
+        "debug",
+        "info",
+        "warn",
+        "error",
+        "trace",
+        "fatal",
+        "development",
+        "production",
+        "staging",
+        "testing",
+        "default",
+        "custom",
+        "manual",
+        "inherit",
     ];
     if TRIVIAL_WORDS.contains(&lower.as_str()) {
         return true;
     }
 
     // File paths (starts with / or ./ or ~/ or drive letter like C:\)
-    if v.starts_with('/') || v.starts_with("./") || v.starts_with("~/")
-        || (v.len() >= 3 && v.as_bytes()[1] == b':' && (v.as_bytes()[2] == b'\\' || v.as_bytes()[2] == b'/'))
+    if v.starts_with('/')
+        || v.starts_with("./")
+        || v.starts_with("~/")
+        || (v.len() >= 3
+            && v.as_bytes()[1] == b':'
+            && (v.as_bytes()[2] == b'\\' || v.as_bytes()[2] == b'/'))
     {
         return true;
     }
@@ -814,11 +835,7 @@ mod tests {
         let logger = SessionLogger::new("/dev/null");
         let det = SecretDetector::new(&config, &client, &logger, true);
 
-        let cases = vec![
-            "key=aaaaaaaaaaaa",
-            "token=zzzzzzzzzz",
-            "secret=0000000000",
-        ];
+        let cases = vec!["key=aaaaaaaaaaaa", "token=zzzzzzzzzz", "secret=0000000000"];
         for line in cases {
             let detections = det.detect_secrets(line);
             assert!(
@@ -837,10 +854,7 @@ mod tests {
         let logger = SessionLogger::new("/dev/null");
         let det = SecretDetector::new(&config, &client, &logger, true);
 
-        let cases = vec![
-            "key=01234567890123",
-            "token=1234567890",
-        ];
+        let cases = vec!["key=01234567890123", "token=1234567890"];
         for line in cases {
             let detections = det.detect_secrets(line);
             assert!(
@@ -933,6 +947,9 @@ mod tests {
         assert!(!is_trivial_value("ghp_ABCDEFghijklm"), "GitHub token");
         assert!(!is_trivial_value("MyP@ssw0rd2026"), "password");
         assert!(!is_trivial_value("a1b2c3d4e5f6g7h8"), "mixed alphanum");
-        assert!(!is_trivial_value("abcdefghij"), "non-repeated alpha (not sequential)");
+        assert!(
+            !is_trivial_value("abcdefghij"),
+            "non-repeated alpha (not sequential)"
+        );
     }
 }

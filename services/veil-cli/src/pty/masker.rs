@@ -1093,17 +1093,29 @@ mod tests {
 
     #[test]
     fn test_vk_and_ve_both_applied() {
-        let map = vec![("super-secret-key".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let map = vec![(
+            "super-secret-key".to_string(),
+            "VK:LOCAL:sec12345".to_string(),
+        )];
         let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("key=super-secret-key host=10.0.0.5", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("super-secret-key"), "VK secret must be masked");
-        assert!(visible.contains("10.0.0.5"), "VE config must show plaintext");
+        assert!(
+            !visible.contains("super-secret-key"),
+            "VK secret must be masked"
+        );
+        assert!(
+            visible.contains("10.0.0.5"),
+            "VE config must show plaintext"
+        );
     }
 
     #[test]
     fn test_vk_masked_before_ve_applied() {
-        let map = vec![("secret-10.0.0.5-pass".to_string(), "VK:LOCAL:full1234".to_string())];
+        let map = vec![(
+            "secret-10.0.0.5-pass".to_string(),
+            "VK:LOCAL:full1234".to_string(),
+        )];
         let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("data: secret-10.0.0.5-pass", &map, &ve, "");
         let visible = strip_ansi(&output);
@@ -1162,7 +1174,10 @@ mod tests {
 
     #[test]
     fn domain_ve_preserves_plaintext_vk_replaces() {
-        let map = vec![("secret-password".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let map = vec![(
+            "secret-password".to_string(),
+            "VK:LOCAL:sec12345".to_string(),
+        )];
         let ve = vec![("config-hostname".to_string(), "VE:LOCAL:HOST".to_string())];
         let (output, _) = mask_with_ve("pw=secret-password host=config-hostname", &map, &ve, "");
         let visible = strip_ansi(&output);
@@ -1197,7 +1212,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_with_embedded_ansi_no_panic() {
-        let ve = vec![("\x1b[31mred\x1b[0m".to_string(), "VE:LOCAL:COLOR".to_string())];
+        let ve = vec![(
+            "\x1b[31mred\x1b[0m".to_string(),
+            "VE:LOCAL:COLOR".to_string(),
+        )];
         let (output, _) = mask_with_ve("show \x1b[31mred\x1b[0m here", &[], &ve, "");
         let _ = strip_ansi(&output); // must not panic
     }
@@ -1222,8 +1240,10 @@ mod tests {
         let (output1, tail1) = mask_with_ve("data", &[], &ve, "");
         assert!(!output1.contains(GREEN));
         let (output2, _) = mask_with_ve("base-server", &[], &ve, &tail1);
-        assert!(!output2.contains(GREEN),
-            "VE split across chunks should not be detected (by design)");
+        assert!(
+            !output2.contains(GREEN),
+            "VE split across chunks should not be detected (by design)"
+        );
     }
 
     #[test]
@@ -1246,13 +1266,18 @@ mod tests {
     #[test]
     fn test_ve_substring_of_vk_secret() {
         // VE "db-host" is substring of VK "my-db-host-password" — VK masks first
-        let map = vec![("my-db-host-password".to_string(), "VK:LOCAL:dbh12345".to_string())];
+        let map = vec![(
+            "my-db-host-password".to_string(),
+            "VK:LOCAL:dbh12345".to_string(),
+        )];
         let ve = vec![("db-host".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("cred=my-db-host-password", &map, &ve, "");
         let visible = strip_ansi(&output);
         assert!(!visible.contains("my-db-host-password"));
-        assert!(!visible.contains("db-host"),
-            "VE substring vanishes when VK masks the containing secret");
+        assert!(
+            !visible.contains("db-host"),
+            "VE substring vanishes when VK masks the containing secret"
+        );
     }
 
     #[test]
@@ -1262,17 +1287,29 @@ mod tests {
         let ve = vec![("production".to_string(), "VE:LOCAL:ENV".to_string())];
         let (output, _) = mask_with_ve("env=production", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("prod"), "VK masks 'prod' even inside 'production'");
+        assert!(
+            !visible.contains("prod"),
+            "VK masks 'prod' even inside 'production'"
+        );
     }
 
     #[test]
     fn test_ve_and_vk_same_value() {
         // Same value as both VK and VE — VK takes precedence
-        let map = vec![("shared-value-1234".to_string(), "VK:LOCAL:sh123456".to_string())];
-        let ve = vec![("shared-value-1234".to_string(), "VE:LOCAL:SHARED".to_string())];
+        let map = vec![(
+            "shared-value-1234".to_string(),
+            "VK:LOCAL:sh123456".to_string(),
+        )];
+        let ve = vec![(
+            "shared-value-1234".to_string(),
+            "VE:LOCAL:SHARED".to_string(),
+        )];
         let (output, _) = mask_with_ve("data=shared-value-1234", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("shared-value-1234"), "VK takes precedence");
+        assert!(
+            !visible.contains("shared-value-1234"),
+            "VK takes precedence"
+        );
     }
 
     #[test]
@@ -1331,7 +1368,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_file_path() {
-        let ve = vec![("/etc/config/app.toml".to_string(), "VE:HOST:CFG_PATH".to_string())];
+        let ve = vec![(
+            "/etc/config/app.toml".to_string(),
+            "VE:HOST:CFG_PATH".to_string(),
+        )];
         let (output, _) = mask_with_ve("loading /etc/config/app.toml ...", &[], &ve, "");
         let visible = strip_ansi(&output);
         assert!(visible.contains("/etc/config/app.toml"));
@@ -1340,7 +1380,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_url() {
-        let ve = vec![("https://db.internal:5432".to_string(), "VE:LOCAL:DB_URL".to_string())];
+        let ve = vec![(
+            "https://db.internal:5432".to_string(),
+            "VE:LOCAL:DB_URL".to_string(),
+        )];
         let (output, _) = mask_with_ve("connecting to https://db.internal:5432", &[], &ve, "");
         assert!(output.contains(GREEN));
         assert!(strip_ansi(&output).contains("https://db.internal:5432"));
@@ -1435,7 +1478,10 @@ mod tests {
         let ve = vec![("password".to_string(), "VE:LOCAL:DB_PASS".to_string())];
         let (output, _) = mask_with_ve("pass=password", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("password"), "VK masks first, VE misses silently");
+        assert!(
+            !visible.contains("password"),
+            "VK masks first, VE misses silently"
+        );
     }
 
     // ── plain_tail tracks original text, not masked ──────────────────
@@ -1447,30 +1493,50 @@ mod tests {
         let ve = vec![("config".to_string(), "VE:LOCAL:CFG".to_string())];
         let (_, tail1) = mask_with_ve("show config here", &[], &ve, "");
         // tail should contain "show config here" (original), not GREEN codes
-        assert!(!tail1.contains("\x1b["), "plain_tail must not contain ANSI codes");
-        assert!(tail1.contains("config"), "plain_tail must contain original text");
+        assert!(
+            !tail1.contains("\x1b["),
+            "plain_tail must not contain ANSI codes"
+        );
+        assert!(
+            tail1.contains("config"),
+            "plain_tail must contain original text"
+        );
     }
 
     #[test]
     fn test_plain_tail_not_affected_by_vk_masking() {
         // Same for VK: plain_tail should be from original, not from masked output
-        let map = vec![("my-password-1234".to_string(), "VK:LOCAL:pw123456".to_string())];
+        let map = vec![(
+            "my-password-1234".to_string(),
+            "VK:LOCAL:pw123456".to_string(),
+        )];
         let (_, tail) = mask_with_ve("echo my-password-1234", &map, &[], "");
         // tail should be original text, so it contains the secret
-        assert!(!tail.contains("\x1b["), "plain_tail must not contain ANSI codes");
-        assert!(tail.contains("my-password-1234"),
-            "plain_tail must contain original text for future cross-chunk matching");
+        assert!(
+            !tail.contains("\x1b["),
+            "plain_tail must not contain ANSI codes"
+        );
+        assert!(
+            tail.contains("my-password-1234"),
+            "plain_tail must contain original text for future cross-chunk matching"
+        );
     }
 
     #[test]
     fn test_plain_tail_enables_cross_chunk_after_ve() {
         // Scenario: chunk1 has VE-colorized text, chunk2 completes a VK secret.
         // plain_tail from chunk1 should be clean plaintext enabling cross-chunk VK detection.
-        let map = vec![("secret-password-12345678".to_string(), "VK:LOCAL:xc123456".to_string())];
+        let map = vec![(
+            "secret-password-12345678".to_string(),
+            "VK:LOCAL:xc123456".to_string(),
+        )];
         let ve = vec![("config".to_string(), "VE:LOCAL:CFG".to_string())];
         // Chunk 1: has VE value + start of VK secret
         let (_, tail1) = mask_with_ve("config: secret-passw", &[], &ve, "");
-        assert!(tail1.contains("secret-passw"), "tail must preserve secret prefix");
+        assert!(
+            tail1.contains("secret-passw"),
+            "tail must preserve secret prefix"
+        );
         // Chunk 2: rest of VK secret
         let (output2, _) = mask_with_ve("ord-12345678 done", &map, &ve, &tail1);
         let visible2 = strip_ansi(&output2);

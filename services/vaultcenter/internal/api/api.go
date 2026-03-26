@@ -808,6 +808,7 @@ func logMiddleware(next http.Handler) http.Handler {
 // for inter-service communication (many concurrent requests to same host).
 func newPooledHTTPClient(base *http.Client) *http.Client {
 	transport := &http.Transport{
+		DialContext:         (&net.Dialer{Timeout: 2 * time.Second}).DialContext,
 		MaxIdleConns:        100,
 		MaxIdleConnsPerHost: 20,
 		IdleConnTimeout:     cmdutil.ParseDurationEnv("VEILKEY_IDLE_CONN_TIMEOUT", 90*time.Second),
