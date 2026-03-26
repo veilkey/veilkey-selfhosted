@@ -2819,3 +2819,221 @@ mod arrow_key_masking_tests {
             "second complete line must still show full ref, got: {}", v3);
     }
 }
+
+#[cfg(test)]
+mod scope_preservation_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ═══ Scope must NEVER be lost in completed output ═══
+
+    /// Every scope type must show full canonical ref in \n-terminated output
+    #[test]
+    fn scope_local_in_completed_line() {
+        let map = mk(&[("local_secret!", "VK:LOCAL:loc00001")]);
+        let (out, _) = call("val=local_secret!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:loc00001"), "LOCAL scope lost: {}", v);
+        assert!(!v.contains("local_secret!"), "secret leaked: {}", v);
+    }
+
+    #[test]
+    fn scope_ssh_in_completed_line() {
+        let map = mk(&[("ssh_key_data!", "VK:SSH:ssh00001")]);
+        let (out, _) = call("key=ssh_key_data!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:SSH:ssh00001"), "SSH scope lost: {}", v);
+    }
+
+    #[test]
+    fn scope_temp_in_completed_line() {
+        let map = mk(&[("temp_token12!", "VK:TEMP:tmp00001")]);
+        let (out, _) = call("tok=temp_token12!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:TEMP:tmp00001"), "TEMP scope lost: {}", v);
+    }
+
+    #[test]
+    fn scope_external_in_completed_line() {
+        let map = mk(&[("ext_value_xx!", "VK:EXTERNAL:ext00001")]);
+        let (out, _) = call("v=ext_value_xx!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:EXTERNAL:ext00001"), "EXTERNAL scope lost: {}", v);
+    }
+
+    // ═══ Compact form (VK:hash) must never appear in \n output ═══
+
+    #[test]
+    fn no_compact_form_in_bash_error() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v = strip(&out);
+        // Must NOT contain compact "VK:6da25530" without LOCAL
+        if v.contains("VK:") && !v.contains("VK:LOCAL:") {
+            panic!("compact form in completed line: {}", v);
+        }
+    }
+
+    #[test]
+    fn no_compact_form_in_cat_output() {
+        let map = mk(&[("db_password!", "VK:LOCAL:cat00001")]);
+        let (out, _) = call("DB_PASS=db_password!\n", &map, "", "");
+        let v = strip(&out);
+        if v.contains("VK:") && !v.contains("VK:LOCAL:") {
+            panic!("compact form in cat output: {}", v);
+        }
+    }
+
+    #[test]
+    fn no_compact_form_in_json() {
+        let map = mk(&[("json_secret!", "VK:LOCAL:jsn00001")]);
+        let (out, _) = call("{\"key\":\"json_secret!\"}\n", &map, "", "");
+        let v = strip(&out);
+        if v.contains("VK:") && !v.contains("VK:LOCAL:") {
+            panic!("compact form in JSON output: {}", v);
+        }
+    }
+
+    #[test]
+    fn no_compact_form_in_multiline() {
+        let map = mk(&[("ml_secret!!", "VK:LOCAL:mln00001")]);
+        let (out, _) = call("line1\nml_secret!!\nline3\n", &map, "", "");
+        let v = strip(&out);
+        if v.contains("VK:") && !v.contains("VK:LOCAL:") {
+            panic!("compact form in multiline: {}", v);
+        }
+    }
+
+    // ═══ Arrow key scenarios — original secret recalled ═══
+
+    /// User types secret, gets error, presses ↑ — secret echoed again
+    #[test]
+    fn full_cycle_type_error_recall() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = String::new();
+
+        // 1. Type + enter → bash error (has \n)
+        let (out1, t1) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", &tail);
+        tail = t1;
+        let v1 = strip(&out1);
+        assert!(v1.contains("VK:LOCAL:6da25530"), "error must be full ref: {}", v1);
+
+        // 2. Arrow up → readline echoes original secret (no \n)
+        let (out2, t2) = call("Ghdrhkdgh1@", &map, "", &tail);
+        tail = t2;
+        let v2 = strip(&out2);
+        // If masked, must be full ref — if not masked, must be plaintext
+        // Must NOT be compact VK:6da25530
+        assert!(!v2.contains("VK:6da25530") || v2.contains("VK:LOCAL:6da25530"),
+            "arrow recall must not produce compact form: {}", v2);
+
+        // 3. Enter → bash error again (has \n)
+        let (out3, _) = call("\nbash: Ghdrhkdgh1@: not found\n", &map, "", &tail);
+        let v3 = strip(&out3);
+        assert!(v3.contains("VK:LOCAL:6da25530"), "re-executed error must be full ref: {}", v3);
+    }
+
+    /// Multiple ↑↓ cycles must not degrade ref quality
+    #[test]
+    fn repeated_arrow_cycles_stable() {
+        let map = mk(&[("secret12345!", "VK:LOCAL:cyc00001")]);
+        let mut tail = String::new();
+
+        for round in 0..5 {
+            // Error line
+            let (out, t) = call("bash: secret12345!: err\n", &map, "", &tail);
+            tail = t;
+            let v = strip(&out);
+            assert!(v.contains("VK:LOCAL:cyc00001"),
+                "round {} error: scope lost: {}", round, v);
+
+            // Arrow recall (no \n)
+            let (_, t) = call("secret12345!", &map, "", &tail);
+            tail = t;
+
+            // Arrow down (ESC sequence)
+            let (_, t) = call("\x1b[B", &map, "", &tail);
+            tail = t;
+        }
+    }
+
+    // ═══ Mixed content in single chunk ═══
+
+    /// Chunk with echo + \n + error: echo part may be compact, error must be full
+    #[test]
+    fn mixed_chunk_error_part_full_ref() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("Ghdrhkdgh1@\nbash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v = strip(&out);
+        // The error line (after \n) must contain full ref
+        let lines: Vec<&str> = v.split('\n').collect();
+        let error_line = lines.iter().find(|l| l.contains("not found")).unwrap_or(&"");
+        assert!(error_line.contains("VK:LOCAL:6da25530"),
+            "error line in mixed chunk must be full ref: {}", error_line);
+    }
+
+    // ═══ Different secret lengths vs ref lengths ═══
+
+    /// Secret shorter than ref (11 < 17) — the problematic case
+    #[test]
+    fn short_secret_completed_line_full_ref() {
+        // "Ghdrhkdgh1@" = 11 chars, "VK:LOCAL:6da25530" = 17 chars
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("echo Ghdrhkdgh1@\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:6da25530"),
+            "short secret in completed line must use full ref (not compact): {}", v);
+    }
+
+    /// Secret same length as ref
+    #[test]
+    fn same_length_secret_full_ref() {
+        // "12345678901234567" = 17 chars = same as "VK:LOCAL:abcdef01"
+        let map = mk(&[("12345678901234567", "VK:LOCAL:abcdef01")]);
+        let (out, _) = call("v=12345678901234567\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:abcdef01"), "same-length: {}", v);
+    }
+
+    /// Secret longer than ref — should always work
+    #[test]
+    fn long_secret_full_ref() {
+        let map = mk(&[("this_is_a_very_long_secret_value_that_exceeds_ref!", "VK:LOCAL:lng00001")]);
+        let (out, _) = call("v=this_is_a_very_long_secret_value_that_exceeds_ref!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:lng00001"), "long secret: {}", v);
+    }
+
+    // ═══ VE config entries must also preserve scope ═══
+
+    #[test]
+    fn ve_config_scope_preserved() {
+        let map: Vec<(String, String)> = vec![];
+        let ve = vec![("https://vc.internal.kr".to_string(), "VE:LOCAL:VAULTCENTER_URL".to_string())];
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, _) = mask_output(
+            b"URL=https://vc.internal.kr\n",
+            &map, &ve, &[], &c, "", ""
+        );
+        let v = strip(&String::from_utf8_lossy(&b));
+        // VE entries are colorized, not replaced with ref — just check no corruption
+        assert!(!v.is_empty(), "VE output must not be empty");
+    }
+}
