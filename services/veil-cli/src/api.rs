@@ -555,6 +555,7 @@ pub fn enrich_mask_map(map: &mut Vec<(String, String)>) {
 /// Returns (secrets, ve_entries) where:
 /// - secrets: VK: refs (and any unknown prefix) → used for PTY output masking
 /// - ve_entries: VE: refs → used for config tagging
+#[allow(clippy::type_complexity)]
 pub fn parse_mask_map_entries(
     data: &serde_json::Value,
 ) -> (Vec<(String, String)>, Vec<(String, String)>) {

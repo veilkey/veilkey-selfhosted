@@ -21,7 +21,7 @@ func MigrateToEncrypted(dbPath, dbKey string) error {
 	if err != nil {
 		return fmt.Errorf("open plaintext: %w", err)
 	}
-	defer plainDB.Close()
+	defer func() { _ = plainDB.Close() }()
 
 	// 2. Verify readable as plaintext
 	if _, err := plainDB.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
