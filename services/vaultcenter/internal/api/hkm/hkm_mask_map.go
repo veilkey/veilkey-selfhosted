@@ -187,7 +187,7 @@ func (h *Handler) buildMaskMapEntries() []maskEntry {
 		}
 		go func(ag *db.Agent) {
 			ai := agentToInfo(ag)
-			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			configURL := ai.URL() + "/api/configs"
 			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, configURL, nil)
