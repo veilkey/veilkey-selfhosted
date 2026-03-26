@@ -559,6 +559,39 @@ impl VeilKeyClient {
             .map(|s| s.to_string())
             .ok_or_else(|| result.to_string())
     }
+
+    /// Search configs across all agents by key name.
+    /// GET /api/configs/search/{key}
+    pub fn configs_search(&self, key: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/configs/search/{}", self.base_url, urlencoding::encode(key));
+        let resp = self.raw_get(&url).map_err(|e| format!("configs search failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Bulk-update a config value across all agents where it matches old_value.
+    /// POST /api/configs/bulk-update
+    pub fn configs_bulk_update(&self, key: &str, old_value: &str, new_value: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/configs/bulk-update", self.base_url);
+        let body = serde_json::json!({
+            "key": key,
+            "old_value": old_value,
+            "new_value": new_value,
+        });
+        let resp = self.raw_post(&url, &body).map_err(|e| format!("bulk-update failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
+
+    /// Bulk-set a config value on all agents (all-or-nothing).
+    /// POST /api/configs/bulk-set
+    pub fn configs_bulk_set(&self, key: &str, value: &str) -> Result<serde_json::Value, String> {
+        let url = format!("{}/api/configs/bulk-set", self.base_url);
+        let body = serde_json::json!({
+            "key": key,
+            "value": value,
+        });
+        let resp = self.raw_post(&url, &body).map_err(|e| format!("bulk-set failed: {}", e))?;
+        resp.into_json().map_err(|e| format!("decode failed: {}", e))
+    }
 }
 
 /// Build a JSON `{"password":"..."}` body with proper escaping.

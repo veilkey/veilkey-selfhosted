@@ -40,6 +40,9 @@ fn print_usage() {
   veilkey list                      List detected VeilKey entries
   veilkey paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey clear                     Clear session log
+  veilkey config search <key>        Search config across all vaults
+  veilkey config bulk-update <k> <old> <new>  Update matching config values
+  veilkey config bulk-set <key> <val>  Set config on all agents
   veilkey traefik <sub>              Manage Traefik config (init|status|destroy)
   veilkey status                    Show status
   veilkey version                   Show version
@@ -88,6 +91,7 @@ fn main() {
         "status",
         "proxy",
         "paste-mode",
+        "config",
     ];
 
     let subcmd = raw_args.get(1).map(String::as_str).unwrap_or("");
@@ -598,6 +602,126 @@ fn main() {
                 _ => {
                     eprintln!("Unknown ssh subcommand: {}", subcmd);
                     eprintln!("Usage: veilkey ssh <add|list> [args]");
+                    process::exit(1);
+                }
+            }
+        }
+        "config" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for config commands.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let subcmd = cmd_args.first().map(String::as_str).unwrap_or_else(|| {
+                eprintln!("Usage: veilkey config <search|bulk-update|bulk-set> [args]");
+                process::exit(1);
+            });
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match subcmd {
+                "search" => {
+                    let key = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("Usage: veilkey config search <key>");
+                        process::exit(1);
+                    });
+                    match client.configs_search(key) {
+                        Ok(result) => {
+                            if let Some(results) = result["results"].as_array() {
+                                if results.is_empty() {
+                                    println!("No configs found for '{}'", key);
+                                } else {
+                                    for entry in results {
+                                        let label = entry["label"].as_str().unwrap_or("?");
+                                        let value = entry["value"].as_str().unwrap_or("?");
+                                        println!("  {} = {}", label, value);
+                                    }
+                                    println!("\nTotal: {} agent(s)", results.len());
+                                }
+                            } else if let Some(entries) = result["entries"].as_array() {
+                                if entries.is_empty() {
+                                    println!("No configs found for '{}'", key);
+                                } else {
+                                    for entry in entries {
+                                        let agent = entry["agent"].as_str()
+                                            .or_else(|| entry["label"].as_str())
+                                            .unwrap_or("?");
+                                        let value = entry["value"].as_str().unwrap_or("?");
+                                        println!("  {} = {}", agent, value);
+                                    }
+                                    println!("\nTotal: {} agent(s)", entries.len());
+                                }
+                            } else {
+                                println!("{}", serde_json::to_string_pretty(&result).unwrap_or_default());
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] config search failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "bulk-update" => {
+                    if cmd_args.len() < 4 {
+                        eprintln!("Usage: veilkey config bulk-update <key> <old_value> <new_value>");
+                        process::exit(1);
+                    }
+                    let key = &cmd_args[1];
+                    let old_value = &cmd_args[2];
+                    let new_value = &cmd_args[3];
+                    match client.configs_bulk_update(key, old_value, new_value) {
+                        Ok(result) => {
+                            let updated = result["updated"].as_u64().unwrap_or(0);
+                            let total = result["total"].as_u64().unwrap_or(0);
+                            println!("[veilkey] bulk-update: {}/{} agents updated", updated, total);
+                            if let Some(errors) = result["errors"].as_array() {
+                                for err in errors {
+                                    let agent = err["agent"].as_str().unwrap_or("?");
+                                    let msg = err["error"].as_str().unwrap_or("?");
+                                    eprintln!("  ERROR {}: {}", agent, msg);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] bulk-update failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                "bulk-set" => {
+                    if cmd_args.len() < 3 {
+                        eprintln!("Usage: veilkey config bulk-set <key> <value>");
+                        process::exit(1);
+                    }
+                    let key = &cmd_args[1];
+                    let value = &cmd_args[2];
+                    match client.configs_bulk_set(key, value) {
+                        Ok(result) => {
+                            let updated = result["updated"].as_u64().unwrap_or(0);
+                            let total = result["total"].as_u64().unwrap_or(0);
+                            println!("[veilkey] bulk-set: {}/{} agents updated", updated, total);
+                            if let Some(errors) = result["errors"].as_array() {
+                                for err in errors {
+                                    let agent = err["agent"].as_str().unwrap_or("?");
+                                    let msg = err["error"].as_str().unwrap_or("?");
+                                    eprintln!("  ERROR {}: {}", agent, msg);
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] bulk-set failed: {}", e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                unknown => {
+                    eprintln!("Unknown config subcommand: {}", unknown);
+                    eprintln!("Usage: veilkey config <search|bulk-update|bulk-set> [args]");
                     process::exit(1);
                 }
             }
