@@ -448,7 +448,10 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     unsafe { write_all_fd(stdout_fd, &masked); }
                     partial_buf.clear();
                 } else {
-                    std::thread::sleep(Duration::from_millis(20));
+                    // No newline yet — wait for more data (bash error comes after echo).
+                    // 100ms is enough for bash to process and return error output.
+                    // If nothing comes, flush as-is (prompt display).
+                    std::thread::sleep(Duration::from_millis(100));
                     let mut pfd = libc::pollfd { fd: master_fd, events: libc::POLLIN, revents: 0 };
                     let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
                     if ready <= 0 {
