@@ -33,14 +33,7 @@ pub fn spawn_mask_map_sync(
                         if let Ok(mut map) = mask_map.write() {
                             let old_len = map.len();
                             *map = new_map;
-                            // Only log when count actually changes
-                            if map.len() != old_len {
-                                eprintln!(
-                                    "[veilkey] mask_map updated: {} secret(s), {} config(s)",
-                                    map.len(),
-                                    new_ve.len(),
-                                );
-                            }
+                            // Silently update — no terminal output during active shell
                         }
                         if let Ok(mut ve) = ve_map.write() {
                             *ve = new_ve;
