@@ -697,10 +697,7 @@ fn main() {
                     Ok(agents) => {
                         if json_flag {
                             let out = serde_json::json!({ "agents": agents });
-                            println!(
-                                "{}",
-                                serde_json::to_string_pretty(&out).unwrap_or_default()
-                            );
+                            println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
                         } else if agents.is_empty() {
                             println!("No agents registered");
                         } else {

@@ -656,10 +656,7 @@ impl VeilKeyClient {
 
     /// Unarchive an agent by node_id.
     pub fn agents_unarchive(&self, node_id: &str) -> Result<serde_json::Value, String> {
-        let url = format!(
-            "{}/api/agents/by-node/{}/unarchive",
-            self.base_url, node_id
-        );
+        let url = format!("{}/api/agents/by-node/{}/unarchive", self.base_url, node_id);
         let body = serde_json::json!({});
         let resp = self
             .raw_post(&url, &body)
