@@ -32,24 +32,42 @@ pub fn colorize_ve_ref(original: &str, _ve_ref: &str) -> String {
 }
 
 /// Same-width VK ref: adapts format to EXACTLY match original secret width.
-/// Always show full canonical ref (VK:LOCAL:xxx, VK:SSH:xxx, etc.)
-/// Pads with spaces if ref is shorter than original. Never truncates.
 pub fn padded_colorize_ref(vk_ref: &str, original_len: usize) -> String {
     if original_len == 0 {
         return String::new();
     }
-    let ref_visible_len = vk_ref.chars().count();
-    let colored = colorize_ref(vk_ref);
-    if ref_visible_len <= original_len {
-        let pad = original_len - ref_visible_len;
+    let full_len = vk_ref.chars().count();
+    let hash = vk_ref.rsplit(':').next().unwrap_or(vk_ref);
+    let display = if full_len <= original_len {
+        let pad = original_len - full_len;
         if pad > 0 {
-            format!("{}{}", colored, " ".repeat(pad))
+            format!("{}{}", vk_ref, " ".repeat(pad))
         } else {
-            colored
+            vk_ref.to_string()
         }
     } else {
-        colored
-    }
+        let compact = format!("VK:{}", hash);
+        let compact_len = compact.chars().count();
+        if compact_len <= original_len {
+            let pad = original_len - compact_len;
+            if pad > 0 {
+                format!("{}{}", compact, " ".repeat(pad))
+            } else {
+                compact
+            }
+        } else if original_len >= 3 {
+            let h: String = hash.chars().take(original_len).collect();
+            let hlen = h.chars().count();
+            if hlen < original_len {
+                format!("{}{}", h, " ".repeat(original_len - hlen))
+            } else {
+                h
+            }
+        } else {
+            "*".repeat(original_len)
+        }
+    };
+    colorize_ref(&display)
 }
 
 /// ANSI-aware secret replacement. Tokenizes input to separate ANSI escape
@@ -211,28 +229,18 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
-    // Note: cross-chunk mask_map (find_cross_chunk_mask) is intentionally NOT
-    // used here. Erasing already-emitted chars with cursor control (\x1b[nD\x1b[K)
-    // breaks readline's cursor tracking, causing VK:LOC partial fragments on
-    // arrow keys and history recall. The 50ms output coalesce aggregates most
-    // char-by-char echo into single chunks where standard mask_map replacement
-    // handles them. Complete output lines (bash errors, command output) are
-    // always masked by the mask_map loop below.
+    // Cross-chunk mask_map: secrets typed char-by-char span tail + new_text.
+    // Same-width refs ensure cursor position stays correct after erase.
+    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
+        output = m.output;
+    }
 
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
     }
-    // mask_map replacement: skip secrets that the user just typed (readline echo).
-    // Full ref is longer than original → breaks readline cursor → VK:LOC fragments.
-    // Completed output lines (bash errors, command output) are NOT in recent_input,
-    // so they are always masked with full VK:LOCAL:xxx ref.
     for (plaintext, vk_ref) in mask_map {
         if plaintext.is_empty() {
-            continue;
-        }
-        // Skip readline echo — user's own typing should not be replaced mid-line
-        if !recent_input.is_empty() && recent_input.contains(plaintext.as_str()) {
             continue;
         }
         let repl = padded_colorize_ref(vk_ref, UnicodeWidthStr::width(plaintext.as_str()));
@@ -420,7 +428,7 @@ mod tests {
         // ref 17 chars, secret 10 chars → show full ref (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 10);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:6da25530"); // full ref, no truncation
+        assert_eq!(visible.chars().count(), 10); // same-width
     }
 
     #[test]
@@ -437,7 +445,7 @@ mod tests {
         // secret 3 chars, ref 12 chars → full ref shown (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 3);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:abc"); // full ref, no truncation
+        assert_eq!(visible.chars().count(), 3); // same-width
     }
 
     #[test]
@@ -453,7 +461,7 @@ mod tests {
         // secret 1 char, ref 12 chars → full ref shown (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 1);
         let visible = strip_ansi(&result);
-        assert_eq!(visible, "VK:LOCAL:abc"); // full ref, no truncation
+        assert_eq!(visible.chars().count(), 1); // same-width
     }
 
     #[test]
@@ -701,9 +709,11 @@ mod tests {
                     result
                 );
             } else {
-                // Full ref is longer than original — result may be longer
-                assert!(result.len() >= input.len(),
-                    "full-ref result must be >= input for secret_len={}",
+                // Same-width: result width == input width
+                assert_eq!(
+                    result.len(),
+                    input.len(),
+                    "same-width mismatch for secret_len={}",
                     secret_len
                 );
             }
@@ -1083,17 +1093,29 @@ mod tests {
 
     #[test]
     fn test_vk_and_ve_both_applied() {
-        let map = vec![("super-secret-key".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let map = vec![(
+            "super-secret-key".to_string(),
+            "VK:LOCAL:sec12345".to_string(),
+        )];
         let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("key=super-secret-key host=10.0.0.5", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("super-secret-key"), "VK secret must be masked");
-        assert!(visible.contains("10.0.0.5"), "VE config must show plaintext");
+        assert!(
+            !visible.contains("super-secret-key"),
+            "VK secret must be masked"
+        );
+        assert!(
+            visible.contains("10.0.0.5"),
+            "VE config must show plaintext"
+        );
     }
 
     #[test]
     fn test_vk_masked_before_ve_applied() {
-        let map = vec![("secret-10.0.0.5-pass".to_string(), "VK:LOCAL:full1234".to_string())];
+        let map = vec![(
+            "secret-10.0.0.5-pass".to_string(),
+            "VK:LOCAL:full1234".to_string(),
+        )];
         let ve = vec![("10.0.0.5".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("data: secret-10.0.0.5-pass", &map, &ve, "");
         let visible = strip_ansi(&output);
@@ -1152,7 +1174,10 @@ mod tests {
 
     #[test]
     fn domain_ve_preserves_plaintext_vk_replaces() {
-        let map = vec![("secret-password".to_string(), "VK:LOCAL:sec12345".to_string())];
+        let map = vec![(
+            "secret-password".to_string(),
+            "VK:LOCAL:sec12345".to_string(),
+        )];
         let ve = vec![("config-hostname".to_string(), "VE:LOCAL:HOST".to_string())];
         let (output, _) = mask_with_ve("pw=secret-password host=config-hostname", &map, &ve, "");
         let visible = strip_ansi(&output);
@@ -1187,7 +1212,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_with_embedded_ansi_no_panic() {
-        let ve = vec![("\x1b[31mred\x1b[0m".to_string(), "VE:LOCAL:COLOR".to_string())];
+        let ve = vec![(
+            "\x1b[31mred\x1b[0m".to_string(),
+            "VE:LOCAL:COLOR".to_string(),
+        )];
         let (output, _) = mask_with_ve("show \x1b[31mred\x1b[0m here", &[], &ve, "");
         let _ = strip_ansi(&output); // must not panic
     }
@@ -1212,8 +1240,10 @@ mod tests {
         let (output1, tail1) = mask_with_ve("data", &[], &ve, "");
         assert!(!output1.contains(GREEN));
         let (output2, _) = mask_with_ve("base-server", &[], &ve, &tail1);
-        assert!(!output2.contains(GREEN),
-            "VE split across chunks should not be detected (by design)");
+        assert!(
+            !output2.contains(GREEN),
+            "VE split across chunks should not be detected (by design)"
+        );
     }
 
     #[test]
@@ -1236,13 +1266,18 @@ mod tests {
     #[test]
     fn test_ve_substring_of_vk_secret() {
         // VE "db-host" is substring of VK "my-db-host-password" — VK masks first
-        let map = vec![("my-db-host-password".to_string(), "VK:LOCAL:dbh12345".to_string())];
+        let map = vec![(
+            "my-db-host-password".to_string(),
+            "VK:LOCAL:dbh12345".to_string(),
+        )];
         let ve = vec![("db-host".to_string(), "VE:LOCAL:DB_HOST".to_string())];
         let (output, _) = mask_with_ve("cred=my-db-host-password", &map, &ve, "");
         let visible = strip_ansi(&output);
         assert!(!visible.contains("my-db-host-password"));
-        assert!(!visible.contains("db-host"),
-            "VE substring vanishes when VK masks the containing secret");
+        assert!(
+            !visible.contains("db-host"),
+            "VE substring vanishes when VK masks the containing secret"
+        );
     }
 
     #[test]
@@ -1252,17 +1287,29 @@ mod tests {
         let ve = vec![("production".to_string(), "VE:LOCAL:ENV".to_string())];
         let (output, _) = mask_with_ve("env=production", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("prod"), "VK masks 'prod' even inside 'production'");
+        assert!(
+            !visible.contains("prod"),
+            "VK masks 'prod' even inside 'production'"
+        );
     }
 
     #[test]
     fn test_ve_and_vk_same_value() {
         // Same value as both VK and VE — VK takes precedence
-        let map = vec![("shared-value-1234".to_string(), "VK:LOCAL:sh123456".to_string())];
-        let ve = vec![("shared-value-1234".to_string(), "VE:LOCAL:SHARED".to_string())];
+        let map = vec![(
+            "shared-value-1234".to_string(),
+            "VK:LOCAL:sh123456".to_string(),
+        )];
+        let ve = vec![(
+            "shared-value-1234".to_string(),
+            "VE:LOCAL:SHARED".to_string(),
+        )];
         let (output, _) = mask_with_ve("data=shared-value-1234", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("shared-value-1234"), "VK takes precedence");
+        assert!(
+            !visible.contains("shared-value-1234"),
+            "VK takes precedence"
+        );
     }
 
     #[test]
@@ -1321,7 +1368,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_file_path() {
-        let ve = vec![("/etc/config/app.toml".to_string(), "VE:HOST:CFG_PATH".to_string())];
+        let ve = vec![(
+            "/etc/config/app.toml".to_string(),
+            "VE:HOST:CFG_PATH".to_string(),
+        )];
         let (output, _) = mask_with_ve("loading /etc/config/app.toml ...", &[], &ve, "");
         let visible = strip_ansi(&output);
         assert!(visible.contains("/etc/config/app.toml"));
@@ -1330,7 +1380,10 @@ mod tests {
 
     #[test]
     fn test_ve_value_url() {
-        let ve = vec![("https://db.internal:5432".to_string(), "VE:LOCAL:DB_URL".to_string())];
+        let ve = vec![(
+            "https://db.internal:5432".to_string(),
+            "VE:LOCAL:DB_URL".to_string(),
+        )];
         let (output, _) = mask_with_ve("connecting to https://db.internal:5432", &[], &ve, "");
         assert!(output.contains(GREEN));
         assert!(strip_ansi(&output).contains("https://db.internal:5432"));
@@ -1425,7 +1478,10 @@ mod tests {
         let ve = vec![("password".to_string(), "VE:LOCAL:DB_PASS".to_string())];
         let (output, _) = mask_with_ve("pass=password", &map, &ve, "");
         let visible = strip_ansi(&output);
-        assert!(!visible.contains("password"), "VK masks first, VE misses silently");
+        assert!(
+            !visible.contains("password"),
+            "VK masks first, VE misses silently"
+        );
     }
 
     // ── plain_tail tracks original text, not masked ──────────────────
@@ -1437,30 +1493,50 @@ mod tests {
         let ve = vec![("config".to_string(), "VE:LOCAL:CFG".to_string())];
         let (_, tail1) = mask_with_ve("show config here", &[], &ve, "");
         // tail should contain "show config here" (original), not GREEN codes
-        assert!(!tail1.contains("\x1b["), "plain_tail must not contain ANSI codes");
-        assert!(tail1.contains("config"), "plain_tail must contain original text");
+        assert!(
+            !tail1.contains("\x1b["),
+            "plain_tail must not contain ANSI codes"
+        );
+        assert!(
+            tail1.contains("config"),
+            "plain_tail must contain original text"
+        );
     }
 
     #[test]
     fn test_plain_tail_not_affected_by_vk_masking() {
         // Same for VK: plain_tail should be from original, not from masked output
-        let map = vec![("my-password-1234".to_string(), "VK:LOCAL:pw123456".to_string())];
+        let map = vec![(
+            "my-password-1234".to_string(),
+            "VK:LOCAL:pw123456".to_string(),
+        )];
         let (_, tail) = mask_with_ve("echo my-password-1234", &map, &[], "");
         // tail should be original text, so it contains the secret
-        assert!(!tail.contains("\x1b["), "plain_tail must not contain ANSI codes");
-        assert!(tail.contains("my-password-1234"),
-            "plain_tail must contain original text for future cross-chunk matching");
+        assert!(
+            !tail.contains("\x1b["),
+            "plain_tail must not contain ANSI codes"
+        );
+        assert!(
+            tail.contains("my-password-1234"),
+            "plain_tail must contain original text for future cross-chunk matching"
+        );
     }
 
     #[test]
     fn test_plain_tail_enables_cross_chunk_after_ve() {
         // Scenario: chunk1 has VE-colorized text, chunk2 completes a VK secret.
         // plain_tail from chunk1 should be clean plaintext enabling cross-chunk VK detection.
-        let map = vec![("secret-password-12345678".to_string(), "VK:LOCAL:xc123456".to_string())];
+        let map = vec![(
+            "secret-password-12345678".to_string(),
+            "VK:LOCAL:xc123456".to_string(),
+        )];
         let ve = vec![("config".to_string(), "VE:LOCAL:CFG".to_string())];
         // Chunk 1: has VE value + start of VK secret
         let (_, tail1) = mask_with_ve("config: secret-passw", &[], &ve, "");
-        assert!(tail1.contains("secret-passw"), "tail must preserve secret prefix");
+        assert!(
+            tail1.contains("secret-passw"),
+            "tail must preserve secret prefix"
+        );
         // Chunk 2: rest of VK secret
         let (output2, _) = mask_with_ve("ord-12345678 done", &map, &ve, &tail1);
         let visible2 = strip_ansi(&output2);
@@ -1501,15 +1577,15 @@ mod tests {
 
     #[test]
     fn test_mask_output_recent_input_skips() {
-        // When the secret was recently typed (readline echo), mask_map skips it
-        // to prevent full ref (longer than original) from breaking readline cursor.
-        // Completed output lines (bash errors) are NOT in recent_input → always masked.
+        // When the secret was recently typed as input, masking is skipped
+        // (to avoid masking what the user intentionally typed)
         let map = vec![("typed-secret-12".to_string(), "VK:LOCAL:skip1".to_string())];
         let (output, _) = mask_with_input("typed-secret-12", &map, "typed-secret-12", "");
         let visible = strip_ansi(&output);
-        // Readline echo: secret should NOT be replaced (prevents VK:LOC fragments)
-        assert!(visible.contains("typed-secret-12"),
-            "readline echo should pass through to prevent cursor desync");
+        // The mask_map replacement still happens because recent_input only
+        // affects pattern-detected secrets, not mask_map entries
+        // mask_map is always applied regardless of recent_input
+        assert!(!visible.contains("typed-secret-12") || visible.contains("VK:LOCAL:skip1"));
     }
 
     #[test]
@@ -1643,5 +1719,327 @@ mod tests {
             "1000 entries took {:?} — too slow",
             elapsed
         );
+    }
+}
+
+#[cfg(test)]
+mod same_width_tests {
+    use super::*;
+
+    fn strip_ansi(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn vw(vk_ref: &str, len: usize) -> usize {
+        strip_ansi(&padded_colorize_ref(vk_ref, len))
+            .chars()
+            .count()
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs
+            .iter()
+            .map(|(s, r)| (s.to_string(), r.to_string()))
+            .collect()
+    }
+
+    // ── Same-width guarantee ────────────────────────────────────
+    #[test]
+    fn sw_full_17() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 17), 17);
+    }
+    #[test]
+    fn sw_compact_11() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 11), 11);
+        assert_eq!(
+            strip_ansi(&padded_colorize_ref("VK:LOCAL:6da25530", 11)),
+            "VK:6da25530"
+        );
+    }
+    #[test]
+    fn sw_hash_8() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 8), 8);
+    }
+    #[test]
+    fn sw_padded_9() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 9), 9);
+    }
+    #[test]
+    fn sw_stars_2() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 2), 2);
+        assert_eq!(
+            strip_ansi(&padded_colorize_ref("VK:LOCAL:6da25530", 2)),
+            "**"
+        );
+    }
+    #[test]
+    fn sw_star_1() {
+        assert_eq!(vw("VK:LOCAL:6da25530", 1), 1);
+    }
+    #[test]
+    fn sw_zero() {
+        assert_eq!(padded_colorize_ref("VK:LOCAL:6da25530", 0), "");
+    }
+    #[test]
+    fn sw_all_1_50() {
+        for l in 1..=50 {
+            assert_eq!(vw("VK:LOCAL:6da25530", l), l, "len={}", l);
+        }
+    }
+    #[test]
+    fn sw_temp_1_50() {
+        for l in 1..=50 {
+            assert_eq!(vw("VK:TEMP:abc12345", l), l, "len={}", l);
+        }
+    }
+
+    // ── Cross-chunk erase + same-width ──────────────────────────
+    #[test]
+    fn cc_erase_same_width() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let r = find_cross_chunk_mask("(VEIL) $ Ghdrhkdgh1", "@", &map).unwrap();
+        assert!(!r.output.contains("Ghdrhkdgh1@"));
+    }
+    #[test]
+    fn cc_no_vkloc_fragments() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let r = find_cross_chunk_mask("$ Ghdrhkdg", "h1@", &map).unwrap();
+        let v = strip_ansi(&r.output);
+        assert!(!v.contains("VK:6dVK:"), "no VK:LOC fragments: [{}]", v);
+    }
+
+    // ── Arrow key safety ────────────────────────────────────────
+    #[test]
+    fn cc_skip_escape() {
+        let m = mk(&[("s99", "VK:LOCAL:x")]);
+        assert!(find_cross_chunk_mask("s9", "9\x1b[C", &m).is_none());
+    }
+    #[test]
+    fn cc_skip_down_arrow() {
+        let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        assert!(find_cross_chunk_mask("tail", "\x1b[B\x1b[2K", &m).is_none());
+    }
+    #[test]
+    fn cc_fires_on_cr() {
+        let m = mk(&[("s99", "VK:LOCAL:y")]);
+        assert!(find_cross_chunk_mask("s9", "9\r", &m).is_some());
+    }
+
+    // ── Repeated invocations ────────────────────────────────────
+    #[test]
+    fn cc_repeated_10x() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = String::new();
+        for i in 0..10 {
+            tail.push_str("(VEIL) $ ");
+            let r = find_cross_chunk_mask(&format!("{}Ghdrhkdgh1", tail), "@\r", &map);
+            assert!(r.is_some(), "#{}", i);
+            tail.push_str("Ghdrhkdgh1@\nbash: VK:6da25530: not found\n");
+            if tail.len() > 4096 {
+                tail = tail[tail.len() - 4096..].to_string();
+            }
+        }
+    }
+
+    // ── 103 secrets ─────────────────────────────────────────────
+    #[test]
+    fn cc_103_secrets() {
+        let mut map: Vec<(String, String)> = (0..102)
+            .map(|i| (format!("other_{:04}", i), format!("VK:LOCAL:{:08x}", i)))
+            .collect();
+        map.push(("Ghdrhkdgh1@".into(), "VK:LOCAL:6da25530".into()));
+        let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@", &map);
+        assert!(r.is_some());
+    }
+
+    // ── Security ────────────────────────────────────────────────
+    #[test]
+    fn sec_no_plaintext() {
+        let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@\r", &m).unwrap();
+        assert!(!r.output.contains("Ghdrhkdgh1@"));
+    }
+    #[test]
+    fn sec_empty_map() {
+        assert!(find_cross_chunk_mask("x", "y", &[]).is_none());
+    }
+    #[test]
+    fn sec_long_tail() {
+        let m = mk(&[("needle", "VK:LOCAL:n")]);
+        let t = format!("{}needl", "x".repeat(50000));
+        assert!(find_cross_chunk_mask(&t, "e", &m).is_some());
+    }
+    #[test]
+    fn sec_unicode() {
+        let m = mk(&[("비밀abc", "VK:LOCAL:k")]);
+        assert!(find_cross_chunk_mask("비밀ab", "c", &m).is_some());
+    }
+    #[test]
+    fn sec_special_chars() {
+        let m = mk(&[("p@$$!", "VK:LOCAL:s")]);
+        assert!(find_cross_chunk_mask("p@$$", "!", &m).is_some());
+    }
+
+    // ── Stdin guard ─────────────────────────────────────────────
+    #[test]
+    fn sg_blocks_env() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("SuperSecret", "VK:LOCAL:e")]);
+        let mut b = String::new();
+        assert_eq!(
+            check_stdin_for_secrets(b"export X=SuperSecret\r", &mut b, &m),
+            StdinGuardResult::Blocked
+        );
+    }
+    #[test]
+    fn sg_multi_chunk() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("pass123", "VK:LOCAL:p")]);
+        let mut b = String::new();
+        check_stdin_for_secrets(b"pass", &mut b, &m);
+        assert_eq!(
+            check_stdin_for_secrets(b"123\r", &mut b, &m),
+            StdinGuardResult::Blocked
+        );
+    }
+    #[test]
+    fn sg_safe_after_ctrl_c() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("secret", "VK:LOCAL:c")]);
+        let mut b = String::new();
+        check_stdin_for_secrets(b"secret", &mut b, &m);
+        check_stdin_for_secrets(b"\x03", &mut b, &m);
+        assert_eq!(
+            check_stdin_for_secrets(b"ls\r", &mut b, &m),
+            StdinGuardResult::Forward
+        );
+    }
+    #[test]
+    fn sg_empty_enter() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("s", "VK:LOCAL:x")]);
+        let mut b = String::new();
+        assert_eq!(
+            check_stdin_for_secrets(b"\r", &mut b, &m),
+            StdinGuardResult::Forward
+        );
+    }
+    #[test]
+    fn sg_binary_no_panic() {
+        use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+        let m = mk(&[("s", "VK:LOCAL:x")]);
+        let mut b = String::new();
+        assert_eq!(
+            check_stdin_for_secrets(&[0xFF, 0xFE, 0x0D], &mut b, &m),
+            StdinGuardResult::Forward
+        );
+    }
+    #[test]
+    fn sg_line_buf_capped() {
+        use crate::pty::session::{check_stdin_for_secrets, MAX_LINE_BUF};
+        let m = mk(&[("x", "VK:LOCAL:x")]);
+        let mut b = String::new();
+        check_stdin_for_secrets(&vec![b'A'; 100_000], &mut b, &m);
+        assert!(b.len() <= MAX_LINE_BUF);
+    }
+}
+
+#[cfg(test)]
+mod security_masking_tests {
+    use super::*;
+    use crate::api::VeilKeyClient;
+    use unicode_width::UnicodeWidthStr;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn mask(data: &str, map: &[(String, String)], tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, "", tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+    fn mask_ri(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+
+    #[test]
+    fn sec_password_echo_masked() {
+        let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = mask("Ghdrhkdgh1@", &m, "");
+        assert!(!strip(&out).contains("Ghdrhkdgh1@"), "SECURITY: password leaked: {}", strip(&out));
+    }
+
+    #[test]
+    fn sec_ansi_escape_does_not_bypass() {
+        let m = mk(&[("hunter2secret", "VK:LOCAL:abc12345")]);
+        let (out, _) = mask("\x1b[32m$ \x1b[0mhunter2secret", &m, "");
+        assert!(!strip(&out).contains("hunter2secret"), "SECURITY: ANSI bypass: {}", strip(&out));
+    }
+
+    #[test]
+    fn sec_multiple_secrets_all_masked() {
+        let m = mk(&[("password123!", "VK:LOCAL:aaa11111"), ("apikey-xyz99", "VK:LOCAL:bbb22222")]);
+        let (out, _) = mask("password123! and apikey-xyz99 here", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("password123!"), "first leaked");
+        assert!(!v.contains("apikey-xyz99"), "second leaked");
+    }
+
+    #[test]
+    fn sec_cross_chunk_no_leak() {
+        let m = mk(&[("password1234", "VK:LOCAL:ccc33333")]);
+        let (_, tail) = mask("echo passwo", &m, "");
+        let (out2, _) = mask("rd1234\n", &m, &tail);
+        assert!(!strip(&out2).contains("password1234"), "SECURITY: cross-chunk leak: {}", strip(&out2));
+    }
+
+    #[test]
+    fn sec_vk_ref_not_double_masked() {
+        let m = mk(&[("password123!", "VK:LOCAL:ddd44444")]);
+        let (out, _) = mask("using VK:LOCAL:ddd44444 ok", &m, "");
+        assert!(strip(&out).contains("ddd44444"), "VK ref disappeared: {}", strip(&out));
+    }
+
+    #[test]
+    fn sec_empty_secret_safe() {
+        let m = mk(&[("", "VK:LOCAL:eee55555"), ("real_secret!", "VK:LOCAL:fff66666")]);
+        let (out, _) = mask("text with real_secret! here", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("real_secret!"), "non-empty leaked");
+        assert!(v.contains("text with"), "text corrupted");
+    }
+
+    #[test]
+    fn sec_mask_map_beats_recent_input() {
+        let m = mk(&[("MyP@ssw0rd!x", "VK:LOCAL:hhh88888")]);
+        let (out, _) = mask_ri("MyP@ssw0rd!x", &m, "MyP@ssw0rd!x", "");
+        assert!(!strip(&out).contains("MyP@ssw0rd!x"),
+            "SECURITY: mask-map must replace even with recent_input: {}", strip(&out));
+    }
+
+    #[test]
+    fn sec_same_width_no_length_leak() {
+        let m = mk(&[("short_pw", "VK:LOCAL:iii99999")]);
+        let (out, _) = mask("short_pw", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("short_pw"), "secret leaked");
+        assert_eq!(v.trim().chars().count(), 8, "width mismatch: {} '{}'", v.trim().chars().count(), v.trim());
+    }
+
+    #[test]
+    fn sec_newline_in_secret_masked() {
+        let m = mk(&[("line1\nline2", "VK:SSH:jjj00000")]);
+        let (out, _) = mask("line1\nline2", &m, "");
+        assert!(!strip(&out).contains("line1\nline2"), "multiline secret leaked");
     }
 }
