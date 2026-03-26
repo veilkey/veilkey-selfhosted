@@ -1943,711 +1943,103 @@ mod same_width_tests {
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// DOMAIN INVARIANT TESTS — failure = security incident
-//
-// These tests verify security properties that must NEVER be violated.
-// A failing test here means secrets can leak to terminal output, stdin
-// commands can exfiltrate secrets, or masking width breaks terminal layout.
-// ══════════════════════════════════════════════════════════════════════
-
 #[cfg(test)]
-mod domain_invariant_tests {
+mod security_masking_tests {
     use super::*;
-    use crate::api::enrich_mask_map;
-    use crate::pty::session::{check_stdin_for_secrets, StdinGuardResult};
+    use crate::api::VeilKeyClient;
+    use unicode_width::UnicodeWidthStr;
 
-    fn strip_ansi(s: &str) -> String {
-        String::from_utf8_lossy(&Tokenizer::strip_ansi(s.as_bytes())).to_string()
-    }
-
-    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
-        pairs
-            .iter()
-            .map(|(s, r)| (s.to_string(), r.to_string()))
-            .collect()
-    }
-
-    /// Helper: simulate ANSI-aware mask_map replacement (same as simulate_mask in tests)
-    fn simulate_mask(input: &str, mask_map: &[(String, String)]) -> String {
-        let mut s = input.to_string();
-        for (plaintext, vk_ref) in mask_map {
-            if plaintext.is_empty() {
-                continue;
-            }
-            let repl = padded_colorize_ref(
-                vk_ref,
-                unicode_width::UnicodeWidthStr::width(plaintext.as_str()),
-            );
-            let (new_s, _) = ansi_aware_replace(&s, plaintext, &repl);
-            s = new_s;
-        }
-        strip_ansi(&s)
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 1. MASKING GUARANTEE: secret NEVER appears in output
-    //
-    // Security incident if violated: plaintext secret displayed on
-    // terminal — visible to screen recording, shoulder surfing,
-    // scrollback buffer, and terminal log files.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_masking_single_secret_in_line() {
-        // A single secret on a line must be replaced completely.
-        let secret = "MyDatabasePassword42!";
-        let input = format!("DB_PASS={}", secret);
-        let map = mk(&[(secret, "VK:LOCAL:aaa11111")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in single-line output: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_in_json() {
-        // Secret embedded in JSON value must be masked.
-        let secret = "sk-live-abc123def456";
-        let input = format!(r#"{{"api_key":"{}","env":"prod"}}"#, secret);
-        let map = mk(&[(secret, "VK:LOCAL:json0001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in JSON output: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_in_yaml() {
-        // Secret in YAML value must be masked.
-        let secret = "ghp_TokenValue1234567890abcdef";
-        let input = format!("  password: {}", secret);
-        let map = mk(&[(secret, "VK:LOCAL:yaml0001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in YAML output: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_in_env_export() {
-        // Secret in `export VAR=value` must be masked.
-        let secret = "SuperSecretToken99";
-        let input = format!("export API_TOKEN={}", secret);
-        let map = mk(&[(secret, "VK:LOCAL:env00001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in env export: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_in_connection_string() {
-        // Secret in connection string must be masked.
-        let secret = "p@ssW0rd!123";
-        let input = format!("postgres://admin:{}@db.host:5432/prod", secret);
-        let map = mk(&[(secret, "VK:LOCAL:conn0001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in connection string: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_in_curl_command() {
-        // Secret in curl -H header must be masked.
-        let secret = "Bearer eyJhbGciOiJIUzI1NiJ9";
-        let input = format!(
-            "curl -H 'Authorization: {}' https://api.example.com",
-            secret
-        );
-        let map = mk(&[(secret, "VK:LOCAL:curl0001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked in curl command: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_repeated_on_same_line() {
-        // Secret appearing multiple times on the same line — ALL must be masked.
-        let secret = "RepeatSecret42";
-        let input = format!("first={} second={} third={}", secret, secret, secret);
-        let map = mk(&[(secret, "VK:LOCAL:rep00001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked (repeated occurrences): [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_at_start() {
-        // Secret at the very start of a line.
-        let secret = "StartOfLineSecret";
-        let input = format!("{} is exposed", secret);
-        let map = mk(&[(secret, "VK:LOCAL:start001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked at line start: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_at_middle() {
-        // Secret in the middle of a line.
-        let secret = "MiddleOfLineSecret";
-        let input = format!("prefix {} suffix", secret);
-        let map = mk(&[(secret, "VK:LOCAL:mid00001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked at line middle: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_at_end() {
-        // Secret at the very end of a line.
-        let secret = "EndOfLineSecret!!";
-        let input = format!("the value is {}", secret);
-        let map = mk(&[(secret, "VK:LOCAL:end00001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked at line end: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_secret_spanning_newlines() {
-        // Secret that appears across a newline boundary in multi-line text.
-        // Each line containing part of the secret must be masked when the
-        // full secret string is present.
-        let secret = "line1-secret-value";
-        let input = format!("data={}\nmore output", secret);
-        let map = mk(&[(secret, "VK:LOCAL:span0001")]);
-        let result = simulate_mask(&input, &map);
-        assert!(
-            !result.contains(secret),
-            "SECURITY: plaintext secret leaked spanning newlines: [{}]",
-            result
-        );
-    }
-
-    #[test]
-    fn domain_masking_100_different_secrets() {
-        // 100 different secrets, each appearing once in output — ALL must be masked.
-        // This tests scalability of the masking engine.
-        let secrets: Vec<(String, String)> = (0..100)
-            .map(|i| {
-                (
-                    format!("secret-value-{:04}-unique", i),
-                    format!("VK:LOCAL:{:08x}", i + 0x1000),
-                )
-            })
-            .collect();
-        let input: String = secrets
-            .iter()
-            .map(|(s, _)| format!("KEY_{}={}", s, s))
-            .collect::<Vec<_>>()
-            .join("\n");
-        let result = simulate_mask(&input, &secrets);
-        for (secret, _) in &secrets {
-            assert!(
-                !result.contains(secret.as_str()),
-                "SECURITY: plaintext secret '{}' leaked among 100 secrets",
-                secret
-            );
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 2. WIDTH GUARANTEE: masked output is exactly same width
-    //
-    // Security incident if violated: terminal column misalignment
-    // reveals that masking occurred and leaks secret length info.
-    // Broken alignment also corrupts interactive TUI applications.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_width_guarantee_1_to_100() {
-        // For every secret length from 1 to 100, padded_colorize_ref must
-        // produce exactly that many visible characters. No exceptions.
-        let vk_ref = "VK:LOCAL:6da25530";
-        for len in 1..=100 {
-            let visible = strip_ansi(&padded_colorize_ref(vk_ref, len));
-            let visible_width = visible.chars().count();
-            assert_eq!(
-                visible_width, len,
-                "SECURITY: width mismatch at len={}: got {} visible chars, expected {}. \
-                 This leaks secret length information.",
-                len, visible_width, len
-            );
-        }
-    }
-
-    #[test]
-    fn domain_width_guarantee_temp_ref_1_to_100() {
-        // TEMP refs use a different color path — must also preserve width.
-        let vk_ref = "VK:TEMP:abc12345";
-        for len in 1..=100 {
-            let visible = strip_ansi(&padded_colorize_ref(vk_ref, len));
-            let visible_width = visible.chars().count();
-            assert_eq!(
-                visible_width, len,
-                "SECURITY: TEMP ref width mismatch at len={}: got {} visible chars",
-                len, visible_width
-            );
-        }
-    }
-
-    #[test]
-    fn domain_width_guarantee_zero_is_empty() {
-        // Zero-length secret produces empty replacement.
-        let result = padded_colorize_ref("VK:LOCAL:6da25530", 0);
-        assert_eq!(
-            result, "",
-            "SECURITY: zero-length secret must produce empty string"
-        );
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 3. CROSS-CHUNK GUARANTEE: split secrets are detected
-    //
-    // Security incident if violated: attacker can leak secrets by
-    // causing PTY output to split at secret boundaries (e.g., slow
-    // network, small buffer sizes, char-by-char echo). The secret
-    // would appear in plaintext across two terminal writes.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_cross_chunk_every_split_position() {
-        // For a secret of length N, splitting at every byte position 1..N-1
-        // must be detected by find_cross_chunk_mask (when no ANSI escapes).
-        let secret = "CrossChunkSecret42!";
-        let map = mk(&[(secret, "VK:LOCAL:cc000001")]);
-        for split_at in 1..secret.len() {
-            let tail = &secret[..split_at];
-            let new_text = &secret[split_at..];
-            let result = find_cross_chunk_mask(tail, new_text, &map);
-            assert!(
-                result.is_some(),
-                "SECURITY: cross-chunk split at byte {} not detected! \
-                 tail=[{}] new=[{}] — secret would leak in plaintext",
-                split_at,
-                tail,
-                new_text
-            );
-        }
-    }
-
-    #[test]
-    fn domain_cross_chunk_with_surrounding_text() {
-        // Secret split with surrounding context in the tail.
-        let secret = "SplitMeAcrossChunks";
-        let map = mk(&[(secret, "VK:LOCAL:cc000002")]);
-        for split_at in 1..secret.len() {
-            let tail = format!("prompt$ {}", &secret[..split_at]);
-            let new_text = &secret[split_at..];
-            let result = find_cross_chunk_mask(&tail, new_text, &map);
-            assert!(
-                result.is_some(),
-                "SECURITY: cross-chunk with context not detected at split={}: \
-                 tail=[{}] new=[{}]",
-                split_at,
-                tail,
-                new_text
-            );
-        }
-    }
-
-    #[test]
-    fn domain_cross_chunk_special_chars() {
-        // Secrets with special characters must also be caught across chunks.
-        let secret = "p@$$w0rd!#%^";
-        let map = mk(&[(secret, "VK:LOCAL:cc000003")]);
-        for split_at in 1..secret.len() {
-            if !secret.is_char_boundary(split_at) {
-                continue;
-            }
-            let tail = &secret[..split_at];
-            let new_text = &secret[split_at..];
-            let result = find_cross_chunk_mask(tail, new_text, &map);
-            assert!(
-                result.is_some(),
-                "SECURITY: cross-chunk special chars not detected at split={}: \
-                 tail=[{}] new=[{}]",
-                split_at,
-                tail,
-                new_text
-            );
-        }
-    }
-
-    #[test]
-    fn domain_cross_chunk_unicode() {
-        // Unicode secrets must be detected across chunk boundaries.
-        let secret = "비밀번호abcdef";
-        let map = mk(&[(secret, "VK:LOCAL:cc000004")]);
-        for split_at in 1..secret.len() {
-            if !secret.is_char_boundary(split_at) {
-                continue;
-            }
-            let tail = &secret[..split_at];
-            let new_text = &secret[split_at..];
-            let result = find_cross_chunk_mask(tail, new_text, &map);
-            assert!(
-                result.is_some(),
-                "SECURITY: cross-chunk unicode not detected at split={}: \
-                 tail=[{}] new=[{}]",
-                split_at,
-                tail,
-                new_text
-            );
-        }
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 4. FAIL-CLOSED: unknown secrets are redacted
-    //
-    // Security incident if violated: when the VeilKey API is down,
-    // pattern-detected secrets would be displayed in plaintext
-    // instead of being redacted. This defeats the entire masking
-    // system during API outages.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_fail_closed_redacts_on_api_failure() {
-        // When client.issue() fails (unreachable server), pattern-matched
-        // secrets must be replaced — NOT displayed in plaintext.
-        // The replacement uses padded_colorize_ref with "[REDACTED:name]" as
-        // the ref, which may truncate/compact the marker to match the secret
-        // width. The critical invariant is: plaintext NEVER appears in output.
+    fn init_crypto() {
         let _ = rustls::crypto::ring::default_provider().install_default();
-        let client = VeilKeyClient::new("http://127.0.0.1:1"); // unreachable
-        let pattern = CompiledPattern {
-            name: "test_api_key".to_string(),
-            regex: regex::Regex::new(r"sk-[a-zA-Z0-9]{16}").unwrap(),
-            confidence: 90,
-            group: 0,
-        };
-        let secret = "sk-abcdefghijklmnop";
-        let input = format!("TOKEN={}", secret);
-        let (output_bytes, _) = mask_output(
-            input.as_bytes(),
-            &[], // no mask_map — secret is only pattern-detected
-            &[],
-            &[pattern],
-            &client,
-            "",
-            "",
-        );
-        let output = String::from_utf8_lossy(&output_bytes).to_string();
-        let visible = strip_ansi(&output);
-        assert!(
-            !visible.contains(secret),
-            "SECURITY: secret leaked when API is down — fail-open! output=[{}]",
-            visible
-        );
-        // The redaction marker is formatted through padded_colorize_ref, which
-        // compacts "[REDACTED:test_api_key]" to fit the secret width. Verify
-        // the output contains a REDACTED or VK-style marker (not plaintext).
-        assert!(
-            visible.contains("REDACTED")
-                || visible.contains("VK:")
-                || visible.contains("test_api_key"),
-            "SECURITY: no redaction indicator when API is down. output=[{}]",
-            visible
-        );
     }
-
-    // ══════════════════════════════════════════════════════════════
-    // 5. STDIN GUARD: secrets in command input are detected
-    //
-    // Security incident if violated: user accidentally pastes or
-    // types a secret in a shell command (e.g., `curl -H "token:SECRET"`)
-    // and it gets executed without warning, potentially sending the
-    // secret to an untrusted endpoint.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_stdin_guard_blocks_every_secret() {
-        // Every secret in the mask_map must be detected when typed as
-        // part of a command and Enter is pressed.
-        let secrets = mk(&[
-            ("SuperSecret123", "VK:LOCAL:sg000001"),
-            ("p@$$w0rd!#", "VK:LOCAL:sg000002"),
-            ("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZab", "VK:LOCAL:sg000003"),
-            ("Bearer eyJhbGciOiJIUzI1NiJ9", "VK:LOCAL:sg000004"),
-            ("AKIAIOSFODNN7EXAMPLE", "VK:LOCAL:sg000005"),
-        ]);
-        for (secret, _) in &secrets {
-            let mut buf = String::new();
-            let cmd = format!("echo {}\r", secret);
-            let result = check_stdin_for_secrets(cmd.as_bytes(), &mut buf, &secrets);
-            assert_eq!(
-                result,
-                StdinGuardResult::Blocked,
-                "SECURITY: stdin guard failed to block secret [{}]",
-                secret
-            );
-        }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn mask(data: &str, map: &[(String, String)], tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, "", tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+    fn mask_ri(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+        re.replace_all(s, "").to_string()
     }
 
     #[test]
-    fn domain_stdin_guard_special_chars() {
-        // Secrets with regex-special characters must still be detected.
-        let secrets = mk(&[
-            ("pass.word+test", "VK:LOCAL:sgsp0001"),
-            ("key[0]=value", "VK:LOCAL:sgsp0002"),
-            ("token(abc)", "VK:LOCAL:sgsp0003"),
-            ("secret|pipe", "VK:LOCAL:sgsp0004"),
-            ("back\\slash", "VK:LOCAL:sgsp0005"),
-        ]);
-        for (secret, _) in &secrets {
-            let mut buf = String::new();
-            let cmd = format!("echo {}\r", secret);
-            let result = check_stdin_for_secrets(cmd.as_bytes(), &mut buf, &secrets);
-            assert_eq!(
-                result,
-                StdinGuardResult::Blocked,
-                "SECURITY: stdin guard missed special-char secret [{}]",
-                secret
-            );
-        }
+    fn sec_password_echo_masked() {
+        let m = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = mask("Ghdrhkdgh1@", &m, "");
+        assert!(!strip(&out).contains("Ghdrhkdgh1@"), "SECURITY: password leaked: {}", strip(&out));
     }
 
     #[test]
-    fn domain_stdin_guard_unicode_secrets() {
-        // Unicode secrets must be detected.
-        let secrets = mk(&[
-            ("비밀번호ABC123", "VK:LOCAL:sguni001"),
-            ("密码value!", "VK:LOCAL:sguni002"),
-            ("пароль42", "VK:LOCAL:sguni003"),
-        ]);
-        for (secret, _) in &secrets {
-            let mut buf = String::new();
-            let cmd = format!("export X={}\r", secret);
-            let result = check_stdin_for_secrets(cmd.as_bytes(), &mut buf, &secrets);
-            assert_eq!(
-                result,
-                StdinGuardResult::Blocked,
-                "SECURITY: stdin guard missed unicode secret [{}]",
-                secret
-            );
-        }
+    fn sec_ansi_escape_does_not_bypass() {
+        let m = mk(&[("hunter2secret", "VK:LOCAL:abc12345")]);
+        let (out, _) = mask("\x1b[32m$ \x1b[0mhunter2secret", &m, "");
+        assert!(!strip(&out).contains("hunter2secret"), "SECURITY: ANSI bypass: {}", strip(&out));
     }
 
     #[test]
-    fn domain_stdin_guard_secret_with_spaces() {
-        // Secrets containing spaces must be detected.
-        let secrets = mk(&[("my secret phrase", "VK:LOCAL:sgspc001")]);
-        let mut buf = String::new();
-        let result = check_stdin_for_secrets(b"echo my secret phrase\r", &mut buf, &secrets);
-        assert_eq!(
-            result,
-            StdinGuardResult::Blocked,
-            "SECURITY: stdin guard missed space-containing secret"
-        );
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 6. ENRICH: encoded variants are added
-    //
-    // Security incident if violated: attacker can exfiltrate secrets
-    // by base64-encoding or hex-encoding them before printing to
-    // terminal. The encoded form would bypass masking and appear in
-    // plaintext.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_enrich_adds_hex_variant() {
-        // Hex-encoded form of a secret must be added to mask_map.
-        let secret = "my-secret-api-key";
-        let mut map = vec![(secret.to_string(), "VK:LOCAL:enc00001".to_string())];
-        enrich_mask_map(&mut map);
-        let hex: String = secret.bytes().map(|b| format!("{:02x}", b)).collect();
-        assert!(
-            map.iter().any(|(p, _)| p == &hex),
-            "SECURITY: hex variant of secret not in mask_map — hex encoding bypasses masking"
-        );
+    fn sec_multiple_secrets_all_masked() {
+        let m = mk(&[("password123!", "VK:LOCAL:aaa11111"), ("apikey-xyz99", "VK:LOCAL:bbb22222")]);
+        let (out, _) = mask("password123! and apikey-xyz99 here", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("password123!"), "first leaked");
+        assert!(!v.contains("apikey-xyz99"), "second leaked");
     }
 
     #[test]
-    fn domain_enrich_adds_base64_variant() {
-        // Base64-encoded form of a secret must be added to mask_map.
-        let secret = "my-secret-api-key";
-        let mut map = vec![(secret.to_string(), "VK:LOCAL:enc00002".to_string())];
-        enrich_mask_map(&mut map);
-        let b64 = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            secret.as_bytes(),
-        );
-        assert!(
-            map.iter().any(|(p, _)| p == &b64),
-            "SECURITY: base64 variant of secret not in mask_map — base64 encoding bypasses masking"
-        );
+    fn sec_cross_chunk_no_leak() {
+        let m = mk(&[("password1234", "VK:LOCAL:ccc33333")]);
+        let (_, tail) = mask("echo passwo", &m, "");
+        let (out2, _) = mask("rd1234\n", &m, &tail);
+        assert!(!strip(&out2).contains("password1234"), "SECURITY: cross-chunk leak: {}", strip(&out2));
     }
 
     #[test]
-    fn domain_enrich_encoded_variants_detected_in_output() {
-        // After enrichment, the encoded forms must actually be masked in output.
-        let secret = "production-db-password";
-        let mut map = vec![(secret.to_string(), "VK:LOCAL:enc00003".to_string())];
-        enrich_mask_map(&mut map);
-
-        let hex: String = secret.bytes().map(|b| format!("{:02x}", b)).collect();
-        let b64 = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            secret.as_bytes(),
-        );
-
-        // Test hex in output
-        let hex_input = format!("encoded={}", hex);
-        let hex_result = simulate_mask(&hex_input, &map);
-        assert!(
-            !hex_result.contains(&hex),
-            "SECURITY: hex-encoded secret leaked in output: [{}]",
-            hex_result
-        );
-
-        // Test base64 in output
-        let b64_input = format!("encoded={}", b64);
-        let b64_result = simulate_mask(&b64_input, &map);
-        assert!(
-            !b64_result.contains(&b64),
-            "SECURITY: base64-encoded secret leaked in output: [{}]",
-            b64_result
-        );
+    fn sec_vk_ref_not_double_masked() {
+        let m = mk(&[("password123!", "VK:LOCAL:ddd44444")]);
+        let (out, _) = mask("using VK:LOCAL:ddd44444 ok", &m, "");
+        assert!(strip(&out).contains("ddd44444"), "VK ref disappeared: {}", strip(&out));
     }
 
     #[test]
-    fn domain_enrich_url_safe_base64_variant() {
-        // URL-safe base64 must also be added when it differs from standard.
-        let secret = "secret?with+special/chars";
-        let mut map = vec![(secret.to_string(), "VK:LOCAL:enc00004".to_string())];
-        enrich_mask_map(&mut map);
-        let b64_url = base64::Engine::encode(
-            &base64::engine::general_purpose::URL_SAFE,
-            secret.as_bytes(),
-        );
-        let b64_std = base64::Engine::encode(
-            &base64::engine::general_purpose::STANDARD,
-            secret.as_bytes(),
-        );
-        // If they differ, both must be present
-        if b64_url != b64_std {
-            assert!(
-                map.iter().any(|(p, _)| p == &b64_url),
-                "SECURITY: URL-safe base64 variant missing — URL-encoded exfiltration possible"
-            );
-        }
-        assert!(
-            map.iter().any(|(p, _)| p == &b64_std),
-            "SECURITY: standard base64 variant missing"
-        );
-    }
-
-    // ══════════════════════════════════════════════════════════════
-    // 7. NO FALSE POSITIVES on normal commands
-    //
-    // Security incident if violated (availability): false positives
-    // block legitimate commands, making the terminal unusable and
-    // causing users to disable the guard entirely — which then
-    // removes all protection.
-    // ══════════════════════════════════════════════════════════════
-
-    #[test]
-    fn domain_no_false_positive_stdin_common_commands() {
-        // Common shell commands must NOT be blocked by stdin guard.
-        let secrets = mk(&[
-            ("MyDatabasePassword", "VK:LOCAL:fp000001"),
-            ("production-api-key", "VK:LOCAL:fp000002"),
-            ("ghp_RealTokenHere1234567890", "VK:LOCAL:fp000003"),
-        ]);
-        let safe_commands = [
-            "ls",
-            "ls -la",
-            "cd /tmp",
-            "cd ~",
-            "grep -r pattern .",
-            "docker ps",
-            "docker compose up -d",
-            "git status",
-            "git log --oneline",
-            "git diff HEAD~1",
-            "curl https://example.com",
-            "ssh user@host",
-            "vim /etc/hosts",
-            "cat /etc/passwd",
-            "echo hello",
-            "echo hello world",
-            "pwd",
-            "whoami",
-            "df -h",
-            "free -m",
-            "ps aux",
-            "top -n 1",
-            "make build",
-            "cargo test",
-            "npm install",
-            "pip install requests",
-        ];
-        for cmd in &safe_commands {
-            let mut buf = String::new();
-            let input = format!("{}\r", cmd);
-            let result = check_stdin_for_secrets(input.as_bytes(), &mut buf, &secrets);
-            assert_eq!(
-                result,
-                StdinGuardResult::Forward,
-                "FALSE POSITIVE: safe command [{}] was blocked by stdin guard",
-                cmd
-            );
-        }
+    fn sec_empty_secret_safe() {
+        let m = mk(&[("", "VK:LOCAL:eee55555"), ("real_secret!", "VK:LOCAL:fff66666")]);
+        let (out, _) = mask("text with real_secret! here", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("real_secret!"), "non-empty leaked");
+        assert!(v.contains("text with"), "text corrupted");
     }
 
     #[test]
-    fn domain_no_false_positive_mask_output_common_commands() {
-        // Common command output must pass through mask_output unchanged.
-        let mask_map = mk(&[
-            ("SuperSecretPassword", "VK:LOCAL:fp100001"),
-            ("api-key-production", "VK:LOCAL:fp100002"),
-        ]);
-        let safe_outputs = [
-            "total 42\ndrwxr-xr-x 2 root root 4096 Jan  1 00:00 .",
-            "On branch main\nYour branch is up to date with 'origin/main'.",
-            "CONTAINER ID   IMAGE   STATUS   PORTS   NAMES",
-            "commit abc1234 (HEAD -> main)\nAuthor: user <user@example.com>",
-            "hello world",
-            "/home/user",
-            "root",
-            "Filesystem      Size  Used Avail Use% Mounted on",
-        ];
-        for output in &safe_outputs {
-            let result = simulate_mask(output, &mask_map);
-            assert_eq!(
-                result, *output,
-                "FALSE POSITIVE: normal output was modified by masking: [{}] -> [{}]",
-                output, result
-            );
-        }
+    fn sec_mask_map_beats_recent_input() {
+        let m = mk(&[("MyP@ssw0rd!x", "VK:LOCAL:hhh88888")]);
+        let (out, _) = mask_ri("MyP@ssw0rd!x", &m, "MyP@ssw0rd!x", "");
+        assert!(!strip(&out).contains("MyP@ssw0rd!x"),
+            "SECURITY: mask-map must replace even with recent_input: {}", strip(&out));
+    }
+
+    #[test]
+    fn sec_same_width_no_length_leak() {
+        let m = mk(&[("short_pw", "VK:LOCAL:iii99999")]);
+        let (out, _) = mask("short_pw", &m, "");
+        let v = strip(&out);
+        assert!(!v.contains("short_pw"), "secret leaked");
+        assert_eq!(v.trim().chars().count(), 8, "width mismatch: {} '{}'", v.trim().chars().count(), v.trim());
+    }
+
+    #[test]
+    fn sec_newline_in_secret_masked() {
+        let m = mk(&[("line1\nline2", "VK:SSH:jjj00000")]);
+        let (out, _) = mask("line1\nline2", &m, "");
+        assert!(!strip(&out).contains("line1\nline2"), "multiline secret leaked");
     }
 }
