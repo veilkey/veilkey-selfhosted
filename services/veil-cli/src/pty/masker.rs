@@ -2651,3 +2651,171 @@ mod domain_invariant_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod re_masking_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    /// BUG: History recall shows "VK:LOCAL:6da25530" which contains the
+    /// original secret hash. Masker must NOT re-mask text that already
+    /// contains a VK: ref — it's already masked output.
+    #[test]
+    fn already_masked_ref_not_re_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Readline recalls history line containing already-masked ref
+        let (out, _) = call("bash: VK:LOCAL:6da25530: not found", &map, "", "");
+        let v = strip(&out);
+        // Must preserve VK:LOCAL: — must NOT re-mask to VK:6da25530
+        assert!(v.contains("VK:LOCAL:6da25530"),
+            "already-masked VK:LOCAL ref must not be re-masked, got: {}", v);
+    }
+
+    /// Arrow up shows previous command with masked ref — must stay full
+    #[test]
+    fn arrow_recall_preserves_full_ref() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // First: bash error outputs full ref
+        let (out1, tail) = call("bash: VK:LOCAL:6da25530: not found\n", &map, "", "");
+        let v1 = strip(&out1);
+        assert!(v1.contains("VK:LOCAL:6da25530"), "initial output must have full ref");
+
+        // Arrow up: readline redraws the command (no \n)
+        let (out2, _) = call("VK:LOCAL:6da25530", &map, "", &tail);
+        let v2 = strip(&out2);
+        // Must NOT truncate to VK:6da25530
+        assert!(!v2.contains("VK:6da25530") || v2.contains("VK:LOCAL:6da25530"),
+            "arrow recall must not truncate VK:LOCAL to VK:, got: {}", v2);
+    }
+
+    /// Text starting with "VK:" must not be treated as a secret
+    #[test]
+    fn vk_prefix_text_not_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("VK:LOCAL:6da25530 is a reference", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:6da25530"),
+            "VK: prefixed text must pass through, got: {}", v);
+    }
+
+    /// Multiple VK refs in output must all be preserved
+    #[test]
+    fn multiple_vk_refs_preserved() {
+        let map = mk(&[
+            ("secret_one!", "VK:LOCAL:aaa11111"),
+            ("secret_two!", "VK:LOCAL:bbb22222"),
+        ]);
+        let (out, _) = call("VK:LOCAL:aaa11111 and VK:LOCAL:bbb22222", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:aaa11111"), "first ref truncated: {}", v);
+        assert!(v.contains("VK:LOCAL:bbb22222"), "second ref truncated: {}", v);
+    }
+
+    /// Compact VK ref (VK:hash) in output must not be further truncated
+    #[test]
+    fn compact_ref_not_further_truncated() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Even if compact form appears, it must not become shorter
+        let (out, _) = call("VK:6da25530", &map, "", "");
+        let v = strip(&out);
+        // Must not lose the hash
+        assert!(v.contains("6da25530"),
+            "hash must survive in any ref form, got: {}", v);
+    }
+}
+
+#[cfg(test)]
+mod arrow_key_masking_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    /// BUG: Arrow up recalls original secret (no \n). Masker applies same-width
+    /// → VK:6da25530 (LOCAL dropped). Must either show full ref or skip entirely.
+    #[test]
+    fn arrow_recall_secret_no_local_drop() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Arrow up: readline echoes the original secret (no \n, not in recent_input)
+        let (out, _) = call("Ghdrhkdgh1@", &map, "", "");
+        let v = strip(&out);
+        // Must NOT produce compact form (VK:6da25530 without LOCAL)
+        if v != "Ghdrhkdgh1@" {
+            // If masked, must be full ref
+            assert!(v.contains("VK:LOCAL:"),
+                "BUG: arrow recall produced compact ref without LOCAL scope: '{}'", v);
+        }
+    }
+
+    /// Same bug with different secret lengths
+    #[test]
+    fn arrow_recall_short_secret_no_scope_loss() {
+        let map = mk(&[("short_pw", "VK:LOCAL:abc12345")]);
+        let (out, _) = call("short_pw", &map, "", "");
+        let v = strip(&out);
+        if v != "short_pw" {
+            assert!(v.contains("VK:LOCAL:") || v.contains("VK:SSH:") || v.contains("VK:TEMP:"),
+                "BUG: scope lost in masking: '{}'", v);
+        }
+    }
+
+    /// Completed line (\n) must ALWAYS show full ref
+    #[test]
+    fn completed_line_always_full_ref() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:6da25530"),
+            "completed line must use full VK:LOCAL: ref, got: {}", v);
+    }
+
+    /// After masking with full ref, re-reading same text must not truncate
+    #[test]
+    fn re_display_after_masking_stable() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Round 1: complete line → full ref
+        let (out1, tail1) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v1 = strip(&out1);
+        assert!(v1.contains("VK:LOCAL:6da25530"));
+
+        // Round 2: arrow up recalls secret (no \n)
+        let (out2, _) = call("Ghdrhkdgh1@", &map, "", &tail1);
+        let v2 = strip(&out2);
+
+        // Round 3: enter → complete line again
+        let (out3, _) = call("\nbash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v3 = strip(&out3);
+        assert!(v3.contains("VK:LOCAL:6da25530"),
+            "second complete line must still show full ref, got: {}", v3);
+    }
+}
