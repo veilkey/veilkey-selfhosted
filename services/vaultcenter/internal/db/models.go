@@ -191,6 +191,7 @@ type Agent struct {
 	VaultUnlockKeyEnc  []byte     `gorm:"column:vault_unlock_key_enc" json:"-"`
 	VaultUnlockKeyNonce []byte    `gorm:"column:vault_unlock_key_nonce" json:"-"`
 	Salt             string     `gorm:"column:salt" json:"-"`
+	ContentVersion   int        `gorm:"column:content_version;default:0" json:"content_version"`
 	Version          int        `gorm:"column:version;default:1" json:"version"`
 	FirstSeen        time.Time  `gorm:"column:first_seen;autoCreateTime" json:"first_seen"`
 	LastSeen         time.Time  `gorm:"column:last_seen;autoUpdateTime" json:"last_seen"`

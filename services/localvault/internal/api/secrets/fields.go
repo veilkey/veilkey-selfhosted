@@ -83,6 +83,7 @@ func (h *Handler) handleSaveSecretFields(w http.ResponseWriter, r *http.Request)
 		respondError(w, http.StatusInternalServerError, "failed to save secret fields")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"name":   req.Name,
@@ -159,6 +160,7 @@ func (h *Handler) handleDeleteSecretField(w http.ResponseWriter, r *http.Request
 		respondError(w, http.StatusNotFound, "field not found")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"name":    name,

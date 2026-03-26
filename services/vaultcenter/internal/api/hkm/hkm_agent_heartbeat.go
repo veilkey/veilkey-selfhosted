@@ -71,6 +71,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		RegistrationToken string   `json:"registration_token"`
 		VaultUnlockKey    string   `json:"vault_unlock_key,omitempty"`
 		Salt              string   `json:"salt,omitempty"`
+		ContentVersion    int      `json:"content_version"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -253,6 +254,14 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondError(w, http.StatusInternalServerError, "failed to get agent")
 		return
+	}
+
+	// Track content_version changes
+	if req.ContentVersion != agent.ContentVersion {
+		log.Printf("agent: content_version changed for %s (%s): %d -> %d", nodeID, req.Label, agent.ContentVersion, req.ContentVersion)
+	}
+	if err := h.deps.DB().UpdateAgentContentVersion(nodeID, req.ContentVersion); err != nil {
+		log.Printf("agent: failed to update content_version for %s: %v", nodeID, err)
 	}
 
 	if agent.AgentHash == "" || (len(agent.DEK) == 0 && len(agent.DEKNonce) == 0) {

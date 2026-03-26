@@ -96,6 +96,7 @@ func (h *Handler) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "failed to save config")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"key":    req.Key,
@@ -136,6 +137,7 @@ func (h *Handler) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) 
 		respondError(w, http.StatusInternalServerError, "failed to save configs")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"saved": len(req.Configs),
@@ -157,6 +159,7 @@ func (h *Handler) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "config not found")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"deleted": key,

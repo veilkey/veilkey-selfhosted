@@ -74,6 +74,7 @@ func (h *Handler) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusNotFound, "secret not found")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"deleted": name,

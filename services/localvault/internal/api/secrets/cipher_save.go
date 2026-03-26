@@ -93,6 +93,7 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "failed to save secret")
 		return
 	}
+	h.deps.DB().BumpContentVersion()
 
 	respondJSON(w, http.StatusOK, map[string]interface{}{
 		"id":      id,

@@ -87,6 +87,11 @@ func (d *DB) UpsertAgent(nodeID, label, vaultHash, vaultName, ip string, port, s
 	return d.BackfillSecretCatalogForAgent(updated.AgentHash)
 }
 
+// UpdateAgentContentVersion stores the latest content_version reported by an agent.
+func (d *DB) UpdateAgentContentVersion(nodeID string, contentVersion int) error {
+	return d.conn.Model(&Agent{}).Where("node_id = ?", nodeID).Update("content_version", contentVersion).Error
+}
+
 func normalizeAgentCapabilities(role string, hostEnabled, localEnabled *bool) (bool, bool) {
 	if hostEnabled != nil || localEnabled != nil {
 		host := false
