@@ -2648,3 +2648,225 @@ mod masking_defense_tests {
             "DEFENSE: TEMP scope must be preserved, got: {}", v);
     }
 }
+
+#[cfg(test)]
+mod masking_comprehensive_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ═══ Secret position edge cases ═══
+
+    /// Secret at very start of completed line
+    #[test]
+    fn secret_at_line_start() {
+        let map = mk(&[("secret_abc!", "VK:LOCAL:pos00001")]);
+        let (out, _) = call("secret_abc!: error\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:pos00001"), "start of line: {}", v);
+    }
+
+    /// Secret at very end of completed line (before \n)
+    #[test]
+    fn secret_at_line_end() {
+        let map = mk(&[("secret_abc!", "VK:LOCAL:pos00002")]);
+        let (out, _) = call("value=secret_abc!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:LOCAL:pos00002"), "end of line: {}", v);
+    }
+
+    /// Line is ONLY the secret + newline
+    #[test]
+    fn line_is_only_secret() {
+        let map = mk(&[("only_secret!", "VK:LOCAL:pos00003")]);
+        let (out, _) = call("only_secret!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("only_secret!"), "sole secret line leaked: {}", v);
+        assert!(v.contains("VK:LOCAL:pos00003"), "must be full ref: {}", v);
+    }
+
+    /// Empty lines between secret lines
+    #[test]
+    fn empty_lines_between_secrets() {
+        let map = mk(&[("hidden_val!", "VK:LOCAL:pos00004")]);
+        let (out, _) = call("\nhidden_val!\n\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("hidden_val!"), "leaked between empty lines: {}", v);
+    }
+
+    // ═══ Output format edge cases ═══
+
+    /// Secret in JSON output
+    #[test]
+    fn secret_in_json_output() {
+        let map = mk(&[("db_pass_xyz!", "VK:LOCAL:fmt00001")]);
+        let (out, _) = call("{\"password\":\"db_pass_xyz!\"}\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("db_pass_xyz!"), "JSON output leaked: {}", v);
+    }
+
+    /// Secret in env var output (env | grep)
+    #[test]
+    fn secret_in_env_output() {
+        let map = mk(&[("api_key_999!", "VK:LOCAL:fmt00002")]);
+        let (out, _) = call("API_KEY=api_key_999!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("api_key_999!"), "env output leaked: {}", v);
+    }
+
+    /// Secret in docker logs
+    #[test]
+    fn secret_in_docker_logs() {
+        let map = mk(&[("conn_string!", "VK:LOCAL:fmt00003")]);
+        let (out, _) = call("2026-03-26 DB_URL=conn_string!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("conn_string!"), "docker log leaked: {}", v);
+    }
+
+    /// Secret in grep output (may have ANSI colors from grep --color)
+    #[test]
+    fn secret_in_colored_grep() {
+        let map = mk(&[("grep_secret!", "VK:LOCAL:fmt00004")]);
+        let (out, _) = call(
+            "\x1b[35mconfig.yml\x1b[0m:\x1b[32mPASS=grep_secret!\x1b[0m\n",
+            &map, "", ""
+        );
+        let v = strip(&out);
+        assert!(!v.contains("grep_secret!"), "colored grep leaked: {}", v);
+    }
+
+    // ═══ Cross-chunk with newline ═══
+
+    /// Secret split across chunks, second chunk has \n (completed line)
+    #[test]
+    fn cross_chunk_with_newline_masked() {
+        let map = mk(&[("password1234", "VK:LOCAL:xch00001")]);
+        let (_, tail) = call("echo passwo", &map, "echo passwo", "");
+        let (out, _) = call("rd1234\n", &map, "", &tail);
+        let v = strip(&out);
+        // The completed portion after \n must not contain the secret
+        assert!(!v.contains("password1234"),
+            "cross-chunk with newline leaked: {}", v);
+    }
+
+    // ═══ Typing sequence simulation ═══
+
+    /// Fast paste: entire secret arrives at once + \n
+    #[test]
+    fn fast_paste_with_enter() {
+        let map = mk(&[("pasted_pw12!", "VK:LOCAL:seq00001")]);
+        // Paste + enter in one chunk — has \n so should mask
+        let (out, _) = call("pasted_pw12!\nbash: pasted_pw12!: not found\n", &map, "pasted_pw12!", "");
+        let v = strip(&out);
+        // The bash error must be masked
+        assert!(v.contains("VK:LOCAL:seq00001"),
+            "bash error after paste must be masked: {}", v);
+    }
+
+    /// Repeated enter on same command
+    #[test]
+    fn repeated_enter_same_command() {
+        let map = mk(&[("repeat_pw!!", "VK:LOCAL:seq00002")]);
+        let mut tail = String::new();
+        for _ in 0..5 {
+            let (out, t) = call("bash: repeat_pw!!: not found\n", &map, "", &tail);
+            tail = t;
+            let v = strip(&String::from_utf8_lossy(&out.as_bytes()));
+            assert!(!v.contains("repeat_pw!!"),
+                "repeated execution leaked: {}", v);
+        }
+    }
+
+    /// Type command with secret, get output, type another
+    #[test]
+    fn sequential_commands_isolated() {
+        let map = mk(&[
+            ("secret_one!", "VK:LOCAL:seq00003"),
+            ("secret_two!", "VK:LOCAL:seq00004"),
+        ]);
+        let mut tail = String::new();
+        // Command 1
+        let (out1, t) = call("bash: secret_one!: not found\n", &map, "", &tail);
+        tail = t;
+        assert!(!strip(&String::from_utf8_lossy(&out1.as_bytes())).contains("secret_one!"));
+        // Command 2
+        let (out2, _) = call("bash: secret_two!: not found\n", &map, "", &tail);
+        assert!(!strip(&String::from_utf8_lossy(&out2.as_bytes())).contains("secret_two!"));
+    }
+
+    // ═══ Edge: empty/minimal inputs ═══
+
+    /// Empty input
+    #[test]
+    fn empty_input_no_crash() {
+        let map = mk(&[("secret!", "VK:LOCAL:edg00001")]);
+        let (out, tail) = call("", &map, "", "");
+        assert!(out.is_empty());
+        assert!(tail.is_empty() || !tail.is_empty()); // just no crash
+    }
+
+    /// Just newline
+    #[test]
+    fn just_newline() {
+        let map = mk(&[("secret!", "VK:LOCAL:edg00002")]);
+        let (out, _) = call("\n", &map, "", "");
+        assert_eq!(strip(&String::from_utf8_lossy(&out.as_bytes())).trim(), "");
+    }
+
+    /// Secret exactly matching mask_map value (self-reference)
+    #[test]
+    fn secret_is_vk_ref_itself() {
+        // If plaintext is "VK:LOCAL:abc" it should NOT be in mask_map (filtered by enrich)
+        // but if it somehow is, it should not infinite-loop
+        let map = mk(&[("VK:LOCAL:abc", "VK:LOCAL:abc")]);
+        let (out, _) = call("test VK:LOCAL:abc end\n", &map, "", "");
+        // Just don't crash/hang
+        assert!(!out.is_empty());
+    }
+
+    // ═══ Scope: all types must show full ref in completed lines ═══
+
+    #[test]
+    fn scope_external_preserved() {
+        let map = mk(&[("ext_secret!!", "VK:EXTERNAL:scp00001")]);
+        let (out, _) = call("val=ext_secret!!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("VK:EXTERNAL:scp00001"),
+            "EXTERNAL scope lost: {}", v);
+    }
+
+    // ═══ Width regression guard ═══
+
+    /// If masking happens on readline echo, width MUST match for ALL lengths
+    #[test]
+    fn width_regression_1_to_30() {
+        let ref_str = "VK:LOCAL:abcdef01";
+        for len in 1..=30 {
+            let secret: String = (0..len).map(|i| (b'a' + (i % 26) as u8) as char).collect();
+            let map = vec![(secret.clone(), ref_str.to_string())];
+            let (out, _) = call(&secret, &map, "", "");
+            let v = strip(&out);
+            if v != secret {
+                // If masked, width must match
+                assert_eq!(v.chars().count(), secret.chars().count(),
+                    "width mismatch at len={}: got {}: '{}'",
+                    len, v.chars().count(), v);
+            }
+        }
+    }
+}
