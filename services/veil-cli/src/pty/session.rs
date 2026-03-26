@@ -328,6 +328,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
             // Recent input tracking
             let recent_input = Arc::new(Mutex::new(String::new()));
+        let enter_pending = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
             // stdin → PTY master (input thread)
             // Terminal response sequences (DSR, OSC) are passed through to PTY
@@ -335,6 +336,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let master_wr = master_fd;
             let input_tracker = recent_input.clone();
             let stdin_mask_map = mask_map.clone();
+            let enter_pending_stdin = enter_pending.clone();
             std::thread::spawn(move || {
                 let mut buf = [0u8; 4096];
                 // Accumulated line buffer for enter-key secret detection
@@ -392,6 +394,10 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                         let map = stdin_mask_map.read().unwrap();
                         check_stdin_for_secrets(data, &mut line_buf, &map);
                     }
+                    // Signal output thread: Enter was pressed, expect \n soon
+                    if data.contains(&b'\r') || data.contains(&b'\n') {
+                        enter_pending_stdin.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
 
                     // Always forward raw data to PTY (blocking not yet enforced — see TODO above)
                     unsafe {
@@ -407,6 +413,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let mask = mask_map.clone();
             let ve = ve_map.clone();
             let input_ref = recent_input.clone();
+            let enter_pending_out = enter_pending.clone();
             let stdout_fd = io::stdout().as_raw_fd();
             let mut plain_tail = String::new();
             let mut in_alt_screen = false;
@@ -448,10 +455,15 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     unsafe { write_all_fd(stdout_fd, &masked); }
                     partial_buf.clear();
                 } else {
-                    // No newline yet — wait for more data (bash error comes after echo).
-                    // 100ms is enough for bash to process and return error output.
-                    // If nothing comes, flush as-is (prompt display).
-                    std::thread::sleep(Duration::from_millis(100));
+                    // No newline yet. If Enter was recently pressed, wait longer
+                    // for bash error output (\n). Otherwise flush quickly (prompt).
+                    let wait_ms = if enter_pending_out.load(std::sync::atomic::Ordering::Relaxed) {
+                        enter_pending_out.store(false, std::sync::atomic::Ordering::Relaxed);
+                        500 // Enter pressed — wait up to 500ms for bash output
+                    } else {
+                        20 // No Enter — flush quickly (prompt, tab completion)
+                    };
+                    std::thread::sleep(Duration::from_millis(wait_ms));
                     let mut pfd = libc::pollfd { fd: master_fd, events: libc::POLLIN, revents: 0 };
                     let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
                     if ready <= 0 {
