@@ -372,7 +372,15 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 	setRuntimeHashAliases(resp, agent.AgentHash)
 
 	// Issue agent_secret if not yet assigned
-	if agent.AgentSecretHash == "" {
+	// Re-issue agent_secret if not assigned or undecryptable (e.g. after KEK rekey)
+	needsSecret := agent.AgentSecretHash == ""
+	if !needsSecret && len(agent.AgentSecretEnc) > 0 {
+		if decrypted := h.decryptAgentSecret(agent.AgentSecretEnc, agent.AgentSecretNonce); decrypted == "" {
+			needsSecret = true
+			log.Printf("agent: agent_secret for %s (%s) undecryptable, re-issuing", nodeID, agent.Label)
+		}
+	}
+	if needsSecret {
 		agentSecret, secretErr := generateAgentSecret()
 		if secretErr == nil {
 			kek := h.deps.GetKEK()
@@ -387,6 +395,11 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 				resp["agent_secret"] = agentSecret
 				log.Printf("agent: issued agent_secret for existing agent %s (%s)", nodeID, agent.Label)
 			}
+		}
+	} else if len(agent.AgentSecretEnc) > 0 {
+		// Always include existing agent_secret so LV can store it if missing
+		if decrypted := h.decryptAgentSecret(agent.AgentSecretEnc, agent.AgentSecretNonce); decrypted != "" {
+			resp["agent_secret"] = decrypted
 		}
 	}
 

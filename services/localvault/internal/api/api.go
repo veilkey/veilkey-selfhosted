@@ -53,6 +53,11 @@ type Server struct {
 	// vaultUnlockKey is the auto-generated password, held in memory until sent to VC.
 	vaultUnlockKey string
 
+	// heartbeat params for post-unlock trigger
+	heartbeatEndpoint string
+	heartbeatLabel    string
+	heartbeatPort     int
+
 	// agentAuthCache caches the decrypted agent secret to avoid repeated DB+KEK lookups.
 	agentAuthCache   string
 	agentAuthCacheAt time.Time
@@ -454,6 +459,16 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 	s.SetVaultUnlockKey(req.Password)
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)
+
+	// Trigger immediate heartbeat after unlock
+	go func() {
+		if s.heartbeatEndpoint != "" {
+			log.Println("Post-unlock heartbeat triggered")
+			if err := s.SendHeartbeatOnce(s.heartbeatEndpoint, s.heartbeatLabel, s.heartbeatPort); err != nil {
+				log.Printf("Post-unlock heartbeat failed: %v", err)
+			}
+		}
+	}()
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{"status": "unlocked"})
 }
 

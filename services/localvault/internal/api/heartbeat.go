@@ -28,6 +28,11 @@ func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Du
 		return
 	}
 
+	endpoint := hubURL + "/api/agents/heartbeat"
+	s.heartbeatEndpoint = endpoint
+	s.heartbeatLabel = label
+	s.heartbeatPort = port
+
 	go func() {
 		endpoint := hubURL + "/api/agents/heartbeat"
 		log.Printf("Heartbeat started: %s every %s", endpoint, interval)
