@@ -576,8 +576,27 @@ func (s *Server) InvalidateMaskCache() {
 	s.BumpMaskMapVersion()
 }
 
+// ClearMaskCache wipes all cached plaintext from memory.
+// Called on lock transition and graceful shutdown.
+func (s *Server) ClearMaskCache() {
+	s.maskCache.mu.Lock()
+	s.maskCache.data = nil
+	s.maskCache.valid = false
+	s.maskCache.builtAt = time.Time{}
+	s.maskCache.mu.Unlock()
+}
+
+// maxMaskCacheSize is the upper bound for cached plaintext data.
+// If exceeded, cache is disabled and falls back to on-demand build.
+const maxMaskCacheSize = 10 * 1024 * 1024 // 10MB
+
 // SetMaskCacheData stores a freshly built mask-map JSON snapshot in the cache.
 func (s *Server) SetMaskCacheData(data []byte) {
+	if len(data) > maxMaskCacheSize {
+		log.Printf("mask-map cache: %d bytes exceeds %d limit — cache disabled", len(data), maxMaskCacheSize)
+		s.ClearMaskCache()
+		return
+	}
 	s.maskCache.mu.Lock()
 	s.maskCache.data = data
 	s.maskCache.valid = true
