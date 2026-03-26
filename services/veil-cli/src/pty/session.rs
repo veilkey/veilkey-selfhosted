@@ -328,7 +328,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
             // Recent input tracking
             let recent_input = Arc::new(Mutex::new(String::new()));
-        let enter_pending = Arc::new(std::sync::atomic::AtomicBool::new(false));
 
             // stdin → PTY master (input thread)
             // Terminal response sequences (DSR, OSC) are passed through to PTY
@@ -336,7 +335,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let master_wr = master_fd;
             let input_tracker = recent_input.clone();
             let stdin_mask_map = mask_map.clone();
-            let enter_pending_stdin = enter_pending.clone();
             std::thread::spawn(move || {
                 let mut buf = [0u8; 4096];
                 // Accumulated line buffer for enter-key secret detection
@@ -394,10 +392,6 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                         let map = stdin_mask_map.read().unwrap();
                         check_stdin_for_secrets(data, &mut line_buf, &map);
                     }
-                    // Signal output thread: Enter was pressed, expect \n soon
-                    if data.contains(&b'\r') || data.contains(&b'\n') {
-                        enter_pending_stdin.store(true, std::sync::atomic::Ordering::Relaxed);
-                    }
 
                     // Always forward raw data to PTY (blocking not yet enforced — see TODO above)
                     unsafe {
@@ -413,65 +407,65 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
             let mask = mask_map.clone();
             let ve = ve_map.clone();
             let input_ref = recent_input.clone();
-            let enter_pending_out = enter_pending.clone();
             let stdout_fd = io::stdout().as_raw_fd();
             let mut plain_tail = String::new();
             let mut in_alt_screen = false;
 
             let mut buf = [0u8; 32768];
-            let mut partial_buf: Vec<u8> = Vec::new();
             loop {
                 let n = unsafe { read_eintr(master_fd, &mut buf) };
                 if n <= 0 {
-                    if !partial_buf.is_empty() {
-                        unsafe { write_all_fd(stdout_fd, &partial_buf); }
-                    }
                     break;
                 }
-                let total = n as usize;
+                let mut total = n as usize;
+
+                // Output coalesce: 50ms drain loop to collect char-by-char echo
+                // into larger chunks, improving cross-chunk secret detection.
+                std::thread::sleep(Duration::from_millis(50));
+                loop {
+                    let mut pfd = libc::pollfd {
+                        fd: master_fd,
+                        events: libc::POLLIN,
+                        revents: 0,
+                    };
+                    let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
+                    if ready <= 0 || total >= buf.len() {
+                        break;
+                    }
+                    let extra = unsafe { read_eintr(master_fd, &mut buf[total..]) };
+                    if extra <= 0 {
+                        break;
+                    }
+                    total += extra as usize;
+                }
+
                 let chunk = &buf[..total];
 
+                // Track alt-screen state (vim, less, htop, etc.)
                 in_alt_screen = masker::detect_alt_screen(chunk, in_alt_screen);
+
                 if in_alt_screen {
-                    if !partial_buf.is_empty() {
-                        unsafe { write_all_fd(stdout_fd, &partial_buf); }
-                        partial_buf.clear();
+                    // Alt-screen active — pass through unmasked (TUI apps break with masking)
+                    unsafe {
+                        write_all_fd(stdout_fd, chunk);
                     }
-                    unsafe { write_all_fd(stdout_fd, chunk); }
                     continue;
                 }
 
-                partial_buf.extend_from_slice(chunk);
+                let ri = input_ref.lock().unwrap().clone();
+                let (masked, new_tail) = masker::mask_output(
+                    chunk,
+                    &mask.read().unwrap(),
+                    &ve.read().unwrap(),
+                    &patterns,
+                    &client,
+                    &ri,
+                    &plain_tail,
+                );
+                plain_tail = new_tail;
 
-                if partial_buf.contains(&b'\n') {
-                    let ri = input_ref.lock().unwrap().clone();
-                    let (masked, new_tail) = masker::mask_output(
-                        &partial_buf,
-                        &mask.read().unwrap(),
-                        &ve.read().unwrap(),
-                        &patterns, &client, &ri, &plain_tail,
-                    );
-                    plain_tail = new_tail;
-                    unsafe { write_all_fd(stdout_fd, &masked); }
-                    partial_buf.clear();
-                } else {
-                    // No newline — wait 50ms for more data then flush.
-                    // 50ms coalesce catches most char-by-char echo into single chunks.
-                    std::thread::sleep(Duration::from_millis(50));
-                    let mut pfd = libc::pollfd { fd: master_fd, events: libc::POLLIN, revents: 0 };
-                    let ready = unsafe { libc::poll(&mut pfd, 1, 0) };
-                    if ready <= 0 {
-                        let ri = input_ref.lock().unwrap().clone();
-                        let (masked, new_tail) = masker::mask_output(
-                            &partial_buf,
-                            &mask.read().unwrap(),
-                            &ve.read().unwrap(),
-                            &patterns, &client, &ri, &plain_tail,
-                        );
-                        plain_tail = new_tail;
-                        unsafe { write_all_fd(stdout_fd, &masked); }
-                        partial_buf.clear();
-                    }
+                unsafe {
+                    write_all_fd(stdout_fd, &masked);
                 }
             }
 

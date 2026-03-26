@@ -239,15 +239,14 @@ pub fn mask_output(
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
     }
-    // Newline-aware masking:
-    // Completed lines (has \n) -> full ref. No \n -> skip (readline safety).
-    let has_newline = output.contains('\n');
-    if has_newline {
-        for (plaintext, vk_ref) in mask_map {
-            if plaintext.is_empty() { continue; }
-            let repl = colorize_ref(vk_ref);
-            let (new_out, replaced) = ansi_aware_replace(&output, plaintext, &repl);
-            if replaced { output = new_out; }
+    for (plaintext, vk_ref) in mask_map {
+        if plaintext.is_empty() {
+            continue;
+        }
+        let repl = padded_colorize_ref(vk_ref, UnicodeWidthStr::width(plaintext.as_str()));
+        let (new_out, replaced) = ansi_aware_replace(&output, plaintext, &repl);
+        if replaced {
+            output = new_out;
         }
     }
     // Pattern-detected replacements — scan on ANSI-stripped text
@@ -417,7 +416,7 @@ mod tests {
 
     #[test]
     fn test_pad_ref_shorter_than_secret() {
-        // ref 17 chars, secret 30 chars -> 13 spaces padding
+        // ref 17 chars, secret 30 chars → 13 spaces padding
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 30);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 30);
@@ -426,7 +425,7 @@ mod tests {
 
     #[test]
     fn test_pad_ref_longer_than_secret() {
-        // ref 17 chars, secret 10 chars -> show full ref (no truncation)
+        // ref 17 chars, secret 10 chars → show full ref (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 10);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 10); // same-width
@@ -434,7 +433,7 @@ mod tests {
 
     #[test]
     fn test_pad_ref_equal_to_secret() {
-        // ref 17 chars, secret 17 chars -> exact fit, no padding
+        // ref 17 chars, secret 17 chars → exact fit, no padding
         let result = padded_colorize_ref("VK:LOCAL:6da25530", 17);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 17);
@@ -443,7 +442,7 @@ mod tests {
 
     #[test]
     fn test_pad_very_short_secret() {
-        // secret 3 chars, ref 12 chars -> full ref shown (no truncation)
+        // secret 3 chars, ref 12 chars → full ref shown (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 3);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 3); // same-width
@@ -451,7 +450,7 @@ mod tests {
 
     #[test]
     fn test_pad_very_long_secret() {
-        // secret 100 chars -> lots of padding
+        // secret 100 chars → lots of padding
         let result = padded_colorize_ref("VK:LOCAL:abc", 100);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 100);
@@ -459,7 +458,7 @@ mod tests {
 
     #[test]
     fn test_pad_single_char_secret() {
-        // secret 1 char, ref 12 chars -> full ref shown (no truncation)
+        // secret 1 char, ref 12 chars → full ref shown (no truncation)
         let result = padded_colorize_ref("VK:LOCAL:abc", 1);
         let visible = strip_ansi(&result);
         assert_eq!(visible.chars().count(), 1); // same-width
@@ -1223,7 +1222,7 @@ mod tests {
 
     #[test]
     fn test_ve_after_vk_no_ref_corruption() {
-        // VK replaces "db-password" -> colorized ref. VE "LOCAL" must not
+        // VK replaces "db-password" → colorized ref. VE "LOCAL" must not
         // colorize inside the ref (ansi_aware_replace skips ANSI segments).
         let map = vec![("db-password".to_string(), "VK:LOCAL:dbp12345".to_string())];
         let ve = vec![("LOCAL".to_string(), "VE:LOCAL:SCOPE".to_string())];
@@ -1406,7 +1405,7 @@ mod tests {
 
     #[test]
     fn test_ve_substring_chain_longer_first() {
-        // "localhost" contains "local". Longer listed first -> matches fully.
+        // "localhost" contains "local". Longer listed first → matches fully.
         let ve = vec![
             ("localhost".to_string(), "VE:LOCAL:FULL".to_string()),
             ("local".to_string(), "VE:LOCAL:SHORT".to_string()),
@@ -1418,7 +1417,7 @@ mod tests {
 
     #[test]
     fn test_ve_substring_chain_shorter_first() {
-        // Shorter listed first -> "local" matches inside "localhost" first
+        // Shorter listed first → "local" matches inside "localhost" first
         let ve = vec![
             ("local".to_string(), "VE:LOCAL:SHORT".to_string()),
             ("localhost".to_string(), "VE:LOCAL:FULL".to_string()),
@@ -1458,7 +1457,7 @@ mod tests {
 
     #[test]
     fn test_ve_cannot_match_inside_vk_replacement() {
-        // VK replaces "my-secret" -> colorized "VK:LOCAL:sec12345".
+        // VK replaces "my-secret" → colorized "VK:LOCAL:sec12345".
         // VE value "sec12345" should NOT match inside the VK ref because
         // ansi_aware_replace works on text segments, and the ref is inside ANSI.
         let map = vec![("my-secret".to_string(), "VK:LOCAL:sec12345".to_string())];
@@ -1474,7 +1473,7 @@ mod tests {
     #[test]
     fn test_ve_silent_miss_when_value_already_masked_by_vk() {
         // VE value "password" is the same as the VK secret.
-        // After VK masks it, VE can't find "password" in the output -> silent miss.
+        // After VK masks it, VE can't find "password" in the output → silent miss.
         let map = vec![("password".to_string(), "VK:LOCAL:pw123456".to_string())];
         let ve = vec![("password".to_string(), "VE:LOCAL:DB_PASS".to_string())];
         let (output, _) = mask_with_ve("pass=password", &map, &ve, "");
@@ -1559,7 +1558,7 @@ mod tests {
         let input = "\x1b[1mprod\x1b[0muction";
         let (output, _) = mask_with_ve(input, &[], &ve, "");
         // The ansi_aware_replace reconstructs text from segments:
-        // segment "prod" + segment "uction" -> finds "production" -> replaces
+        // segment "prod" + segment "uction" → finds "production" → replaces
         let visible = strip_ansi(&output);
         // Whether it matches depends on implementation — just verify no panic
         // and that the output is valid
