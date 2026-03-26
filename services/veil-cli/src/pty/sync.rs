@@ -25,19 +25,22 @@ pub fn spawn_mask_map_sync(
                     let data: serde_json::Value = resp.into_json().unwrap_or_default();
                     let new_version = data["version"].as_u64().unwrap_or(version);
                     let changed = data["changed"].as_bool().unwrap_or(false);
-                    if changed && new_version >= version {
+                    if changed && new_version > version {
                         let (mut new_map, new_ve) = parse_mask_map_entries(&data);
 
                         enrich_mask_map(&mut new_map);
 
                         if let Ok(mut map) = mask_map.write() {
+                            let old_len = map.len();
                             *map = new_map;
-                            eprintln!(
-                                "[veilkey] mask_map synced: {} secret(s), {} config(s) (v{})",
-                                map.len(),
-                                new_ve.len(),
-                                new_version
-                            );
+                            // Only log when count actually changes
+                            if map.len() != old_len {
+                                eprintln!(
+                                    "[veilkey] mask_map updated: {} secret(s), {} config(s)",
+                                    map.len(),
+                                    new_ve.len(),
+                                );
+                            }
                         }
                         if let Ok(mut ve) = ve_map.write() {
                             *ve = new_ve;
