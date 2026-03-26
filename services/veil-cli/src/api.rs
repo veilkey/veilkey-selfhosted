@@ -1953,4 +1953,124 @@ mod connection_domain_tests {
             "plain_tail must use new_text (original), not output (masked)"
         );
     }
+
+    // ── guard: veilkey wrapper binary removed ─────────────────────
+
+    #[test]
+    fn guard_cargo_toml_no_veilkey_bin() {
+        let src = include_str!("../Cargo.toml");
+        // Must NOT have [[bin]] name = "veilkey" (wrapper removed)
+        // But MUST have veilkey-cli, veil, veilkey-session-config
+        let mut in_bin_block = false;
+        for line in src.lines() {
+            if line.trim() == "[[bin]]" {
+                in_bin_block = true;
+                continue;
+            }
+            if in_bin_block && line.starts_with("name") {
+                let name = line.split('=').nth(1).unwrap_or("").trim().trim_matches('"');
+                assert_ne!(name, "veilkey", "Cargo.toml must not have [[bin]] name = \"veilkey\" (wrapper removed)");
+                in_bin_block = false;
+            }
+        }
+        assert!(src.contains("name = \"veilkey-cli\""), "must keep veilkey-cli bin");
+        assert!(src.contains("name = \"veil\""), "must keep veil bin");
+        assert!(src.contains("name = \"veilkey-session-config\""), "must keep veilkey-session-config bin");
+    }
+
+    #[test]
+    fn guard_dockerfile_no_veilkey_binary() {
+        let src = include_str!("../Dockerfile");
+        for line in src.lines() {
+            if line.contains("COPY") && line.contains("/veilkey") {
+                // Allow veilkey-cli, veilkey-session-config, veilkey-installer
+                let after_veilkey = line.split("/veilkey").last().unwrap_or("");
+                if after_veilkey.is_empty()
+                    || after_veilkey.starts_with(' ')
+                    || after_veilkey.starts_with('"')
+                {
+                    panic!("Dockerfile must not COPY standalone veilkey binary: {}", line.trim());
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn guard_dockerfile_has_veilkey_cli() {
+        let src = include_str!("../Dockerfile");
+        assert!(src.contains("veilkey-cli"), "Dockerfile must include veilkey-cli");
+    }
+
+    #[test]
+    fn guard_docker_compose_no_standalone_veilkey() {
+        let src = include_str!("../../../docker-compose.yml");
+        for line in src.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with("VEILKEY_VK_BIN:") || trimmed.starts_with("VEILKEY_BIN:") {
+                assert!(
+                    trimmed.contains("veilkey-cli"),
+                    "docker-compose VEILKEY_*_BIN must point to veilkey-cli, not veilkey: {}",
+                    trimmed
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn guard_install_script_no_veilkey_binary() {
+        let src = include_str!("../../../install/common/install-veil-cli.sh");
+        for line in src.lines() {
+            if line.contains("for bin in") || line.contains("for BIN in") {
+                assert!(
+                    !line.contains(" veilkey "),
+                    "install script must not distribute standalone veilkey: {}",
+                    line.trim()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn guard_install_script_has_veilkey_cli() {
+        let src = include_str!("../../../install/common/install-veil-cli.sh");
+        assert!(src.contains("veilkey-cli"), "install script must include veilkey-cli");
+    }
+
+    #[test]
+    fn guard_docs_no_standalone_veilkey_commands() {
+        let files = [
+            include_str!("../../../docs/cli.md"),
+            include_str!("../../../docs/security-model.md"),
+            include_str!("../../../docs/OPERATING-MODEL.md"),
+            include_str!("../../../docs/vssh-design.md"),
+            include_str!("../../../docs/setup/veil-cli/usage.md"),
+        ];
+        let commands = [
+            "veilkey wrap", "veilkey resolve", "veilkey status",
+            "veilkey exec", "veilkey create", "veilkey scan",
+            "veilkey filter", "veilkey paste-mode", "veilkey ssh",
+            "veilkey function",
+        ];
+        for (i, src) in files.iter().enumerate() {
+            for cmd in &commands {
+                // Find occurrences NOT preceded by "-cli"
+                for (line_no, line) in src.lines().enumerate() {
+                    if line.contains(cmd) && !line.contains(&format!("-cli {}", cmd.split_whitespace().last().unwrap_or(""))) && !line.contains("veilkey-cli") {
+                        panic!(
+                            "doc file #{} line {}: found standalone '{}' — must use 'veilkey-cli' instead: {}",
+                            i, line_no + 1, cmd, line.trim()
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn guard_cli_binary_name_is_veilkey_cli() {
+        // The bin entry in Cargo.toml for the main CLI must be "veilkey-cli"
+        let src = include_str!("../Cargo.toml");
+        assert!(src.contains("name = \"veilkey-cli\""));
+        assert!(src.contains("path = \"src/bin/veilkey_cli.rs\""));
+    }
 }
