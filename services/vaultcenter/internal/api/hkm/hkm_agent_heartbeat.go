@@ -71,6 +71,7 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		RegistrationToken string   `json:"registration_token"`
 		VaultUnlockKey    string   `json:"vault_unlock_key,omitempty"`
 		Salt              string   `json:"salt,omitempty"`
+		NeedsAgentSecret  bool     `json:"needs_agent_secret,omitempty"`
 	}
 	if err := httputil.DecodeJSON(r, &req); err != nil {
 		respondError(w, http.StatusBadRequest, "invalid request body")
@@ -396,10 +397,11 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 				log.Printf("agent: issued agent_secret for existing agent %s (%s)", nodeID, agent.Label)
 			}
 		}
-	} else if len(agent.AgentSecretEnc) > 0 {
-		// Always include existing agent_secret so LV can store it if missing
+	} else if req.NeedsAgentSecret && len(agent.AgentSecretEnc) > 0 {
+		// LV reported it's missing agent_secret — re-send existing one
 		if decrypted := h.decryptAgentSecret(agent.AgentSecretEnc, agent.AgentSecretNonce); decrypted != "" {
 			resp["agent_secret"] = decrypted
+			log.Printf("agent: re-sent agent_secret to %s (%s) on request", nodeID, agent.Label)
 		}
 	}
 

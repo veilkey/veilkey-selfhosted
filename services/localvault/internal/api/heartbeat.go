@@ -29,9 +29,11 @@ func (s *Server) StartHeartbeat(hubURL, label string, port int, interval time.Du
 	}
 
 	endpoint := hubURL + "/api/agents/heartbeat"
+	s.heartbeatMu.Lock()
 	s.heartbeatEndpoint = endpoint
 	s.heartbeatLabel = label
 	s.heartbeatPort = port
+	s.heartbeatMu.Unlock()
 
 	go func() {
 		endpoint := hubURL + "/api/agents/heartbeat"
@@ -103,6 +105,10 @@ func (s *Server) SendHeartbeatOnce(endpoint, label string, port int) error {
 	}
 	if saltBytes := s.Salt(); len(saltBytes) > 0 {
 		payload["salt"] = base64.StdEncoding.EncodeToString(saltBytes)
+	}
+	// Tell VC if we need agent_secret (file missing)
+	if s.ReadAgentSecretFile() == "" {
+		payload["needs_agent_secret"] = true
 	}
 	// Include registration token for first-time registration
 	if regToken, err := s.db.GetConfig("VEILKEY_REGISTRATION_TOKEN"); err == nil && regToken != nil && regToken.Value != "" {

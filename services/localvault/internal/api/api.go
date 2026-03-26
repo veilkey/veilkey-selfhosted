@@ -53,7 +53,8 @@ type Server struct {
 	// vaultUnlockKey is the auto-generated password, held in memory until sent to VC.
 	vaultUnlockKey string
 
-	// heartbeat params for post-unlock trigger
+	// heartbeat params for post-unlock trigger (set once at startup, read-only after)
+	heartbeatMu       sync.RWMutex
 	heartbeatEndpoint string
 	heartbeatLabel    string
 	heartbeatPort     int
@@ -462,9 +463,12 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 
 	// Trigger immediate heartbeat after unlock
 	go func() {
-		if s.heartbeatEndpoint != "" {
+		s.heartbeatMu.RLock()
+		ep, lbl, pt := s.heartbeatEndpoint, s.heartbeatLabel, s.heartbeatPort
+		s.heartbeatMu.RUnlock()
+		if ep != "" {
 			log.Println("Post-unlock heartbeat triggered")
-			if err := s.SendHeartbeatOnce(s.heartbeatEndpoint, s.heartbeatLabel, s.heartbeatPort); err != nil {
+			if err := s.SendHeartbeatOnce(ep, lbl, pt); err != nil {
 				log.Printf("Post-unlock heartbeat failed: %v", err)
 			}
 		}
