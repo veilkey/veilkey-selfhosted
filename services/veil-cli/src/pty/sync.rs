@@ -31,7 +31,7 @@ pub fn spawn_mask_map_sync(
                         enrich_mask_map(&mut new_map);
 
                         if let Ok(mut map) = mask_map.write() {
-                            let old_len = map.len();
+                            let _old_len = map.len();
                             *map = new_map;
                             // Silently update — no terminal output during active shell
                         }
