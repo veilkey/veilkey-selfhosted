@@ -57,11 +57,10 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		Vault string `json:"vault"`
 	}
 
-	secretOnlineCutoff := time.Now().Add(-5 * time.Minute)
 	var entries []maskEntry
 	for i := range agents {
 		agent := &agents[i]
-		if len(agent.DEK) == 0 || agent.LastSeen.Before(secretOnlineCutoff) {
+		if len(agent.DEK) == 0 {
 			continue
 		}
 		agentDEK, dekErr := h.decryptAgentDEK(agent.DEK, agent.DEKNonce)
@@ -153,11 +152,10 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 			Status string `json:"status"`
 		}
 	}
-	agentOnlineCutoff := time.Now().Add(-5 * time.Minute)
 	veCh := make(chan veResult, len(agents))
 	for i := range agents {
 		agent := &agents[i]
-		if agent.IP == "" || agent.LastSeen.Before(agentOnlineCutoff) {
+		if agent.IP == "" {
 			veCh <- veResult{}
 			continue
 		}
