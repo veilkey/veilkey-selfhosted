@@ -14,10 +14,13 @@ import (
 func RunKeycenter() {
 	addr := os.Getenv("VEILKEY_KEYCENTER_URL")
 	if addr == "" {
+		addr = os.Getenv("VEILKEY_LOCALVAULT_URL")
+	}
+	if addr == "" {
 		addr = os.Getenv("VEILKEY_ADDR")
 	}
 	if addr == "" {
-		log.Fatal("VEILKEY_KEYCENTER_URL or VEILKEY_ADDR is required")
+		log.Fatal("VEILKEY_KEYCENTER_URL, VEILKEY_LOCALVAULT_URL, or VEILKEY_ADDR is required")
 	}
 
 	// Normalize to a full URL

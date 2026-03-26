@@ -57,10 +57,11 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 		Vault string `json:"vault"`
 	}
 
+	secretOnlineCutoff := time.Now().Add(-5 * time.Minute)
 	var entries []maskEntry
 	for i := range agents {
 		agent := &agents[i]
-		if len(agent.DEK) == 0 {
+		if len(agent.DEK) == 0 || agent.LastSeen.Before(secretOnlineCutoff) {
 			continue
 		}
 		agentDEK, dekErr := h.decryptAgentDEK(agent.DEK, agent.DEKNonce)
@@ -142,48 +143,72 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		veSeenValues[e.Value] = true
 	}
+	// Fetch VE configs from all agents in parallel with short timeout
+	type veResult struct {
+		vaultName string
+		configs   []struct {
+			Key    string `json:"key"`
+			Value  string `json:"value"`
+			Scope  string `json:"scope"`
+			Status string `json:"status"`
+		}
+	}
+	agentOnlineCutoff := time.Now().Add(-5 * time.Minute)
+	veCh := make(chan veResult, len(agents))
 	for i := range agents {
 		agent := &agents[i]
-		if agent.IP == "" {
+		if agent.IP == "" || agent.LastSeen.Before(agentOnlineCutoff) {
+			veCh <- veResult{}
 			continue
 		}
-		ai := agentToInfo(agent)
-		configURL := ai.URL() + "/api/configs"
-		req, reqErr := http.NewRequest(http.MethodGet, configURL, nil)
-		if reqErr != nil {
-			continue
-		}
-		h.setAgentAuthHeader(req, ai)
-		configResp, configErr := h.deps.HTTPClient().Do(req)
-		if configErr != nil {
-			continue
-		}
-		var configData struct {
-			Configs []struct {
-				Key    string `json:"key"`
-				Value  string `json:"value"`
-				Scope  string `json:"scope"`
-				Status string `json:"status"`
-			} `json:"configs"`
-		}
-		if err := json.NewDecoder(configResp.Body).Decode(&configData); err == nil {
-			for _, cfg := range configData.Configs {
-				if cfg.Value == "" || cfg.Status != "active" {
-					continue
-				}
-				if veSeenValues[cfg.Value] {
-					continue // skip duplicate values
-				}
-				veSeenValues[cfg.Value] = true
-				veRef := "VE:" + cfg.Scope + ":" + cfg.Key
-				entries = append(entries, maskEntry{
-					Ref:   veRef,
-					Value: cfg.Value,
-					Vault: agent.VaultName,
-				})
+		go func(ag *db.Agent) {
+			ai := agentToInfo(ag)
+			ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+			defer cancel()
+			configURL := ai.URL() + "/api/configs"
+			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, configURL, nil)
+			if reqErr != nil {
+				veCh <- veResult{}
+				return
 			}
+			h.setAgentAuthHeader(req, ai)
+			configResp, configErr := h.deps.HTTPClient().Do(req)
+			if configErr != nil {
+				veCh <- veResult{}
+				return
+			}
+			defer configResp.Body.Close()
+			var data struct {
+				Configs []struct {
+					Key    string `json:"key"`
+					Value  string `json:"value"`
+					Scope  string `json:"scope"`
+					Status string `json:"status"`
+				} `json:"configs"`
+			}
+			if err := json.NewDecoder(configResp.Body).Decode(&data); err != nil {
+				veCh <- veResult{}
+				return
+			}
+			veCh <- veResult{vaultName: ag.VaultName, configs: data.Configs}
+		}(agent)
+	}
+	for range agents {
+		res := <-veCh
+		for _, cfg := range res.configs {
+			if cfg.Value == "" || cfg.Status != "active" {
+				continue
+			}
+			if veSeenValues[cfg.Value] {
+				continue
+			}
+			veSeenValues[cfg.Value] = true
+			entries = append(entries, maskEntry{
+				Ref:   "VE:" + cfg.Scope + ":" + cfg.Key,
+				Value: cfg.Value,
+				Vault: res.vaultName,
+			})
 		}
-		configResp.Body.Close()
 	}
 
 	respondJSON(w, http.StatusOK, map[string]any{
