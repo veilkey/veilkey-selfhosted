@@ -40,6 +40,7 @@ fn print_usage() {
   veilkey list                      List detected VeilKey entries
   veilkey paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey clear                     Clear session log
+  veilkey health [--json]            Show agent health from VaultCenter
   veilkey config search <key>        Search config across all vaults
   veilkey config bulk-update <k> <old> <new>  Update matching config values
   veilkey config bulk-set <key> <val>  Set config on all agents
@@ -55,6 +56,7 @@ Options:
 
 Environment:
   VEILKEY_LOCALVAULT_URL       Preferred localvault URL
+  VEILKEY_VAULTCENTER_URL      VaultCenter URL (for health/config commands)
   VEILKEY_API                  Legacy endpoint variable (fallback)
   VEILKEY_STATE_DIR            State directory (default: $TMPDIR/veilkey-cli)
 "#
@@ -92,6 +94,7 @@ fn main() {
         "proxy",
         "paste-mode",
         "config",
+        "health",
     ];
 
     let subcmd = raw_args.get(1).map(String::as_str).unwrap_or("");
@@ -602,6 +605,61 @@ fn main() {
                 _ => {
                     eprintln!("Unknown ssh subcommand: {}", subcmd);
                     eprintln!("Usage: veilkey ssh <add|list> [args]");
+                    process::exit(1);
+                }
+            }
+        }
+        "health" => {
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for health command.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match client.agents_list() {
+                Ok(agents) => {
+                    if json_flag {
+                        let out = serde_json::json!({ "agents": agents });
+                        println!("{}", serde_json::to_string_pretty(&out).unwrap_or_default());
+                    } else if agents.is_empty() {
+                        println!("No agents registered");
+                    } else {
+                        println!(
+                            "{:<20} {:<10} {:>8} {}",
+                            "AGENT", "STATUS", "SECRETS", "LAST_SEEN"
+                        );
+                        println!("{}", "-".repeat(60));
+                        for agent in &agents {
+                            let label = agent["label"].as_str().unwrap_or("?");
+                            let archived = agent["archived"].as_bool().unwrap_or(false);
+                            let status = if archived {
+                                "archived"
+                            } else {
+                                agent["status"].as_str().unwrap_or("unknown")
+                            };
+                            let secrets = agent["secrets_count"].as_u64().unwrap_or(0);
+                            let last_seen = agent["last_seen_ago"]
+                                .as_str()
+                                .or_else(|| agent["last_heartbeat"].as_str())
+                                .unwrap_or("-");
+                            println!(
+                                "{:<20} {:<10} {:>8} {}",
+                                label, status, secrets, last_seen
+                            );
+                        }
+                        println!("\nTotal: {} agent(s)", agents.len());
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[veilkey] health check failed: {}", e);
                     process::exit(1);
                 }
             }
