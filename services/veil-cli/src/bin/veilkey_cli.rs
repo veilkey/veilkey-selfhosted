@@ -41,6 +41,9 @@ fn print_usage() {
   veilkey paste-mode [mode]         Get or set pasted temp issuance mode
   veilkey clear                     Clear session log
   veilkey health [--json]            Show agent health from VaultCenter
+  veilkey agent list [--json]        List agents from VaultCenter
+  veilkey agent archive <label>      Archive an agent
+  veilkey agent unarchive <label>    Unarchive an agent
   veilkey config search <key>        Search config across all vaults
   veilkey config bulk-update <k> <old> <new>  Update matching config values
   veilkey config bulk-set <key> <val>  Set config on all agents
@@ -95,6 +98,7 @@ fn main() {
         "paste-mode",
         "config",
         "health",
+        "agent",
     ];
 
     let subcmd = raw_args.get(1).map(String::as_str).unwrap_or("");
@@ -665,6 +669,119 @@ fn main() {
                 }
                 Err(e) => {
                     eprintln!("[veilkey] health check failed: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        "agent" => {
+            let subcmd = cmd_args.first().map(String::as_str).unwrap_or_else(|| {
+                eprintln!("Usage: veilkey agent <list|archive|unarchive> [label]");
+                process::exit(1);
+            });
+            let vc_url = std::env::var("VEILKEY_VAULTCENTER_URL").unwrap_or_else(|_| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for agent commands.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            let json_flag = cmd_args.iter().any(|a| a == "--json");
+            let password = std::env::var("VEILKEY_PASSWORD").unwrap_or_else(|_| {
+                rpassword::prompt_password("VeilKey password: ").unwrap_or_default()
+            });
+            let client = veil_cli_rs::api::VeilKeyClient::new(&vc_url);
+            if let Err(e) = client.admin_login(&password) {
+                eprintln!("[veilkey] login failed: {}", e);
+                process::exit(1);
+            }
+            match subcmd {
+                "list" => match client.agents_list() {
+                    Ok(agents) => {
+                        if json_flag {
+                            let out = serde_json::json!({ "agents": agents });
+                            println!(
+                                "{}",
+                                serde_json::to_string_pretty(&out).unwrap_or_default()
+                            );
+                        } else if agents.is_empty() {
+                            println!("No agents registered");
+                        } else {
+                            println!(
+                                "{:<20} {:<12} {:<10} {:>8} {:<10}",
+                                "LABEL", "NODE_ID", "STATUS", "SECRETS", "ARCHIVED"
+                            );
+                            println!("{}", "-".repeat(70));
+                            for agent in &agents {
+                                let label = agent["label"].as_str().unwrap_or("?");
+                                let node_id = agent["node_id"].as_str().unwrap_or("?");
+                                let node_short = if node_id.len() > 8 {
+                                    &node_id[..8]
+                                } else {
+                                    node_id
+                                };
+                                let status = agent["status"].as_str().unwrap_or("unknown");
+                                let secrets = agent["secrets_count"].as_u64().unwrap_or(0);
+                                let archived = agent["archived"].as_bool().unwrap_or(false);
+                                println!(
+                                    "{:<20} {:<12} {:<10} {:>8} {:<10}",
+                                    label,
+                                    node_short,
+                                    status,
+                                    secrets,
+                                    if archived { "yes" } else { "no" }
+                                );
+                            }
+                            println!("\nTotal: {} agent(s)", agents.len());
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("[veilkey] agent list failed: {}", e);
+                        process::exit(1);
+                    }
+                },
+                "archive" | "unarchive" => {
+                    let label = cmd_args.get(1).map(String::as_str).unwrap_or_else(|| {
+                        eprintln!("Usage: veilkey agent {} <label>", subcmd);
+                        process::exit(1);
+                    });
+                    let agents = client.agents_list().unwrap_or_else(|e| {
+                        eprintln!("[veilkey] agent list failed: {}", e);
+                        process::exit(1);
+                    });
+                    let agent = agents
+                        .iter()
+                        .find(|a| a["label"].as_str() == Some(label))
+                        .unwrap_or_else(|| {
+                            eprintln!("[veilkey] agent '{}' not found", label);
+                            process::exit(1);
+                        });
+                    let node_id = agent["node_id"].as_str().unwrap_or_else(|| {
+                        eprintln!("[veilkey] agent '{}' missing node_id", label);
+                        process::exit(1);
+                    });
+                    let result = if subcmd == "archive" {
+                        client.agents_archive(node_id)
+                    } else {
+                        client.agents_unarchive(node_id)
+                    };
+                    match result {
+                        Ok(resp) => {
+                            if json_flag {
+                                println!(
+                                    "{}",
+                                    serde_json::to_string_pretty(&resp).unwrap_or_default()
+                                );
+                            } else {
+                                println!("[veilkey] agent '{}' → {}", label, subcmd);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[veilkey] {} failed: {}", subcmd, e);
+                            process::exit(1);
+                        }
+                    }
+                }
+                unknown => {
+                    eprintln!("Unknown agent subcommand: {}", unknown);
+                    eprintln!("Usage: veilkey agent <list|archive|unarchive> [label]");
                     process::exit(1);
                 }
             }
