@@ -150,6 +150,13 @@ func DefaultRefStatus(scope RefScope) RefStatus {
 func (d *DB) GetRef(canonical string) (*TokenRef, error) {
 	return dbFirst[TokenRef](d, "ref "+canonical+" not found", "ref_canonical = ?", canonical)
 }
+
+// GetRefBySecretName finds the first active (non-temp) ref with the given secret_name.
+func (d *DB) GetRefBySecretName(name string) (*TokenRef, error) {
+	return dbFirst[TokenRef](d, "ref for name "+name+" not found",
+		"secret_name = ? AND ref_scope != ? AND status = ?", name, RefScopeTemp, RefStatusActive)
+}
+
 func (d *DB) ListRefs() ([]TokenRef, error) {
 	var refs []TokenRef
 	err := d.conn.Order("ref_canonical ASC").Find(&refs).Error

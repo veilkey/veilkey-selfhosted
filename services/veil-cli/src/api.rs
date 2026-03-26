@@ -664,6 +664,10 @@ pub fn parse_mask_map_entries(
 }
 
 fn resolve_candidates(token: &str) -> Vec<String> {
+    // VK:STATIC:{name} — send as-is, no fallback (name-based lookup, not hash)
+    if token.starts_with("VK:STATIC:") {
+        return vec![token.to_string()];
+    }
     if token.starts_with("VK:") || token.starts_with("VE:") {
         let colon_count = token.chars().filter(|&c| c == ':').count();
         if colon_count == 1 {
@@ -1970,6 +1974,29 @@ mod connection_domain_tests {
         // "VE:something" (only 1 colon) — special path in resolve_candidates
         let candidates = super::resolve_candidates("VE:something");
         assert_eq!(candidates, vec!["something"]);
+    }
+
+    // ── VK:STATIC resolve candidates ─────────────────────────────────
+
+    #[test]
+    fn test_resolve_candidates_vk_static_full_token() {
+        let c = super::resolve_candidates("VK:STATIC:OWNER_PASSWORD");
+        assert_eq!(c, vec!["VK:STATIC:OWNER_PASSWORD"]);
+    }
+
+    #[test]
+    fn test_resolve_candidates_vk_static_no_fallback() {
+        let c = super::resolve_candidates("VK:STATIC:MY_KEY");
+        assert_eq!(c.len(), 1, "VK:STATIC must not have hash fallback");
+    }
+
+    #[test]
+    fn test_resolve_candidates_vk_static_various_names() {
+        for name in ["DB_PASSWORD", "owner-email", "api_key_123", "x"] {
+            let token = format!("VK:STATIC:{}", name);
+            let c = super::resolve_candidates(&token);
+            assert_eq!(c, vec![token]);
+        }
     }
 
     // ── env var resolution regex excludes VE ─────────────────────────

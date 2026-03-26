@@ -34,6 +34,23 @@ func (h *Handler) handleResolveSecret(w http.ResponseWriter, r *http.Request) {
 
 	isCascade := r.Header.Get("X-VeilKey-Cascade") == "true"
 
+	// VK:STATIC:{name} — resolve by secret name instead of hash
+	if strings.HasPrefix(ref, "VK:STATIC:") {
+		name := strings.TrimPrefix(ref, "VK:STATIC:")
+		if name == "" {
+			respondError(w, http.StatusBadRequest, "VK:STATIC: name is required")
+			return
+		}
+		tracked, err := h.deps.DB().GetRefBySecretName(name)
+		if err == nil && tracked != nil {
+			if h.resolveTrackedRef(w, tracked.RefCanonical, tracked) {
+				return
+			}
+		}
+		respondError(w, http.StatusNotFound, "static ref not found: "+name)
+		return
+	}
+
 	// Try exact match first, then canonical forms (VK:LOCAL:ref, VK:TEMP:ref)
 	candidates := []string{ref}
 	if !strings.Contains(ref, ":") {
