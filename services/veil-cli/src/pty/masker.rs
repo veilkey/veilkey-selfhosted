@@ -211,11 +211,13 @@ pub fn mask_output(
     // The combined pre-scan above already issued split secrets to the API.
     let mut output = new_text.clone();
 
-    // Cross-chunk mask_map: secrets typed char-by-char span tail + new_text.
-    // Same-width refs ensure cursor position stays correct after erase.
-    if let Some(m) = find_cross_chunk_mask(plain_tail, &new_text, mask_map) {
-        output = m.output;
-    }
+    // Note: cross-chunk mask_map (find_cross_chunk_mask) is intentionally NOT
+    // used here. Erasing already-emitted chars with cursor control (\x1b[nD\x1b[K)
+    // breaks readline's cursor tracking, causing VK:LOC partial fragments on
+    // arrow keys and history recall. The 50ms output coalesce aggregates most
+    // char-by-char echo into single chunks where standard mask_map replacement
+    // handles them. Complete output lines (bash errors, command output) are
+    // always masked by the mask_map loop below.
 
     // Apply cross-chunk boundary replacements first (secret suffix leaked into new_text)
     for (leaked, replacement) in &cross_chunk_replacements {
