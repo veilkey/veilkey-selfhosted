@@ -239,24 +239,12 @@ pub fn mask_output(
     for (leaked, replacement) in &cross_chunk_replacements {
         output = output.replacen(leaked, replacement, 1);
     }
-    // Newline-aware masking:
-    // - Completed lines (\n present): use full canonical ref (VK:LOCAL:xxx)
-    //   Cursor position is irrelevant after newline.
-    // - Readline echo (no \n, in recent_input): skip entirely
-    //   Prevents cursor desync → VK:LOC fragments on arrow keys.
-    // - Partial output (no \n, not in recent_input): same-width fallback
-    let has_newline = output.contains('\n');
+    // Same-width mask_map replacement — always applied.
     for (plaintext, vk_ref) in mask_map {
         if plaintext.is_empty() {
             continue;
         }
-        // No newline = readline territory (echo, history recall, tab completion).
-        // Skip ALL masking here to prevent cursor desync and scope loss.
-        // Completed lines (\n) always get full canonical ref.
-        if !has_newline {
-            continue;
-        }
-        let repl = colorize_ref(vk_ref);
+        let repl = padded_colorize_ref(vk_ref, UnicodeWidthStr::width(plaintext.as_str()));
         let (new_out, replaced) = ansi_aware_replace(&output, plaintext, &repl);
         if replaced {
             output = new_out;
