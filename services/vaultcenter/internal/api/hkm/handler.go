@@ -62,6 +62,8 @@ type Deps interface {
 
 	// GetMaskCacheData returns cached mask-map data if valid and within TTL, or nil.
 	GetMaskCacheData() []byte
+	// BumpMaskMapVersion increments version and wakes long-poll clients.
+	BumpMaskMapVersion()
 }
 
 // Handler owns all HKM HTTP handlers.

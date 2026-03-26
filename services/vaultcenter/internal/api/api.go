@@ -763,6 +763,14 @@ func (s *Server) handleUnlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("Server unlocked by %s", r.RemoteAddr)
+
+	// Pre-build mask-map cache so first veil connection is instant
+	go func() {
+		log.Println("mask-map cache: pre-building after unlock...")
+		s.hkmHandler.RebuildMaskCache()
+		log.Println("mask-map cache: ready")
+	}()
+
 	s.respondJSON(w, http.StatusOK, map[string]interface{}{"status": "unlocked"})
 }
 

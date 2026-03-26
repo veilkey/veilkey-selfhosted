@@ -256,10 +256,11 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Track content_version changes
+	// Track content_version changes — rebuild mask-map cache on dirty
 	if req.ContentVersion != agent.ContentVersion {
 		log.Printf("agent: content_version changed for %s (%s): %d -> %d", nodeID, req.Label, agent.ContentVersion, req.ContentVersion)
 		h.deps.InvalidateMaskCache()
+		go h.RebuildMaskCache() // async rebuild so veil gets updated cache
 	}
 	if err := h.deps.DB().UpdateAgentContentVersion(nodeID, req.ContentVersion); err != nil {
 		log.Printf("agent: failed to update content_version for %s: %v", nodeID, err)
