@@ -2870,3 +2870,209 @@ mod masking_comprehensive_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod masking_advanced_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        let re = regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap();
+        re.replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ═══ ECHO off scenario (sudo/ssh password) ═══
+
+    /// sudo error leaks password — must be masked in output.
+    /// Password was typed during ECHO off, NOT in recent_input.
+    #[test]
+    fn sudo_error_masks_password() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // sudo outputs error with the attempted password (rare but possible)
+        // recent_input is empty because ECHO was off during typing
+        let (out, _) = call("Sorry, try again.\nGhdrhkdgh1@\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("Ghdrhkdgh1@"), "sudo error leaked password: {}", v);
+    }
+
+    // ═══ Multiline secret (SSH key) ═══
+
+    /// SSH private key spans multiple lines — all lines must be masked
+    #[test]
+    fn ssh_key_multiline_masked() {
+        let key = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaC1rZXk=\n-----END OPENSSH PRIVATE KEY-----";
+        let map = mk(&[(key, "VK:SSH:sshkey01")]);
+        let (out, _) = call(&format!("{}\n", key), &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("BEGIN OPENSSH"), "SSH key header leaked: {}", v);
+    }
+
+    // ═══ Two secrets adjacent, no space ═══
+
+    /// Two secrets touching each other in output
+    #[test]
+    fn adjacent_secrets_both_masked() {
+        let map = mk(&[
+            ("secret_aaa!", "VK:LOCAL:adj00001"),
+            ("secret_bbb!", "VK:LOCAL:adj00002"),
+        ]);
+        let (out, _) = call("secret_aaa!secret_bbb!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("secret_aaa!"), "first adjacent leaked");
+        assert!(!v.contains("secret_bbb!"), "second adjacent leaked");
+    }
+
+    // ═══ \r\n vs \n ═══
+
+    /// Windows-style line endings (\r\n) — still a completed line
+    #[test]
+    fn crlf_line_ending_masked() {
+        let map = mk(&[("win_secret!", "VK:LOCAL:crlf0001")]);
+        let (out, _) = call("val=win_secret!\r\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("win_secret!"), "CRLF line leaked: {}", v);
+        assert!(v.contains("VK:LOCAL:crlf0001"), "must use full ref: {}", v);
+    }
+
+    // ═══ Secret followed by prompt ═══
+
+    /// Error line + new prompt in same chunk
+    #[test]
+    fn error_then_prompt_in_same_chunk() {
+        let map = mk(&[("my_password!", "VK:LOCAL:prm00001")]);
+        let (out, _) = call("bash: my_password!: not found\n$ ", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("my_password!"), "error before prompt leaked: {}", v);
+        assert!(v.contains("$ "), "prompt must survive: {}", v);
+    }
+
+    // ═══ Secret after ANSI reset ═══
+
+    /// Secret immediately after ANSI reset code
+    #[test]
+    fn secret_after_ansi_reset() {
+        let map = mk(&[("reset_secret", "VK:LOCAL:ansi0001")]);
+        let (out, _) = call("\x1b[0mreset_secret\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("reset_secret"), "secret after ANSI reset leaked: {}", v);
+    }
+
+    // ═══ Enriched variants ═══
+
+    /// Base64 of secret must also be masked
+    #[test]
+    fn base64_variant_masked() {
+        // "Ghdrhkdgh1@" base64 = "R2hkcmhrZGdoMUA="
+        let map = mk(&[
+            ("Ghdrhkdgh1@", "VK:LOCAL:6da25530"),
+            ("R2hkcmhrZGdoMUA=", "VK:LOCAL:6da25530"),
+        ]);
+        let (out, _) = call("token=R2hkcmhrZGdoMUA=\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("R2hkcmhrZGdoMUA="), "base64 variant leaked: {}", v);
+    }
+
+    /// Hex of secret must also be masked
+    #[test]
+    fn hex_variant_masked() {
+        // "Ghdrhkdgh1@" hex = "47686472686b64676831..."
+        let hex_val = "47686472686b6467683140";
+        let map = mk(&[
+            ("Ghdrhkdgh1@", "VK:LOCAL:6da25530"),
+            (hex_val, "VK:LOCAL:6da25530"),
+        ]);
+        let (out, _) = call(&format!("hex={}\n", hex_val), &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains(hex_val), "hex variant leaked: {}", v);
+    }
+
+    // ═══ Long line / terminal wrap ═══
+
+    /// Secret in a very long line (beyond 80 cols)
+    #[test]
+    fn secret_in_long_line() {
+        let map = mk(&[("long_secret!", "VK:LOCAL:lng00001")]);
+        let prefix = "x".repeat(200);
+        let (out, _) = call(&format!("{}long_secret!\n", prefix), &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("long_secret!"), "secret in long line leaked: {}", v);
+    }
+
+    // ═══ Backspace during typing ═══
+
+    /// User types partial secret, backspaces, retypes — echo should not be masked
+    #[test]
+    fn backspace_during_typing_safe() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Backspace = \x7f or \x08
+        let (out, _) = call("Ghdrhk\x08\x08dgh1@", &map, "Ghdrhk\x08\x08dgh1@", "");
+        // Must not crash or produce fragments
+        let v = strip(&out);
+        let has_fragment = v.contains("VK:LOCVK:");
+        assert!(!has_fragment, "backspace produced fragment: {}", v);
+    }
+
+    // ═══ Ctrl+C interrupt ═══
+
+    /// Ctrl+C (^C) mid-line should not leave fragments
+    #[test]
+    fn ctrl_c_mid_secret_safe() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        // Ctrl+C appears as ^C in output
+        let (out, _) = call("Ghdrhk^C\n", &map, "Ghdrhk", "");
+        let v = strip(&out);
+        // Partial secret "Ghdrhk" should not match (too short or incomplete)
+        // No crash, no fragment
+        assert!(!v.contains("VK:LOCVK:"), "ctrl+c fragment: {}", v);
+    }
+
+    // ═══ Concurrent chunks ═══
+
+    /// Two different secrets in rapid succession
+    #[test]
+    fn rapid_successive_secrets() {
+        let map = mk(&[
+            ("first_sec!!", "VK:LOCAL:rap00001"),
+            ("second_sec!", "VK:LOCAL:rap00002"),
+        ]);
+        let mut tail = String::new();
+        let (out1, t) = call("bash: first_sec!!: not found\n", &map, "", &tail);
+        tail = t;
+        let (out2, _) = call("bash: second_sec!: not found\n", &map, "", &tail);
+        let v1 = strip(&String::from_utf8_lossy(&out1.as_bytes()));
+        let v2 = strip(&String::from_utf8_lossy(&out2.as_bytes()));
+        assert!(!v1.contains("first_sec!!"), "first rapid leaked");
+        assert!(!v2.contains("second_sec!"), "second rapid leaked");
+    }
+
+    // ═══ No secret registered ═══
+
+    /// Empty mask_map — output passes through unchanged
+    #[test]
+    fn empty_mask_map_passthrough() {
+        let map: Vec<(String, String)> = vec![];
+        let (out, _) = call("normal output\n", &map, "", "");
+        let v = strip(&out);
+        assert_eq!(v.trim(), "normal output", "empty map corrupted output");
+    }
+
+    /// Secret not in mask_map — passes through (not our job to detect)
+    #[test]
+    fn unregistered_secret_passes() {
+        let map = mk(&[("known_secret", "VK:LOCAL:xxx00001")]);
+        let (out, _) = call("unknown_password\n", &map, "", "");
+        let v = strip(&out);
+        assert!(v.contains("unknown_password"), "only mask_map secrets should be masked");
+    }
+}
