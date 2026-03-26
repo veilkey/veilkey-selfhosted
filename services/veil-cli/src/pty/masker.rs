@@ -2753,3 +2753,280 @@ mod re_masking_tests {
 }
 
 
+
+#[cfg(test)]
+mod masking_robustness_tests {
+    use super::*;
+
+    fn init_crypto() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+    }
+    fn mk(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+        pairs.iter().map(|(a, b)| (a.to_string(), b.to_string())).collect()
+    }
+    fn strip(s: &str) -> String {
+        regex::Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").unwrap().replace_all(s, "").to_string()
+    }
+    fn call(data: &str, map: &[(String, String)], ri: &str, tail: &str) -> (String, String) {
+        init_crypto();
+        let c = VeilKeyClient::new("http://localhost:0");
+        let (b, t) = mask_output(data.as_bytes(), map, &[], &[], &c, ri, tail);
+        (String::from_utf8_lossy(&b).to_string(), t)
+    }
+
+    // ═══ Same-width guarantee ═══
+
+    /// Every masked output must have exact same visible width as input
+    #[test]
+    fn same_width_all_lengths_1_to_40() {
+        let vk_ref = "VK:LOCAL:abcdef01"; // 17 chars
+        for len in 1..=40 {
+            let secret: String = (0..len).map(|i| (b'a' + (i % 26) as u8) as char).collect();
+            let map = vec![(secret.clone(), vk_ref.to_string())];
+            let (out, _) = call(&secret, &map, "", "");
+            let v = strip(&out);
+            if v != secret {
+                assert_eq!(v.chars().count(), secret.chars().count(),
+                    "width mismatch at len={}: got '{}' ({})", len, v, v.chars().count());
+            }
+        }
+    }
+
+    /// Same-width must hold for all scope types
+    #[test]
+    fn same_width_all_scopes() {
+        for vk_ref in &["VK:LOCAL:abc", "VK:SSH:def", "VK:TEMP:ghi", "VK:EXTERNAL:jkl"] {
+            let secret = "test_secret!";
+            let map = mk(&[(secret, vk_ref)]);
+            let (out, _) = call(secret, &map, "", "");
+            let v = strip(&out);
+            if v != secret {
+                assert_eq!(v.chars().count(), secret.chars().count(),
+                    "width mismatch for {}: '{}'", vk_ref, v);
+            }
+        }
+    }
+
+    // ═══ Cross-chunk char-by-char ═══
+
+    /// 1-char-at-a-time echo must eventually trigger cross-chunk
+    #[test]
+    fn cross_chunk_1char_complete_secret() {
+        let map = mk(&[("password1234", "VK:LOCAL:ccc33333")]);
+        let mut tail = String::new();
+        for ch in "password123".chars() {
+            let (_, t) = call(&ch.to_string(), &map, "", &tail);
+            tail = t;
+        }
+        let (raw, _) = call("4", &map, "", &tail);
+        let v = strip(&raw);
+        assert!(v.contains("VK:") || v.contains("ccc33333"),
+            "cross-chunk must catch: '{}'", v);
+    }
+
+    /// 2-char chunks
+    #[test]
+    fn cross_chunk_2char_chunks() {
+        let map = mk(&[("secret12345!", "VK:LOCAL:eee55555")]);
+        let mut tail = String::new();
+        for chunk in ["se", "cr", "et", "12", "34"] {
+            let (_, t) = call(chunk, &map, "", &tail);
+            tail = t;
+        }
+        let (raw, _) = call("5!", &map, "", &tail);
+        let v = strip(&raw);
+        assert!(v.contains("VK:") || v.contains("eee55555"),
+            "2-char cross-chunk: '{}'", v);
+    }
+
+    /// Cross-chunk must skip escape sequences
+    #[test]
+    fn cross_chunk_skip_escape() {
+        let map = mk(&[("password1234", "VK:LOCAL:ddd44444")]);
+        let (raw, _) = call("4\x1b[A", &map, "", "password123");
+        assert!(String::from_utf8_lossy(&raw.as_bytes()).contains("\x1b[A"),
+            "escape must pass through");
+    }
+
+    // ═══ Masking correctness ═══
+
+    /// Secret in bash error must be masked
+    #[test]
+    fn bash_error_masked() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (out, _) = call("bash: Ghdrhkdgh1@: not found\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("Ghdrhkdgh1@"), "bash error leaked: {}", v);
+    }
+
+    /// Secret in cat output must be masked
+    #[test]
+    fn cat_output_masked() {
+        let map = mk(&[("db_password!", "VK:LOCAL:cat00001")]);
+        let (out, _) = call("DB_PASS=db_password!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("db_password!"), "cat output leaked: {}", v);
+    }
+
+    /// Secret in JSON must be masked
+    #[test]
+    fn json_output_masked() {
+        let map = mk(&[("json_secret!", "VK:LOCAL:jsn00001")]);
+        let (out, _) = call("{\"key\":\"json_secret!\"}\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("json_secret!"), "JSON leaked: {}", v);
+    }
+
+    /// Multiple secrets all masked
+    #[test]
+    fn multiple_secrets_masked() {
+        let map = mk(&[
+            ("password123!", "VK:LOCAL:aaa11111"),
+            ("apikey-xyz99", "VK:LOCAL:bbb22222"),
+        ]);
+        let (out, _) = call("password123! apikey-xyz99\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("password123!"), "first leaked");
+        assert!(!v.contains("apikey-xyz99"), "second leaked");
+    }
+
+    /// Empty secret skipped
+    #[test]
+    fn empty_secret_safe() {
+        let map = mk(&[("", "VK:LOCAL:empty"), ("real_secret!", "VK:LOCAL:real1")]);
+        let (out, _) = call("real_secret!\n", &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("real_secret!"), "empty secret corrupted");
+    }
+
+    /// SSH key multiline
+    #[test]
+    fn ssh_key_masked() {
+        let key = "-----BEGIN OPENSSH PRIVATE KEY-----\nb3BlbnNzaA==\n-----END OPENSSH PRIVATE KEY-----";
+        let map = mk(&[(key, "VK:SSH:sshkey01")]);
+        let (out, _) = call(&format!("{}\n", key), &map, "", "");
+        let v = strip(&out);
+        assert!(!v.contains("BEGIN OPENSSH"), "SSH key leaked: {}", v);
+    }
+
+    // ═══ VK:LOC fragment prevention ═══
+
+    /// 10 rounds of error + arrow must not produce VK:LOC
+    #[test]
+    fn no_vkloc_10_rounds() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut combined = String::new();
+        let mut tail = String::new();
+        for _ in 0..10 {
+            let (raw, t) = call("bash: Ghdrhkdgh1@: err\n", &map, "", &tail);
+            tail = t;
+            combined += &strip(&raw);
+            let (_, t) = call("\x1b[A", &map, "", &tail);
+            tail = t;
+            let (_, t) = call("\x1b[B", &map, "", &tail);
+            tail = t;
+        }
+        assert!(!combined.contains("VK:LOCVK:"),
+            "VK:LOC fragment: {}", &combined[..combined.len().min(100)]);
+    }
+
+    /// Rapid arrows
+    #[test]
+    fn rapid_arrows_safe() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let mut tail = String::new();
+        for arrow in ["\x1b[A", "\x1b[B", "\x1b[A", "\x1b[B", "\x1b[A"] {
+            let (_, t) = call(arrow, &map, "", &tail);
+            tail = t;
+        }
+        let (raw, _) = call("bash: Ghdrhkdgh1@: err\n", &map, "", &tail);
+        let v = strip(&raw);
+        assert!(!v.contains("Ghdrhkdgh1@"), "after rapid arrows: {}", v);
+    }
+
+    // ═══ Edge cases ═══
+
+    /// Empty input no crash
+    #[test]
+    fn empty_input() {
+        let map = mk(&[("secret!", "VK:LOCAL:e01")]);
+        let (out, _) = call("", &map, "", "");
+        assert!(out.is_empty());
+    }
+
+    /// Just newline
+    #[test]
+    fn just_newline() {
+        let map = mk(&[("secret!", "VK:LOCAL:e02")]);
+        let (out, _) = call("\n", &map, "", "");
+        assert!(!out.is_empty());
+    }
+
+    /// Very long line
+    #[test]
+    fn long_line() {
+        let map = mk(&[("long_secret!", "VK:LOCAL:lng01")]);
+        let prefix = "x".repeat(500);
+        let (out, _) = call(&format!("{}long_secret!\n", prefix), &map, "", "");
+        assert!(!strip(&out).contains("long_secret!"));
+    }
+
+    /// Backspace in input
+    #[test]
+    fn backspace_safe() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (_, _) = call("Ghdrhk\x08dgh1@", &map, "", "");
+        // No crash
+    }
+
+    /// Ctrl+C
+    #[test]
+    fn ctrl_c_safe() {
+        let map = mk(&[("Ghdrhkdgh1@", "VK:LOCAL:6da25530")]);
+        let (_, _) = call("Ghdrhk^C\n", &map, "", "");
+        // No crash
+    }
+
+    // ═══ Coalesce guard ═══
+
+    #[test]
+    fn coalesce_at_least_30ms() {
+        let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        let line = prod.lines().find(|l| l.contains("from_millis") && l.contains("sleep")).unwrap();
+        let ms: u64 = line.split("from_millis(").nth(1)
+            .and_then(|s| s.split(')').next())
+            .and_then(|s| s.trim().parse().ok()).unwrap();
+        assert!(ms >= 30, "coalesce {}ms too short — secrets leak through readline echo", ms);
+    }
+
+    #[test]
+    fn coalesce_at_most_200ms() {
+        let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        let line = prod.lines().find(|l| l.contains("from_millis") && l.contains("sleep")).unwrap();
+        let ms: u64 = line.split("from_millis(").nth(1)
+            .and_then(|s| s.split(')').next())
+            .and_then(|s| s.trim().parse().ok()).unwrap();
+        assert!(ms <= 200, "coalesce {}ms too long — laggy", ms);
+    }
+
+    // ═══ Pattern async guard ═══
+
+    #[test]
+    fn patterns_loaded_async() {
+        let src = std::fs::read_to_string("src/pty/session.rs").expect("read");
+        assert!(src.contains("patterns_handle") && src.contains("thread::spawn"),
+            "patterns must be compiled in background thread");
+    }
+
+    // ═══ Sync no terminal output ═══
+
+    #[test]
+    fn sync_no_eprintln() {
+        let src = std::fs::read_to_string("src/pty/sync.rs").expect("read");
+        let prod = src.split("#[cfg(test)]").next().unwrap_or(&src);
+        assert!(!prod.contains("eprintln!"),
+            "sync must not print to terminal");
+    }
+}
