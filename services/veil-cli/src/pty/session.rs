@@ -166,9 +166,12 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
         std::process::exit(1);
     }
 
-    // Load detection patterns
-    let cfg = load_config(patterns_file).ok();
-    let patterns: Vec<CompiledPattern> = cfg.map(|c| c.patterns).unwrap_or_default();
+    // Load detection patterns in background (223 regex compilations = ~2s)
+    let pf = patterns_file.map(|s| s.to_string());
+    let patterns_handle = std::thread::spawn(move || {
+        let cfg = load_config(pf.as_deref()).ok();
+        cfg.map(|c| c.patterns).unwrap_or_default()
+    });
 
     // Save PID file
     let sd = state_dir();
@@ -176,7 +179,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
     let pid_path = sd.join("guard.pid");
     let _ = std::fs::write(&pid_path, format!("{}", std::process::id()));
 
-    // 1. Fetch mask_map (fail-closed)
+    // 1. Fetch mask_map (fail-closed) — runs in parallel with pattern compilation
     let mut mask_map: Vec<(String, String)> = match client.fetch_all_secrets_mask_map() {
         Some(map) => map,
         None => {
@@ -320,7 +323,17 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
             let mask_map = Arc::new(RwLock::new(mask_map));
             let ve_map = Arc::new(RwLock::new(ve_entries));
-            let patterns = Arc::new(patterns);
+            // Patterns compiled in background — start with empty, swap when ready
+            let patterns: Arc<RwLock<Vec<CompiledPattern>>> = Arc::new(RwLock::new(Vec::new()));
+            {
+                let patterns_ref = patterns.clone();
+                std::thread::spawn(move || {
+                    let compiled = patterns_handle.join().unwrap_or_default();
+                    if let Ok(mut p) = patterns_ref.write() {
+                        *p = compiled;
+                    }
+                });
+            }
             let client = Arc::new(client);
 
             // Background mask_map sync
@@ -457,7 +470,7 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
                     chunk,
                     &mask.read().unwrap(),
                     &ve.read().unwrap(),
-                    &patterns,
+                    &patterns.read().unwrap(),
                     &client,
                     &ri,
                     &plain_tail,
