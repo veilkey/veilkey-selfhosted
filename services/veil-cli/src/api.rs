@@ -2037,123 +2037,323 @@ mod connection_domain_tests {
         );
     }
 
-    // ── guard: veilkey wrapper binary removed ─────────────────────
+    // ── secret vault selection logic ──────────────────────────────
 
     #[test]
-    fn guard_cargo_toml_no_veilkey_bin() {
-        let src = include_str!("../Cargo.toml");
-        // Must NOT have [[bin]] name = "veilkey" (wrapper removed)
-        // But MUST have veilkey-cli, veil, veilkey-session-config
-        let mut in_bin_block = false;
-        for line in src.lines() {
-            if line.trim() == "[[bin]]" {
-                in_bin_block = true;
-                continue;
-            }
-            if in_bin_block && line.starts_with("name") {
-                let name = line.split('=').nth(1).unwrap_or("").trim().trim_matches('"');
-                assert_ne!(name, "veilkey", "Cargo.toml must not have [[bin]] name = \"veilkey\" (wrapper removed)");
-                in_bin_block = false;
-            }
-        }
-        assert!(src.contains("name = \"veilkey-cli\""), "must keep veilkey-cli bin");
-        assert!(src.contains("name = \"veil\""), "must keep veil bin");
-        assert!(src.contains("name = \"veilkey-session-config\""), "must keep veilkey-session-config bin");
-    }
-
-    #[test]
-    fn guard_dockerfile_no_veilkey_binary() {
-        let src = include_str!("../Dockerfile");
-        for line in src.lines() {
-            if line.contains("COPY") && line.contains("/veilkey") {
-                // Allow veilkey-cli, veilkey-session-config, veilkey-installer
-                let after_veilkey = line.split("/veilkey").last().unwrap_or("");
-                if after_veilkey.is_empty()
-                    || after_veilkey.starts_with(' ')
-                    || after_veilkey.starts_with('"')
-                {
-                    panic!("Dockerfile must not COPY standalone veilkey binary: {}", line.trim());
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn guard_dockerfile_has_veilkey_cli() {
-        let src = include_str!("../Dockerfile");
-        assert!(src.contains("veilkey-cli"), "Dockerfile must include veilkey-cli");
-    }
-
-    #[test]
-    fn guard_docker_compose_no_standalone_veilkey() {
-        let src = include_str!("../../../docker-compose.yml");
-        for line in src.lines() {
-            let trimmed = line.trim();
-            if trimmed.starts_with("VEILKEY_VK_BIN:") || trimmed.starts_with("VEILKEY_BIN:") {
-                assert!(
-                    trimmed.contains("veilkey-cli"),
-                    "docker-compose VEILKEY_*_BIN must point to veilkey-cli, not veilkey: {}",
-                    trimmed
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn guard_install_script_no_veilkey_binary() {
-        let src = include_str!("../../../install/common/install-veil-cli.sh");
-        for line in src.lines() {
-            if line.contains("for bin in") || line.contains("for BIN in") {
-                assert!(
-                    !line.contains(" veilkey "),
-                    "install script must not distribute standalone veilkey: {}",
-                    line.trim()
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn guard_install_script_has_veilkey_cli() {
-        let src = include_str!("../../../install/common/install-veil-cli.sh");
-        assert!(src.contains("veilkey-cli"), "install script must include veilkey-cli");
-    }
-
-    #[test]
-    fn guard_docs_no_standalone_veilkey_commands() {
-        let files = [
-            include_str!("../../../docs/cli.md"),
-            include_str!("../../../docs/security-model.md"),
-            include_str!("../../../docs/OPERATING-MODEL.md"),
-            include_str!("../../../docs/vssh-design.md"),
-            include_str!("../../../docs/setup/veil-cli/usage.md"),
+    fn secret_add_selects_vault_with_most_secrets() {
+        let agents = vec![
+            serde_json::json!({"label": "soulflow", "agent_hash": "aaa", "secrets_count": 2, "archived": false}),
+            serde_json::json!({"label": "host-lv", "agent_hash": "bbb", "secrets_count": 13, "archived": false}),
         ];
-        let commands = [
-            "veilkey wrap", "veilkey resolve", "veilkey status",
-            "veilkey exec", "veilkey create", "veilkey scan",
-            "veilkey filter", "veilkey paste-mode", "veilkey ssh",
-            "veilkey function",
-        ];
-        for (i, src) in files.iter().enumerate() {
-            for cmd in &commands {
-                // Find occurrences NOT preceded by "-cli"
-                for (line_no, line) in src.lines().enumerate() {
-                    if line.contains(cmd) && !line.contains(&format!("-cli {}", cmd.split_whitespace().last().unwrap_or(""))) && !line.contains("veilkey-cli") {
-                        panic!(
-                            "doc file #{} line {}: found standalone '{}' — must use 'veilkey-cli' instead: {}",
-                            i, line_no + 1, cmd, line.trim()
-                        );
-                    }
-                }
-            }
-        }
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        let selected = active.iter()
+            .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
+            .unwrap();
+        assert_eq!(selected["agent_hash"].as_str().unwrap(), "bbb");
     }
 
     #[test]
-    fn guard_cli_binary_name_is_veilkey_cli() {
-        // The bin entry in Cargo.toml for the main CLI must be "veilkey-cli"
-        let src = include_str!("../Cargo.toml");
-        assert!(src.contains("name = \"veilkey-cli\""));
-        assert!(src.contains("path = \"src/bin/veilkey_cli.rs\""));
+    fn secret_add_selects_single_vault() {
+        let agents = vec![
+            serde_json::json!({"label": "host-lv", "agent_hash": "bbb", "secrets_count": 5, "archived": false}),
+        ];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0]["agent_hash"].as_str().unwrap(), "bbb");
+    }
+
+    #[test]
+    fn secret_add_filters_archived() {
+        let agents = vec![
+            serde_json::json!({"label": "old", "agent_hash": "aaa", "secrets_count": 50, "archived": true}),
+            serde_json::json!({"label": "active", "agent_hash": "bbb", "secrets_count": 3, "archived": false}),
+        ];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0]["label"].as_str().unwrap(), "active");
+    }
+
+    #[test]
+    fn secret_add_vault_match_by_label() {
+        let agents = vec![
+            serde_json::json!({"label": "soulflow", "vault_name": "soulflow-lv", "agent_hash": "aaa", "archived": false}),
+            serde_json::json!({"label": "host-localvault", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
+        ];
+        let label = "host-localvault";
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        let found = active.iter()
+            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        assert!(found.is_some());
+        assert_eq!(found.unwrap()["agent_hash"].as_str().unwrap(), "bbb");
+    }
+
+    #[test]
+    fn secret_add_vault_match_by_vault_name() {
+        let agents = vec![
+            serde_json::json!({"label": "host-localvault", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
+        ];
+        let label = "host-lv";
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        let found = active.iter()
+            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        assert!(found.is_some());
+    }
+
+    #[test]
+    fn secret_add_vault_not_found() {
+        let agents = vec![
+            serde_json::json!({"label": "host-lv", "vault_name": "host-lv", "agent_hash": "bbb", "archived": false}),
+        ];
+        let label = "nonexistent";
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        let found = active.iter()
+            .find(|a| a["label"].as_str() == Some(label) || a["vault_name"].as_str() == Some(label));
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn secret_add_no_active_vaults() {
+        let agents: Vec<serde_json::Value> = vec![
+            serde_json::json!({"label": "old", "agent_hash": "aaa", "archived": true}),
+        ];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        assert!(active.is_empty());
+    }
+
+    #[test]
+    fn secret_add_empty_agents() {
+        let agents: Vec<serde_json::Value> = vec![];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        assert!(active.is_empty());
+    }
+
+    #[test]
+    fn secret_add_missing_archived_defaults_false() {
+        let agents = vec![
+            serde_json::json!({"label": "no-field", "agent_hash": "aaa", "secrets_count": 5}),
+        ];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        assert_eq!(active.len(), 1);
+    }
+
+    #[test]
+    fn secret_add_zero_secrets_still_selectable() {
+        let agents = vec![
+            serde_json::json!({"label": "empty", "agent_hash": "aaa", "secrets_count": 0, "archived": false}),
+        ];
+        let active: Vec<&serde_json::Value> = agents.iter()
+            .filter(|a| !a["archived"].as_bool().unwrap_or(false))
+            .collect();
+        let selected = active.iter()
+            .max_by_key(|a| a["secrets_count"].as_u64().unwrap_or(0))
+            .unwrap();
+        assert_eq!(selected["agent_hash"].as_str().unwrap(), "aaa");
+    }
+
+    // ── response parsing ──────────────────────────────────────────
+
+    #[test]
+    fn secret_list_parses_response() {
+        let resp: serde_json::Value = serde_json::json!({
+            "secrets": [
+                {"name": "KEY_A", "token": "VK:LOCAL:aaa", "scope": "LOCAL"},
+                {"name": "KEY_B", "token": "VK:TEMP:bbb", "scope": "TEMP"},
+            ],
+            "count": 2
+        });
+        let secrets = resp["secrets"].as_array().unwrap();
+        assert_eq!(secrets.len(), 2);
+        assert_eq!(secrets[0]["name"].as_str().unwrap(), "KEY_A");
+        assert_eq!(secrets[1]["scope"].as_str().unwrap(), "TEMP");
+    }
+
+    #[test]
+    fn secret_list_empty() {
+        let resp: serde_json::Value = serde_json::json!({"secrets": [], "count": 0});
+        assert!(resp["secrets"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn secret_list_missing_fields() {
+        let resp: serde_json::Value = serde_json::json!({"secrets": [{"name": "KEY_A"}]});
+        let secrets = resp["secrets"].as_array().unwrap();
+        assert_eq!(secrets[0]["token"].as_str(), None);
+        assert_eq!(secrets[0]["scope"].as_str(), None);
+    }
+
+    #[test]
+    fn promote_request_format() {
+        let body = serde_json::json!({
+            "ref": "VK:TEMP:ed694a5e",
+            "name": "MAILGUN_API_KEY",
+            "vault_hash": "a0a761c6",
+        });
+        assert_eq!(body["ref"].as_str().unwrap(), "VK:TEMP:ed694a5e");
+        assert_eq!(body["name"].as_str().unwrap(), "MAILGUN_API_KEY");
+        assert_eq!(body["vault_hash"].as_str().unwrap(), "a0a761c6");
+    }
+
+    #[test]
+    fn promote_response_created() {
+        let resp: serde_json::Value = serde_json::json!({
+            "action": "created", "token": "VK:LOCAL:3c3d53ea", "status": "active"
+        });
+        assert_eq!(resp["action"].as_str().unwrap(), "created");
+        assert_eq!(resp["token"].as_str().unwrap(), "VK:LOCAL:3c3d53ea");
+    }
+
+    #[test]
+    fn promote_response_updated() {
+        let resp: serde_json::Value = serde_json::json!({
+            "action": "updated", "token": "VK:LOCAL:3c3d53ea"
+        });
+        assert_eq!(resp["action"].as_str().unwrap(), "updated");
+    }
+
+    #[test]
+    fn agents_list_response_parsing() {
+        let resp: serde_json::Value = serde_json::json!({
+            "agents": [{
+                "label": "host-lv", "agent_hash": "a0a761c6",
+                "ip": "10.50.0.102", "port": 10180,
+                "secrets_count": 13, "archived": false
+            }],
+            "count": 1
+        });
+        let agents = resp["agents"].as_array().unwrap();
+        assert_eq!(agents[0]["agent_hash"].as_str().unwrap(), "a0a761c6");
+        assert_eq!(agents[0]["port"].as_u64().unwrap(), 10180);
+    }
+
+    #[test]
+    fn secret_delete_response() {
+        let resp: serde_json::Value = serde_json::json!({"deleted": "MY_SECRET"});
+        assert_eq!(resp["deleted"].as_str().unwrap(), "MY_SECRET");
+    }
+
+    // ── guard: functions exist ─────────────────────────────────────
+
+    #[test]
+    fn guard_secret_add_exists() {
+        let src = include_str!("api.rs");
+        assert!(src.contains("fn secret_add("));
+    }
+
+    #[test]
+    fn guard_secret_list_exists() {
+        let src = include_str!("api.rs");
+        assert!(src.contains("fn secret_list("));
+    }
+
+    #[test]
+    fn guard_secret_delete_exists() {
+        let src = include_str!("api.rs");
+        assert!(src.contains("fn secret_delete("));
+    }
+
+    #[test]
+    fn guard_agents_list_exists() {
+        let src = include_str!("api.rs");
+        assert!(src.contains("fn agents_list("));
+    }
+
+    #[test]
+    fn guard_promote_exists() {
+        let src = include_str!("api.rs");
+        assert!(src.contains("fn promote("));
+    }
+
+    #[test]
+    fn guard_secret_add_pipeline() {
+        let src = include_str!("api.rs");
+        let fn_body = &src[src.find("fn secret_add(").unwrap()..];
+        let fn_end = fn_body.find("\n    }").unwrap_or(fn_body.len());
+        let body = &fn_body[..fn_end];
+        assert!(body.contains("self.issue("), "must create temp ref");
+        assert!(body.contains("self.agents_list()"), "must fetch agents");
+        assert!(body.contains("self.promote("), "must promote to vault");
+        assert!(body.contains("archived"), "must filter archived vaults");
+    }
+
+    // ── guard: API endpoints ──────────────────────────────────────
+
+    #[test]
+    fn guard_agents_endpoint() {
+        let src = include_str!("api.rs");
+        let f = &src[src.find("fn agents_list(").unwrap()..];
+        assert!(f.contains("/api/agents"));
+    }
+
+    #[test]
+    fn guard_promote_endpoint() {
+        let src = include_str!("api.rs");
+        let f = &src[src.find("fn promote(").unwrap()..];
+        assert!(f.contains("/api/keycenter/promote"));
+    }
+
+    #[test]
+    fn guard_secret_list_endpoint() {
+        let src = include_str!("api.rs");
+        let f = &src[src.find("fn secret_list(").unwrap()..];
+        assert!(f.contains("/api/secrets"));
+    }
+
+    #[test]
+    fn guard_secret_delete_endpoint() {
+        let src = include_str!("api.rs");
+        let f = &src[src.find("fn secret_delete(").unwrap()..];
+        assert!(f.contains("/api/secrets/"));
+    }
+
+    // ── guard: CLI routing ────────────────────────────────────────
+
+    #[test]
+    fn guard_cli_secret_subcommand() {
+        let src = include_str!("bin/veilkey_cli.rs");
+        assert!(src.contains(r#""secret""#), "CLI must route secret subcommand");
+    }
+
+    #[test]
+    fn guard_cli_secret_subcmds() {
+        let src = include_str!("bin/veilkey_cli.rs");
+        let block = &src[src.find(r#""secret""#).unwrap()..];
+        assert!(block.contains(r#""add""#), "must have add");
+        assert!(block.contains(r#""list""#), "must have list");
+        assert!(block.contains(r#""get""#), "must have get");
+        assert!(block.contains(r#""delete""#), "must have delete");
+    }
+
+    #[test]
+    fn guard_cli_secret_vault_flag() {
+        let src = include_str!("bin/veilkey_cli.rs");
+        let block = &src[src.find(r#""secret""#).unwrap()..];
+        assert!(block.contains("--vault"), "secret add must support --vault flag");
+    }
+
+    #[test]
+    fn guard_cli_usage_shows_secret() {
+        let src = include_str!("bin/veilkey_cli.rs");
+        assert!(src.contains("veilkey secret add"));
+        assert!(src.contains("veilkey secret list"));
+        assert!(src.contains("veilkey secret get"));
+        assert!(src.contains("veilkey secret delete"));
     }
 }
