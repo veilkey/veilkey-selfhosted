@@ -246,6 +246,12 @@ func (d *DB) GetAgentByLabel(label string) (*Agent, error) {
 func (d *DB) GetAgentByHash(agentHash string) (*Agent, error) {
 	return dbFirst[Agent](d, "agent hash "+agentHash+" not found", "agent_hash = ?", agentHash)
 }
+func (d *DB) GetAgentByVaultHash(vaultHash string) (*Agent, error) {
+	return dbFirst[Agent](d, "agent vault hash "+vaultHash+" not found", "vault_hash = ?", vaultHash)
+}
+func (d *DB) GetAgentByVaultName(vaultName string) (*Agent, error) {
+	return dbFirst[Agent](d, "agent vault name "+vaultName+" not found", "vault_name = ?", vaultName)
+}
 func (d *DB) GetAgentBySecretHash(secretHash string) (*Agent, error) {
 	return dbFirst[Agent](d, "agent with secret hash not found", "agent_secret_hash = ?", secretHash)
 }
@@ -293,12 +299,25 @@ func (d *DB) RestoreDeletedAgent(nodeID string) error {
 }
 
 func (d *DB) GetAgentRecord(hashOrLabel string) (*Agent, error) {
-	if len(hashOrLabel) == 8 {
-		if agent, err := d.GetAgentByHash(hashOrLabel); err == nil {
+	id := strings.TrimSpace(hashOrLabel)
+	if id == "" {
+		return nil, fmt.Errorf("agent identifier is empty")
+	}
+	if len(id) == 8 {
+		if agent, err := d.GetAgentByHash(id); err == nil {
 			return agent, nil
 		}
 	}
-	return d.GetAgentByLabel(hashOrLabel)
+	if agent, err := d.GetAgentByVaultHash(id); err == nil {
+		return agent, nil
+	}
+	if agent, err := d.GetAgentByNodeID(id); err == nil {
+		return agent, nil
+	}
+	if agent, err := d.GetAgentByVaultName(id); err == nil {
+		return agent, nil
+	}
+	return d.GetAgentByLabel(id)
 }
 
 func (d *DB) UpdateAgentDEK(nodeID string, agentHash string, dek, dekNonce []byte) error {

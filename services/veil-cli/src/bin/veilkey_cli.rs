@@ -19,6 +19,15 @@ fn resolve_api_url() -> Option<String> {
     None
 }
 
+fn resolve_vaultcenter_url() -> Option<String> {
+    if let Ok(v) = std::env::var("VEILKEY_VAULTCENTER_URL") {
+        if !v.is_empty() {
+            return Some(v);
+        }
+    }
+    None
+}
+
 fn print_usage() {
     eprintln!(
         r#"Usage:
@@ -52,6 +61,8 @@ fn print_usage() {
   veilkey cleanup [--json]          Clean up stale tracked refs
   veilkey ref-audit [--json]        Audit tracked refs
   veilkey inventory [--json]        Show vault inventory
+  veilkey plugin list               List installed plugins
+  veilkey plugin sync ...           Run plugin sync against a vault
   veilkey traefik <sub>              Manage Traefik config (init|status|destroy)
   veilkey status                    Show status
   veilkey version                   Show version
@@ -109,6 +120,7 @@ fn main() {
         "cleanup",
         "ref-audit",
         "inventory",
+        "plugin",
     ];
 
     let subcmd = raw_args.get(1).map(String::as_str).unwrap_or("");
@@ -1115,6 +1127,14 @@ fn main() {
             }
         }
         "version" => println!("veilkey {}", VERSION),
+        "plugin" => {
+            let vc_url = resolve_vaultcenter_url().unwrap_or_else(|| {
+                eprintln!("ERROR: VEILKEY_VAULTCENTER_URL is required for plugin commands.");
+                eprintln!("  export VEILKEY_VAULTCENTER_URL=<vaultcenter-url>");
+                process::exit(1);
+            });
+            commands::cmd_plugin(&cmd_args, &vc_url, &log_path, patterns_file.as_deref())
+        }
         "traefik" => {
             commands::cmd_traefik(&cmd_args, &api_url, &log_path, patterns_file.as_deref())
         }

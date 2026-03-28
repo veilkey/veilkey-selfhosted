@@ -174,6 +174,44 @@ impl VeilKeyClient {
         req.call()
     }
 
+    pub fn plugins_list(&self) -> Result<Vec<serde_json::Value>, String> {
+        let url = format!("{}/api/plugins", self.base_url);
+        let resp = self
+            .raw_get(&url)
+            .map_err(|e| format!("plugins list failed: {}", e))?;
+        let result: serde_json::Value = resp
+            .into_json()
+            .map_err(|e| format!("decode failed: {}", e))?;
+        result["plugins"]
+            .as_array()
+            .cloned()
+            .ok_or_else(|| "missing plugins in response".to_string())
+    }
+
+    pub fn plugin_sync(
+        &self,
+        vault: &str,
+        plugin: &str,
+        action: &str,
+        input: &serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let url = format!(
+            "{}/api/vaults/{}/plugins/{}/sync",
+            self.base_url,
+            urlencoding::encode(vault),
+            urlencoding::encode(plugin)
+        );
+        let body = serde_json::json!({
+            "action": action,
+            "input": input,
+        });
+        let resp = self
+            .raw_post(&url, &body)
+            .map_err(|e| format!("plugin sync failed: {}", e))?;
+        resp.into_json()
+            .map_err(|e| format!("decode failed: {}", e))
+    }
+
     pub fn issue(&self, value: &str) -> Result<String, String> {
         let value = value.trim_end_matches(['\r', '\n']);
         {

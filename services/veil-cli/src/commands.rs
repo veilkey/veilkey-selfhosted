@@ -590,6 +590,174 @@ fn traefik_destroy(args: &[String], api_url: &str) {
     }
 }
 
+pub fn cmd_plugin(args: &[String], api_url: &str, _log_path: &str, _patterns_file: Option<&str>) {
+    if args.is_empty() {
+        eprintln!("Usage: veilkey plugin <list|sync> [args]");
+        eprintln!("  list");
+        eprintln!("  sync --vault <vault> --plugin <name> --action <action> --input-json <json>");
+        eprintln!("  sync --vault <vault> --plugin <name> --action <action> --input-file <path>");
+        process::exit(1);
+    }
+    match args[0].as_str() {
+        "list" => plugin_list(api_url),
+        "sync" => plugin_sync(&args[1..], api_url),
+        other => {
+            eprintln!("Unknown plugin subcommand: {}", other);
+            process::exit(1);
+        }
+    }
+}
+
+fn plugin_list(api_url: &str) {
+    let client = VeilKeyClient::new(api_url);
+    let password = std::env::var("VEILKEY_PASSWORD")
+        .unwrap_or_else(|_| rpassword::prompt_password("VeilKey password: ").unwrap_or_default());
+    if let Err(e) = client.admin_login(&password) {
+        eprintln!("[veilkey] login failed: {}", e);
+        process::exit(1);
+    }
+    match client.plugins_list() {
+        Ok(plugins) => {
+            if plugins.is_empty() {
+                println!("No plugins installed");
+                return;
+            }
+            println!(
+                "\x1b[0;36m{:<24} {:<10} {:<8} {}\x1b[0m",
+                "NAME", "VERSION", "LOADED", "DESCRIPTION"
+            );
+            println!("{}", "─".repeat(80));
+            for plugin in plugins {
+                println!(
+                    "{:<24} {:<10} {:<8} {}",
+                    plugin["name"].as_str().unwrap_or("-"),
+                    plugin["version"].as_str().unwrap_or("-"),
+                    if plugin["loaded"].as_bool().unwrap_or(false) {
+                        "yes"
+                    } else {
+                        "no"
+                    },
+                    plugin["description"].as_str().unwrap_or("-"),
+                );
+            }
+        }
+        Err(e) => {
+            eprintln!("ERROR: plugin list failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
+fn plugin_sync(args: &[String], api_url: &str) {
+    let mut vault: Option<String> = None;
+    let mut plugin: Option<String> = None;
+    let mut action: Option<String> = None;
+    let mut input_json: Option<String> = None;
+    let mut input_file: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--vault" if i + 1 < args.len() => {
+                vault = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--vault=") => {
+                vault = Some(a["--vault=".len()..].to_string());
+                i += 1;
+            }
+            "--plugin" if i + 1 < args.len() => {
+                plugin = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--plugin=") => {
+                plugin = Some(a["--plugin=".len()..].to_string());
+                i += 1;
+            }
+            "--action" if i + 1 < args.len() => {
+                action = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--action=") => {
+                action = Some(a["--action=".len()..].to_string());
+                i += 1;
+            }
+            "--input-json" if i + 1 < args.len() => {
+                input_json = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--input-json=") => {
+                input_json = Some(a["--input-json=".len()..].to_string());
+                i += 1;
+            }
+            "--input-file" if i + 1 < args.len() => {
+                input_file = Some(args[i + 1].clone());
+                i += 2;
+            }
+            a if a.starts_with("--input-file=") => {
+                input_file = Some(a["--input-file=".len()..].to_string());
+                i += 1;
+            }
+            _ => {
+                i += 1;
+            }
+        }
+    }
+
+    let vault = vault.unwrap_or_else(|| {
+        eprintln!("ERROR: --vault is required");
+        process::exit(1);
+    });
+    let plugin = plugin.unwrap_or_else(|| {
+        eprintln!("ERROR: --plugin is required");
+        process::exit(1);
+    });
+    let action = action.unwrap_or_else(|| {
+        eprintln!("ERROR: --action is required");
+        process::exit(1);
+    });
+
+    let raw_input = if let Some(path) = input_file {
+        std::fs::read_to_string(&path).unwrap_or_else(|e| {
+            eprintln!("ERROR: cannot read {}: {}", path, e);
+            process::exit(1);
+        })
+    } else if let Some(json) = input_json {
+        json
+    } else {
+        eprintln!("ERROR: --input-json or --input-file is required");
+        process::exit(1);
+    };
+
+    let input: serde_json::Value = serde_json::from_str(&raw_input).unwrap_or_else(|e| {
+        eprintln!("ERROR: invalid input JSON: {}", e);
+        process::exit(1);
+    });
+
+    let client = VeilKeyClient::new(api_url);
+    let password = std::env::var("VEILKEY_PASSWORD")
+        .unwrap_or_else(|_| rpassword::prompt_password("VeilKey password: ").unwrap_or_default());
+    if let Err(e) = client.admin_login(&password) {
+        eprintln!("[veilkey] login failed: {}", e);
+        process::exit(1);
+    }
+    match client.plugin_sync(&vault, &plugin, &action, &input) {
+        Ok(result) => {
+            println!(
+                "plugin synced: vault={} plugin={} action={}",
+                vault, plugin, action
+            );
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&result).unwrap_or_else(|_| result.to_string())
+            );
+        }
+        Err(e) => {
+            eprintln!("ERROR: plugin sync failed: {}", e);
+            process::exit(1);
+        }
+    }
+}
+
 pub fn cmd_proxy(args: &[String]) {
     let mut listen = String::new();
     let mut allow_hosts: Vec<String> = Vec::new();
