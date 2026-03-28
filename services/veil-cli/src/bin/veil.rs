@@ -83,6 +83,27 @@ fn load_env_file(path: &str) {
     }
 }
 
+fn find_repo_install_script() -> Option<String> {
+    let cwd = env::current_dir().ok()?;
+    for dir in cwd.ancestors() {
+        let common = dir
+            .join("install")
+            .join("common")
+            .join("install-localvault.sh");
+        if common.exists() {
+            return Some(common.to_string_lossy().to_string());
+        }
+        let proxmox = dir
+            .join("install")
+            .join("proxmox-lxc-debian")
+            .join("install-localvault.sh");
+        if proxmox.exists() {
+            return Some(proxmox.to_string_lossy().to_string());
+        }
+    }
+    None
+}
+
 fn main() {
     // Auto-load .veilkey/env from current or parent dirs
     // Clear legacy env vars first so .veilkey/env takes precedence
@@ -169,25 +190,30 @@ trap 'rm -f "$HISTFILE"' EXIT
                         process::exit(1);
                     }
 
-                    let gist_url = "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh";
-                    let script = format!(
-                        "VEILKEY_CENTER_URL='{}' VEILKEY_PORT='{}' curl -sL '{}?{}' | bash",
-                        center_url,
-                        port,
-                        gist_url,
-                        std::time::SystemTime::now()
-                            .duration_since(std::time::UNIX_EPOCH)
-                            .unwrap_or_default()
-                            .as_secs()
-                    );
-                    let status = process::Command::new("bash")
-                        .arg("-c")
-                        .arg(&script)
-                        .status()
-                        .unwrap_or_else(|e| {
-                            eprintln!("veil localvault: failed to run installer: {}", e);
-                            process::exit(1);
-                        });
+                    let status = if let Some(script_path) = find_repo_install_script() {
+                        process::Command::new("bash")
+                            .arg(script_path)
+                            .env("VEILKEY_CENTER_URL", &center_url)
+                            .env("VEILKEY_PORT", port.to_string())
+                            .status()
+                    } else {
+                        let gist_url = "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh";
+                        let script = format!(
+                            "VEILKEY_CENTER_URL='{}' VEILKEY_PORT='{}' curl -sL '{}?{}' | bash",
+                            center_url,
+                            port,
+                            gist_url,
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_secs()
+                        );
+                        process::Command::new("bash").arg("-c").arg(&script).status()
+                    }
+                    .unwrap_or_else(|e| {
+                        eprintln!("veil localvault: failed to run installer: {}", e);
+                        process::exit(1);
+                    });
                     process::exit(status.code().unwrap_or(1));
                 }
                 "stop" => {

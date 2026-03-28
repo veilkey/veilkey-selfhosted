@@ -36,10 +36,10 @@ bash install/common/install-localvault.sh
 The installer:
 
 1. Builds binary (or downloads from `VEILKEY_BINARY_URL`)
-2. Creates data directory
+2. Creates data directory and self-signed TLS cert
 3. Runs `init --root --center <url> --token <token>` (auto-generated password, VC-managed unlock)
-4. Writes `.env` with all config
-5. Creates + enables systemd service (or nohup fallback)
+4. Writes `.env` with TLS and runtime config
+5. Creates + enables systemd service (or nohup fallback) and waits for `health=ok`
 
 ## Management
 

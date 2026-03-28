@@ -16,7 +16,7 @@ VEILKEY_CENTER_URL=https://<HOST>:<VC_PORT> \
   bash install/proxmox-lxc-debian/install-localvault.sh
 ```
 
-The script handles: source update, build, TLS cert generation, init, start, and unlock.
+The script handles: source update, build, TLS cert generation, `init`, start, bootstrap auto-unlock, and health check.
 
 ## Options
 
@@ -25,7 +25,6 @@ The script handles: source update, build, TLS cert generation, init, start, and 
 | `VEILKEY_CENTER_URL` | - | VaultCenter URL (required) |
 | `VEILKEY_PORT` | `10180` | LocalVault listen port |
 | `VEILKEY_LABEL` | `$(hostname)` | Vault display name |
-| `VEILKEY_PASSWORD` | - | Master password (prompted if not set) |
 | `VEILKEY_BULK_APPLY_ALLOWED_PATHS` | - | Comma-separated absolute paths for bulk-apply targets |
 
 ## What it does
@@ -35,9 +34,9 @@ The script handles: source update, build, TLS cert generation, init, start, and 
 | Source update | - | `git pull` |
 | Build | Go build | Rebuild with latest |
 | TLS certificate | Auto-generate (self-signed, 10yr) | Preserved |
-| .env config | Created | Preserved (bulk paths updated) |
-| Init | Password → KEK → salt | Skipped (salt exists) |
-| Start + unlock | HTTPS start → unlock | Restart → unlock |
+| .env config | Rewritten from current env | Rewritten from current env |
+| Init | Auto-generated vault unlock key → salt/DB | Skipped (salt exists) |
+| Start | HTTPS start + bootstrap auto-unlock | Restart + VC-managed auto-unlock |
 
 ## After install
 

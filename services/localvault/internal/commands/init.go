@@ -54,7 +54,7 @@ func RunInit() {
 		fmt.Println("  --force     Force re-initialization (WARNING: destroys existing data)")
 		fmt.Println("  --token     Registration token from VaultCenter")
 		fmt.Println("  --center    VaultCenter URL (alternative to token)")
-		fmt.Println("  Password is read from stdin (pipe) or interactive TTY prompt.")
+		fmt.Println("  Unlock key is auto-generated and transferred to VaultCenter on first heartbeat.")
 		os.Exit(1)
 	}
 
