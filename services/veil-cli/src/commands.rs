@@ -134,6 +134,27 @@ pub fn cmd_exec(args: &[String], api_url: &str, log_path: &str, patterns_file: O
         })
         .collect();
 
+    // Resolve VK refs in inherited environment variables
+    let resolved_env: Vec<(String, String)> = std::env::vars()
+        .map(|(key, val)| {
+            let new_val = vk_re
+                .replace_all(&val, |caps: &regex::Captures| {
+                    match client.resolve(&caps[0]) {
+                        Ok(v) => {
+                            mask_pairs.push((v.clone(), caps[0].to_string()));
+                            v
+                        }
+                        Err(e) => {
+                            eprintln!("WARNING: resolve env {}={} failed: {}", key, &caps[0], e);
+                            caps[0].to_string()
+                        }
+                    }
+                })
+                .to_string();
+            (key, new_val)
+        })
+        .collect();
+
     // Mask stdout to prevent resolved plaintext from leaking to terminal
     let cfg = match load_config(patterns_file) {
         Ok(c) => c,
@@ -141,6 +162,8 @@ pub fn cmd_exec(args: &[String], api_url: &str, log_path: &str, patterns_file: O
             // Fallback: run without masking rather than blocking execution
             let status = process::Command::new(&resolved[0])
                 .args(&resolved[1..])
+                .env_clear()
+                .envs(resolved_env.iter().map(|(k, v)| (k, v)))
                 .stdin(process::Stdio::inherit())
                 .stdout(process::Stdio::inherit())
                 .stderr(process::Stdio::inherit())
@@ -164,6 +187,8 @@ pub fn cmd_exec(args: &[String], api_url: &str, log_path: &str, patterns_file: O
 
     let mut child = match process::Command::new(&resolved[0])
         .args(&resolved[1..])
+        .env_clear()
+        .envs(resolved_env.iter().map(|(k, v)| (k, v)))
         .stdin(process::Stdio::inherit())
         .stdout(process::Stdio::piped())
         .stderr(process::Stdio::piped())
