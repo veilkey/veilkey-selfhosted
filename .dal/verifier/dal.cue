@@ -1,15 +1,19 @@
-uuid:           "vk-verifier-20260326"
-name:           "verifier"
-version:        "1.0.0"
-player:         "claude"
-player_version: "go"
-role:           "member"
-skills:         ["skills/go-ci", "skills/rust-ci", "skills/security-audit", "skills/code-review"]
-hooks:          []
-auto_task:      "veilkey-selfhosted 자체 검증: go vet ./... && go test ./... 실행. 실패 시 실패 항목과 에러를 정리해서 보고. 전부 통과하면 PASS 한줄로 보고."
-auto_interval:  "1h"
+uuid:    "vk-verifier-20260410"
+name:    "verifier"
+version: "1.1.0"
+player:  "claude"
+role:    "member"
+model:   "sonnet"
 git: {
-	user:         "dal-verifier"
-	email:        "dal-verifier@dalcenter.local"
-	github_token: "env:GITHUB_TOKEN"
+	user:  "dal-verifier"
+	email: "dal-verifier@veilkey.local"
+}
+
+// Read 전용 — Edit/Write/Bash 절대 없음. 검증만.
+tools: ["Read", "Glob", "Grep"]
+
+dalcli: {
+	own: {
+		commands: [] // 커맨드 실행 권한 0 — 정말 Read만
+	}
 }
