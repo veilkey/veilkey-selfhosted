@@ -20,7 +20,7 @@
 |----------|---------|-------------|
 | `VEILKEY_ADDR` | `:10181` / `:10180` | Listen address |
 | `VEILKEY_DB_PATH` | `/data/veilkey.db` | Database path |
-| `VEILKEY_DB_KEY` | **(auto-derived)** | SQLCipher encryption key. Auto-derived from master password (KEK) during unlock. No manual setting needed |
+| `VEILKEY_DB_KEY` | **(KEK-derived)** | SQLCipher encryption key. Derived from master password (KEK) during unlock. DB only opens after password entry |
 | `VEILKEY_TLS_INSECURE` | `0` | Accept self-signed certs (also applies to `init --token` validation) |
 | `VEILKEY_TLS_CERT` | - | TLS certificate path |
 | `VEILKEY_TLS_KEY` | - | TLS private key path |
@@ -38,3 +38,5 @@
 | `VEILKEY_BULK_APPLY_ALLOWED_HOOKS` | - | Comma-separated `name:cmd` pairs for custom hooks |
 | `VEILKEY_VAULT_NAME` | `$(hostname)` | Vault display name |
 | `VEILKEY_VAULTCENTER_URL` | - | VaultCenter URL for heartbeat |
+| `VEILKEY_UNLOCK_PASSWORD` | - | Master password for auto-unlock on startup. If set, LocalVault unlocks via VaultCenter automatically after reboot |
+| `VEILKEY_TRUSTED_IPS` | `10.0.0.0/8,...,::1` | Always include `::1` (IPv6 loopback) to prevent localhost unlock failures |
