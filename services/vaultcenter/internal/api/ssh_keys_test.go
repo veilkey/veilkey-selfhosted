@@ -66,7 +66,11 @@ func sshParse(t *testing.T, rec *httptest.ResponseRecorder) ([]map[string]any, i
 	if err := json.NewDecoder(rec.Body).Decode(&b); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	cnt := int(b["count"].(float64))
+	cntF, ok := b["count"].(float64)
+	if !ok {
+		t.Fatalf("count missing or not a number: %v", b["count"])
+	}
+	cnt := int(cntF)
 	raw, _ := json.Marshal(b["ssh_keys"])
 	var keys []map[string]any
 	_ = json.Unmarshal(raw, &keys)
@@ -90,7 +94,13 @@ func TestSSH_List_ReturnsInserted(t *testing.T) {
 	keys, c := sshParse(t, sshGET(h))
 	if c != 2 { t.Errorf("count=%d", c) }
 	refs := map[string]bool{}
-	for _, k := range keys { refs[k["ref"].(string)] = true }
+	for _, k := range keys {
+		ref, ok := k["ref"].(string)
+		if !ok {
+			t.Fatalf("ref missing or not a string: %v", k["ref"])
+		}
+		refs[ref] = true
+	}
 	if !refs["VK:SSH:k001"] || !refs["VK:SSH:k002"] { t.Error("missing refs") }
 }
 

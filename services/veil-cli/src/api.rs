@@ -806,7 +806,7 @@ pub fn enrich_mask_map(map: &mut Vec<(String, String)>) {
         }
     }
     map.extend(encoded);
-    map.sort_by(|a, b| b.0.len().cmp(&a.0.len()));
+    map.sort_by_key(|entry| std::cmp::Reverse(entry.0.len()));
 
     // Remove entries where plaintext would corrupt VK/VE ref tokens in output.
     // Only filter if plaintext is literally a substring of the ref format itself

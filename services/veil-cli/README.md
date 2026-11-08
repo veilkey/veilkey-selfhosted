@@ -44,3 +44,7 @@ veilkey-cli status
 ## Documentation
 
 See [docs/setup/veil-cli/usage.md](../../docs/setup/veil-cli/usage.md).
+
+## Security
+
+Please report vulnerabilities privately through the repository's [security policy](https://github.com/veilkey/veilkey-selfhosted/security/policy), not through public issues.

@@ -72,6 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veilkey-vaultcenter-linux-amd64
+          if-no-files-found: error
           path: services/vaultcenter/veilkey-vaultcenter
 
   # ── LocalVault (Go + SQLCipher) ──────────────────────────────
@@ -99,6 +100,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veilkey-localvault-linux-amd64
+          if-no-files-found: error
           path: services/localvault/veilkey-localvault
 
   # ── veil-cli (Rust) ───────────────────────────────────────────
@@ -130,9 +132,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veil-cli-linux-amd64
+          # The repository root Cargo.toml is a workspace, so build output lands in ./target.
+          if-no-files-found: error
           path: |
-            services/veil-cli/target/release/veil
-            services/veil-cli/target/release/veilkey
+            target/release/veil
+            target/release/veilkey
 
   # ── veilkey-cli (Rust) ────────────────────────────────────────
   veilkey-cli:
@@ -161,9 +165,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: veilkey-cli-linux-amd64
+          if-no-files-found: error
           path: |
-            services/veil-cli/target/release/veilkey-cli
-            services/veil-cli/target/release/veilkey-session-config
+            target/release/veilkey-cli
+            target/release/veilkey-session-config
 
   # ── Release (tag push only) ─────────────────────────────────
   release:
