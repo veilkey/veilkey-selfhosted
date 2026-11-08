@@ -126,3 +126,7 @@ See [docs/setup/](../../docs/setup/README.md) for usage guides.
 ## Environment
 
 See [docs/setup/env-vars.md](../../docs/setup/env-vars.md).
+
+## Security
+
+Please report vulnerabilities privately through the repository's [security policy](https://github.com/veilkey/veilkey-selfhosted/security/policy), not through public issues.

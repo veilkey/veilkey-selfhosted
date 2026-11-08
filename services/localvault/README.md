@@ -216,3 +216,7 @@ bash tests/test_ci_deploy_rules.sh
 ## License
 
 AGPL-3.0 License
+
+## Security
+
+Please report vulnerabilities privately through the repository's [security policy](https://github.com/veilkey/veilkey-selfhosted/security/policy), not through public issues.
