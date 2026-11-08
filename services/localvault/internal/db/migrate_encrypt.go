@@ -21,7 +21,7 @@ func MigrateToEncrypted(dbPath, dbKey string) error {
 	if err != nil {
 		return fmt.Errorf("open plaintext: %w", err)
 	}
-	defer plainDB.Close()
+	defer func() { _ = plainDB.Close() }()
 
 	// 2. Verify readable as plaintext
 	if _, err := plainDB.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
@@ -45,7 +45,7 @@ func MigrateToEncrypted(dbPath, dbKey string) error {
 		_ = os.Remove(encPath)
 		return fmt.Errorf("detach: %w", err)
 	}
-	plainDB.Close()
+	_ = plainDB.Close()
 
 	// 5. Verify encrypted DB is readable with key
 	encDSN := encPath + "?_journal_mode=wal&_busy_timeout=5000&_pragma_key=" + dbKey
@@ -55,11 +55,11 @@ func MigrateToEncrypted(dbPath, dbKey string) error {
 		return fmt.Errorf("verify encrypted open: %w", err)
 	}
 	if _, err := verifyDB.Exec("SELECT count(*) FROM sqlite_master"); err != nil {
-		verifyDB.Close()
+		_ = verifyDB.Close()
 		_ = os.Remove(encPath)
 		return fmt.Errorf("verify encrypted read: %w", err)
 	}
-	verifyDB.Close()
+	_ = verifyDB.Close()
 
 	// 6. Atomic rename: plaintext → .bak, encrypted → original
 	bakPath := dbPath + ".plaintext.bak"

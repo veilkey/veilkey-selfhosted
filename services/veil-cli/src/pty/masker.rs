@@ -2924,7 +2924,11 @@ mod masking_robustness_tests {
         let map = mk(&[("MaskingExamplePass!42", "VK:LOCAL:6da25530")]);
         let (out, _) = call("bash: MaskingExamplePass!42: not found\n", &map, "", "");
         let v = strip(&out);
-        assert!(!v.contains("MaskingExamplePass!42"), "bash error leaked: {}", v);
+        assert!(
+            !v.contains("MaskingExamplePass!42"),
+            "bash error leaked: {}",
+            v
+        );
     }
 
     /// Secret in cat output must be masked
@@ -3013,7 +3017,11 @@ mod masking_robustness_tests {
         }
         let (raw, _) = call("bash: MaskingExamplePass!42: err\n", &map, "", &tail);
         let v = strip(&raw);
-        assert!(!v.contains("MaskingExamplePass!42"), "after rapid arrows: {}", v);
+        assert!(
+            !v.contains("MaskingExamplePass!42"),
+            "after rapid arrows: {}",
+            v
+        );
     }
 
     // ═══ Edge cases ═══
