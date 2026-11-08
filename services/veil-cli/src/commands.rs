@@ -683,8 +683,8 @@ fn plugin_list(api_url: &str) {
                 return;
             }
             println!(
-                "\x1b[0;36m{:<24} {:<10} {:<8} {}\x1b[0m",
-                "NAME", "VERSION", "LOADED", "DESCRIPTION"
+                "\x1b[0;36m{:<24} {:<10} {:<8} DESCRIPTION\x1b[0m",
+                "NAME", "VERSION", "LOADED"
             );
             println!("{}", "─".repeat(80));
             for plugin in plugins {

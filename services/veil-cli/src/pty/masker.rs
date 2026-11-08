@@ -1822,13 +1822,13 @@ mod same_width_tests {
     #[test]
     fn cc_erase_same_width() {
         let map = mk(&[("MaskingExamplePass!42", "VK:LOCAL:6da25530")]);
-        let r = find_cross_chunk_mask("(VEIL) $ Ghdrhkdgh1", "@", &map).unwrap();
+        let r = find_cross_chunk_mask("(VEIL) $ MaskingExamplePass!4", "2", &map).unwrap();
         assert!(!r.output.contains("MaskingExamplePass!42"));
     }
     #[test]
     fn cc_no_vkloc_fragments() {
         let map = mk(&[("MaskingExamplePass!42", "VK:LOCAL:6da25530")]);
-        let r = find_cross_chunk_mask("$ Ghdrhkdg", "h1@", &map).unwrap();
+        let r = find_cross_chunk_mask("$ MaskingExamplePa", "ss!42", &map).unwrap();
         let v = strip_ansi(&r.output);
         assert!(!v.contains("VK:6dVK:"), "no VK:LOC fragments: [{}]", v);
     }
@@ -1857,7 +1857,7 @@ mod same_width_tests {
         let mut tail = String::new();
         for i in 0..10 {
             tail.push_str("(VEIL) $ ");
-            let r = find_cross_chunk_mask(&format!("{}Ghdrhkdgh1", tail), "@\r", &map);
+            let r = find_cross_chunk_mask(&format!("{}MaskingExamplePass!4", tail), "2\r", &map);
             assert!(r.is_some(), "#{}", i);
             tail.push_str("MaskingExamplePass!42\nbash: VK:6da25530: not found\n");
             if tail.len() > 4096 {
@@ -1873,7 +1873,7 @@ mod same_width_tests {
             .map(|i| (format!("other_{:04}", i), format!("VK:LOCAL:{:08x}", i)))
             .collect();
         map.push(("MaskingExamplePass!42".into(), "VK:LOCAL:6da25530".into()));
-        let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@", &map);
+        let r = find_cross_chunk_mask("$ MaskingExamplePass!4", "2", &map);
         assert!(r.is_some());
     }
 
@@ -1881,7 +1881,7 @@ mod same_width_tests {
     #[test]
     fn sec_no_plaintext() {
         let m = mk(&[("MaskingExamplePass!42", "VK:LOCAL:6da25530")]);
-        let r = find_cross_chunk_mask("$ Ghdrhkdgh1", "@\r", &m).unwrap();
+        let r = find_cross_chunk_mask("$ MaskingExamplePass!4", "2\r", &m).unwrap();
         assert!(!r.output.contains("MaskingExamplePass!42"));
     }
     #[test]
