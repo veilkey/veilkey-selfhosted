@@ -16,6 +16,10 @@ cp scripts/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 
+## Security Issues
+
+Do not open public issues or pull requests for vulnerabilities. Follow [SECURITY.md](./SECURITY.md) to report them privately.
+
 ## Where To Start
 
 - Repository overview: [`README.md`](./README.md)
