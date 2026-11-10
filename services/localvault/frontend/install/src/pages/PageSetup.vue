@@ -19,6 +19,17 @@
         </div>
 
         <div class="form-group">
+          <label class="form-label">{{ t.registrationToken }} <span class="required">*</span></label>
+          <input
+            class="form-input"
+            type="password"
+            v-model="store.registrationToken"
+            autocomplete="off"
+            required
+          />
+        </div>
+
+        <div class="form-group">
           <label class="form-label">{{ t.password }} <span class="required">*</span></label>
           <input
             class="form-input"
@@ -80,7 +91,8 @@ const polling = ref(false)
 const i18n = {
   ko: {
     heading: 'LocalVault 초기 설정',
-    desc: 'VaultCenter URL과 비밀번호를 설정하면 LocalVault가 초기화됩니다.',
+    desc: 'VaultCenter URL, 등록 토큰과 비밀번호를 설정하면 LocalVault가 초기화됩니다.',
+    registrationToken: '등록 토큰',
     password: '비밀번호',
     passwordPh: '8자 이상 입력',
     passwordConfirm: '비밀번호 확인',
@@ -95,7 +107,8 @@ const i18n = {
   },
   en: {
     heading: 'LocalVault Initial Setup',
-    desc: 'Set the VaultCenter URL and password to initialize LocalVault.',
+    desc: 'Set the VaultCenter URL, registration token and password to initialize LocalVault.',
+    registrationToken: 'Registration Token',
     password: 'Password',
     passwordPh: 'Minimum 8 characters',
     passwordConfirm: 'Confirm Password',
@@ -115,6 +128,7 @@ const t = computed(() => i18n[store.lang] || i18n.ko)
 const canSubmit = computed(() => {
   return (
     store.vaultcenterUrl.trim() !== '' &&
+    store.registrationToken.trim() !== '' &&
     store.password.length >= 8 &&
     store.password === store.passwordConfirm
   )

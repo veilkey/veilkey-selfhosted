@@ -200,18 +200,15 @@ func (h *Handler) handleAgentHeartbeat(w http.ResponseWriter, r *http.Request) {
 		agent = nil
 	}
 
-	// New agent registration requires a valid registration token — consume atomically to prevent race.
-	// Exception: trusted IPs can register without a token (for local/dev setups).
+	// First-time registration requires a valid token regardless of the source IP.
 	if agent == nil {
-		trusted := h.deps.IsTrustedIPString(httputil.ActorIDForRequest(r))
-		if req.RegistrationToken != "" {
-			// Consume atomically: WHERE status='active' AND expires_at > now
-			if err := h.deps.DB().ConsumeRegistrationToken(req.RegistrationToken, nodeID); err != nil {
-				respondError(w, http.StatusForbidden, "invalid, expired, or already used registration token")
-				return
-			}
-		} else if !trusted {
+		if req.RegistrationToken == "" {
 			respondError(w, http.StatusForbidden, "registration_token is required for first-time agent registration")
+			return
+		}
+		// Consume atomically: WHERE status='active' AND expires_at > now.
+		if err := h.deps.DB().ConsumeRegistrationToken(req.RegistrationToken, nodeID); err != nil {
+			respondError(w, http.StatusForbidden, "invalid, expired, or already used registration token")
 			return
 		}
 	}

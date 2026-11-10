@@ -108,18 +108,16 @@ curl -sk -X POST https://localhost:<VC_PORT>/api/unlock \
 
 ### LocalVault registration
 
+Issue a registration token in the VaultCenter keycenter UI first. It is required even on a trusted Docker network.
+
 ```bash
 # Init LocalVault
 cd /opt/veilkey
-sudo docker compose exec -T localvault sh -c \
-  'echo "<MASTER_PASSWORD>" | veilkey-localvault init --root --center https://vaultcenter:10181'
+sudo docker compose exec -T localvault veilkey-localvault init --root \
+  --token '<REG_TOKEN>' --center https://vaultcenter:10181
 
-# Restart and unlock
+# Restart for bootstrap auto-unlock (unlock key is auto-generated)
 sudo docker compose restart localvault
-sleep 3
-curl -sk -X POST https://localhost:<LV_PORT>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"<MASTER_PASSWORD>"}'
 ```
 
 ### Verify both services

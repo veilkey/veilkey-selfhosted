@@ -127,19 +127,17 @@ curl.exe -sk -X POST https://localhost:11181/api/unlock `
 
 ### LocalVault 등록
 
+VaultCenter keycenter UI에서 등록 토큰을 발급합니다. Docker 내부의 신뢰 IP에서도 최초 등록에는 토큰이 필요합니다.
+
 ```powershell
 cd C:\veilkey
 
 # Init
-docker compose exec -T localvault sh -c `
-  'echo "<MASTER_PASSWORD>" | veilkey-localvault init --root --center https://vaultcenter:10181'
+docker compose exec -T localvault veilkey-localvault init --root `
+  --token '<REG_TOKEN>' --center https://vaultcenter:10181
 
-# 재시작 후 unlock
+# 자동 생성된 unlock key로 bootstrap auto-unlock
 docker compose restart localvault
-Start-Sleep 3
-curl.exe -sk -X POST https://localhost:11180/api/unlock `
-  -H "Content-Type: application/json" `
-  -d "{`"password`":`"<MASTER_PASSWORD>`"}"
 ```
 
 ## 7. PTY 마스킹 (wrap-pty) — Windows 제약 및 우회 방법
