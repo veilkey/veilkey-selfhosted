@@ -41,7 +41,7 @@ func (h *Handler) Register(mux *http.ServeMux, requireTrustedIP func(http.Handle
 	mux.HandleFunc("POST /api/plugins/{name}/unload", requireTrustedIP(h.handleUnload))
 	mux.HandleFunc("POST /api/vaults/{vault}/plugins/{name}/sync", requireTrustedIP(h.handleSync))
 	mux.HandleFunc("POST /api/plugins/traefik-sync/domain-check", requireTrustedIP(h.handleDomainCheck))
-	mux.HandleFunc("GET /api/plugins/{name}/api/{rest...}", h.handlePluginAPI)
+	mux.HandleFunc("GET /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))
 	mux.HandleFunc("POST /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))
 	mux.HandleFunc("PUT /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))
 	mux.HandleFunc("DELETE /api/plugins/{name}/api/{rest...}", requireTrustedIP(h.handlePluginAPI))

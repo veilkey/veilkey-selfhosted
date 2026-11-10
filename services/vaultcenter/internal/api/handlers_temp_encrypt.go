@@ -1,8 +1,6 @@
 package api
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"net/http"
 	"strings"
 	"time"
@@ -29,25 +27,6 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Plaintext == "" {
 		s.respondError(w, http.StatusBadRequest, "plaintext is required")
-		return
-	}
-
-	// Check for existing active temp ref with same plaintext
-	hash := sha256.Sum256([]byte(req.Plaintext))
-	plaintextHash := hex.EncodeToString(hash[:])
-
-	if existing, err := s.db.FindActiveTempRefByHash(plaintextHash); err == nil && existing != nil {
-		resp := map[string]any{
-			"ref":   existing.RefCanonical,
-			"token": existing.RefCanonical,
-		}
-		if existing.ExpiresAt != nil {
-			resp["expires_at"] = existing.ExpiresAt.Format(time.RFC3339)
-		}
-		if existing.SecretName != "" && existing.SecretName != existing.RefID {
-			resp["name"] = existing.SecretName
-		}
-		s.respondJSON(w, http.StatusOK, resp)
 		return
 	}
 
@@ -102,15 +81,19 @@ func (s *Server) handleTempEncrypt(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if _, err := s.SubmitTx(r.Context(), chain.TxSaveTokenRef, chain.SaveTokenRefPayload{
-			RefFamily:     parts.Family,
-			RefScope:      refs.RefScope(parts.Scope),
-			RefID:         parts.ID,
-			SecretName:    name,
-			PlaintextHash: plaintextHash,
-			Ciphertext:    encoded,
-			Version:       nodeInfo.Version,
-			Status:        refs.RefStatus(status),
-			ExpiresAt:     func() *time.Time { if expiresAt.IsZero() { return nil }; return &expiresAt }(),
+			RefFamily:  parts.Family,
+			RefScope:   refs.RefScope(parts.Scope),
+			RefID:      parts.ID,
+			SecretName: name,
+			Ciphertext: encoded,
+			Version:    nodeInfo.Version,
+			Status:     refs.RefStatus(status),
+			ExpiresAt: func() *time.Time {
+				if expiresAt.IsZero() {
+					return nil
+				}
+				return &expiresAt
+			}(),
 		}); err != nil {
 			s.respondError(w, http.StatusInternalServerError, "failed to save ref")
 			return

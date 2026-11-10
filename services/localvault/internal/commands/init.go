@@ -49,38 +49,21 @@ func RunInit() {
 	}
 
 	if !isRoot {
-		fmt.Println("Usage: veilkey-localvault init --root [--force] [--token vk_reg_...] [--center https://vc.example.com]")
+		fmt.Println("Usage: veilkey-localvault init --root --token vk_reg_... [--force] [--center https://vc.example.com]")
 		fmt.Println("  --root      Initialize as HKM node")
 		fmt.Println("  --force     Force re-initialization (WARNING: destroys existing data)")
-		fmt.Println("  --token     Registration token from VaultCenter")
-		fmt.Println("  --center    VaultCenter URL (alternative to token)")
+		fmt.Println("  --token     Required registration token from VaultCenter")
+		fmt.Println("  --center    VaultCenter URL when not included in the token")
 		fmt.Println("  Unlock key is auto-generated and transferred to VaultCenter on first heartbeat.")
 		os.Exit(1)
 	}
 
-	// Parse registration token if provided
-	var tokenID, tokenLabel string
-	if tokenStr != "" {
-		var tokenURL string
-		var err error
-		tokenID, tokenURL, tokenLabel, err = decodeRegistrationToken(tokenStr)
-		if err != nil {
-			log.Fatalf("Invalid registration token: %v", err)
-		}
-		if tokenURL != "" {
-			centerURL = tokenURL
-		}
-		if centerURL == "" {
-			log.Fatal("VaultCenter URL is required. Provide via --center or include in token.")
-		}
-		fmt.Printf("  Token: %s (label: %s)\n", tokenID[:8]+"...", tokenLabel)
-		fmt.Printf("  VaultCenter: %s\n", centerURL)
-
-		if err := validateTokenRemote(centerURL, tokenID); err != nil {
-			log.Fatalf("Token validation failed: %v", err)
-		}
-		fmt.Println("  Token validated successfully.")
+	// Validate registration before creating or replacing any local state.
+	tokenID, centerURL, err := prepareRegistration(tokenStr, centerURL)
+	if err != nil {
+		log.Fatal(err)
 	}
+	fmt.Println("  Registration token validated successfully.")
 
 	dbPath := os.Getenv("VEILKEY_DB_PATH")
 	if dbPath == "" {
@@ -164,19 +147,12 @@ func RunInit() {
 		log.Fatalf("Failed to save node info: %v", err)
 	}
 
-	// Save VC URL and registration token to DB config
-	if centerURL != "" {
-		normalized := strings.TrimRight(centerURL, "/")
-		if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, normalized); err != nil {
-			log.Printf("Warning: failed to save vaultcenter URL: %v", err)
-		} else {
-			fmt.Printf("  VaultCenter URL saved: %s\n", normalized)
-		}
+	// The first heartbeat reads the validated token from DB config.
+	if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, centerURL); err != nil {
+		log.Fatalf("Failed to save VaultCenter URL: %v", err)
 	}
-	if tokenID != "" {
-		if err := database.SaveConfig("VEILKEY_REGISTRATION_TOKEN", tokenID); err != nil {
-			log.Printf("Warning: failed to save registration token: %v", err)
-		}
+	if err := database.SaveConfig("VEILKEY_REGISTRATION_TOKEN", tokenID); err != nil {
+		log.Fatalf("Failed to save registration token: %v", err)
 	}
 
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {
@@ -196,6 +172,27 @@ func RunInit() {
 	fmt.Printf("  DB:      %s\n", dbPath)
 	fmt.Println("")
 	fmt.Println("  Password auto-generated. VC will manage unlock on startup.")
+}
+
+func prepareRegistration(token, centerURL string) (tokenID, vcURL string, err error) {
+	if strings.TrimSpace(token) == "" {
+		return "", "", fmt.Errorf("registration token is required for initialization, including trusted networks")
+	}
+	tokenID, tokenURL, _, err := decodeRegistrationToken(strings.TrimSpace(token))
+	if err != nil {
+		return "", "", fmt.Errorf("invalid registration token: %w", err)
+	}
+	if tokenURL != "" {
+		centerURL = tokenURL
+	}
+	centerURL = strings.TrimRight(strings.TrimSpace(centerURL), "/")
+	if centerURL == "" {
+		return "", "", fmt.Errorf("VaultCenter URL is required: provide --center or include it in the token")
+	}
+	if err := validateTokenRemote(centerURL, tokenID); err != nil {
+		return "", "", fmt.Errorf("registration token validation failed: %w", err)
+	}
+	return tokenID, centerURL, nil
 }
 
 func decodeRegistrationToken(token string) (tokenID, vcURL, label string, err error) {

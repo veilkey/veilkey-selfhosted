@@ -138,7 +138,8 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	defer initMu.Unlock()
 
 	var req struct {
-		VaultcenterURL string `json:"vaultcenter_url"`
+		VaultcenterURL    string `json:"vaultcenter_url"`
+		RegistrationToken string `json:"registration_token"`
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -150,6 +151,13 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 	saltFile := filepath.Join(dataDir, "salt")
 	if _, err := os.Stat(saltFile); err == nil {
 		http.Error(w, "already initialized", http.StatusConflict)
+		return
+	}
+
+	// Require the same registration proof as CLI initialization before changing state.
+	tokenID, centerURL, err := prepareRegistration(req.RegistrationToken, req.VaultcenterURL)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -210,14 +218,15 @@ func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, 
 		return
 	}
 
-	if req.VaultcenterURL != "" {
-		normalized := strings.TrimRight(req.VaultcenterURL, "/")
-		if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, normalized); err != nil {
-			log.Printf("install: failed to save vaultcenter URL: %v", err)
-			http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
-			return
-		}
-		log.Printf("install: vaultcenter URL saved: %s", normalized)
+	if err := database.SaveConfig(db.ConfigKeyVaultcenterURL, centerURL); err != nil {
+		log.Printf("install: failed to save vaultcenter URL: %v", err)
+		http.Error(w, "failed to save vaultcenter URL", http.StatusInternalServerError)
+		return
+	}
+	if err := database.SaveConfig("VEILKEY_REGISTRATION_TOKEN", tokenID); err != nil {
+		log.Printf("install: failed to save registration token: %v", err)
+		http.Error(w, "failed to save registration token", http.StatusInternalServerError)
+		return
 	}
 
 	if err := os.WriteFile(saltFile, salt, 0600); err != nil {

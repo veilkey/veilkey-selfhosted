@@ -2,8 +2,6 @@ package api
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"io"
 	"log"
@@ -94,19 +92,6 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	// Dedup: check for existing active temp ref with same plaintext
-	hash := sha256.Sum256([]byte(req.Value))
-	plaintextHash := hex.EncodeToString(hash[:])
-	if existing, err := s.db.FindActiveTempRefByHash(plaintextHash); err == nil && existing != nil {
-		s.respondJSON(w, http.StatusOK, map[string]any{
-			"ref":          existing.RefCanonical,
-			"name":         existing.SecretName,
-			"expires_at":   existing.ExpiresAt,
-			"deduplicated": true,
-		})
-		return
-	}
-
 	dek, err := s.GetLocalDEK()
 	if err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to get encryption key")
@@ -135,15 +120,14 @@ func (s *Server) handleKeycenterCreateTempRef(w http.ResponseWriter, r *http.Req
 	}
 
 	if _, err := s.SubmitTx(r.Context(), chain.TxSaveTokenRef, chain.SaveTokenRefPayload{
-		RefFamily:     parts.Family,
-		RefScope:      refs.RefScope(parts.Scope),
-		RefID:         parts.ID,
-		SecretName:    req.Name,
-		PlaintextHash: plaintextHash,
-		Ciphertext:    encoded,
-		Version:       nodeInfo.Version,
-		Status:        refs.RefStatus(db.RefStatusTemp),
-		ExpiresAt:     &expiresAt,
+		RefFamily:  parts.Family,
+		RefScope:   refs.RefScope(parts.Scope),
+		RefID:      parts.ID,
+		SecretName: req.Name,
+		Ciphertext: encoded,
+		Version:    nodeInfo.Version,
+		Status:     refs.RefStatus(db.RefStatusTemp),
+		ExpiresAt:  &expiresAt,
 	}); err != nil {
 		s.respondError(w, http.StatusInternalServerError, "failed to save temp ref")
 		return

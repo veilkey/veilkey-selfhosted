@@ -4,6 +4,7 @@ export const store = reactive({
   lang: 'ko',
   initialized: false,
   vaultcenterUrl: '',
+  registrationToken: '',
   password: '',
   passwordConfirm: '',
   loading: false,
@@ -33,14 +34,17 @@ export async function runInit() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         password: store.password,
-        vaultcenter_url: store.vaultcenterUrl
+        vaultcenter_url: store.vaultcenterUrl,
+        registration_token: store.registrationToken.trim()
       })
     })
     if (!res.ok) {
       const text = await res.text()
       throw new Error(text)
     }
-    return await res.json()
+    const result = await res.json()
+    store.registrationToken = ''
+    return result
   } catch (e) {
     store.error = e.message
     return null

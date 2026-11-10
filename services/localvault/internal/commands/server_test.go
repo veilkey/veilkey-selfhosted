@@ -2,14 +2,17 @@ package commands
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestPasswordFileEnvRejected(t *testing.T) {
 	// VEILKEY_PASSWORD_FILE must not be supported
-	t.Setenv("VEILKEY_PASSWORD_FILE", "/tmp/test-password")
-	_ = os.WriteFile("/tmp/test-password", []byte("test"), 0600)
-	defer func() { _ = os.Remove("/tmp/test-password") }()
+	passwordFile := filepath.Join(t.TempDir(), "test-password")
+	t.Setenv("VEILKEY_PASSWORD_FILE", passwordFile)
+	if err := os.WriteFile(passwordFile, []byte("test"), 0600); err != nil {
+		t.Fatal(err)
+	}
 
 	// The env var should have no effect — server starts locked regardless
 	// If any code reads this env var, it's a security violation

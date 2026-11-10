@@ -227,15 +227,18 @@ type SecretInputChallenge struct {
 func (SecretInputChallenge) TableName() string { return "secret_input_challenges" }
 
 type EmailOTPChallenge struct {
-	Token         string     `gorm:"primaryKey;column:token" json:"token"`
-	Email         string     `gorm:"column:email;not null" json:"email"`
-	Reason        string     `gorm:"column:reason;not null;default:''" json:"reason"`
-	Status        string     `gorm:"column:status;not null;default:pending;index" json:"status"`
-	CodeHash      string     `gorm:"column:code_hash;not null;default:''" json:"code_hash"`
-	CodeExpiresAt *time.Time `gorm:"column:code_expires_at" json:"code_expires_at"`
-	CreatedAt     time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
-	UpdatedAt     time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
-	UsedAt        *time.Time `gorm:"column:used_at" json:"used_at"`
+	Token          string     `gorm:"primaryKey;column:token" json:"token"`
+	Email          string     `gorm:"column:email;not null" json:"email"`
+	Reason         string     `gorm:"column:reason;not null;default:''" json:"reason"`
+	Status         string     `gorm:"column:status;not null;default:pending;index" json:"status"`
+	CodeHash       string     `gorm:"column:code_hash;not null;default:''" json:"code_hash"`
+	CodeExpiresAt  *time.Time `gorm:"column:code_expires_at" json:"code_expires_at"`
+	FailedAttempts int        `gorm:"column:failed_attempts;not null;default:0" json:"failed_attempts"`
+	SendCount      int        `gorm:"column:send_count;not null;default:0" json:"send_count"`
+	LastSentAt     *time.Time `gorm:"column:last_sent_at" json:"last_sent_at"`
+	CreatedAt      time.Time  `gorm:"column:created_at;autoCreateTime" json:"created_at"`
+	UpdatedAt      time.Time  `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
+	UsedAt         *time.Time `gorm:"column:used_at" json:"used_at"`
 }
 
 func (EmailOTPChallenge) TableName() string { return "email_otp_challenges" }

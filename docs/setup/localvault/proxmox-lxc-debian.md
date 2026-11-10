@@ -2,32 +2,31 @@
 
 ## Docker Compose (inside VeilKey LXC)
 
+Issue a registration token in VaultCenter first. It is required even on the trusted Docker network.
+
 ```bash
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && \
-  docker compose exec -T localvault sh -c \
-    'echo \"<MASTER_PASSWORD>\" | veilkey-localvault init --root --center https://vaultcenter:10181'"
+  docker compose exec -T localvault veilkey-localvault init --root \
+    --token '<REG_TOKEN>' --center https://vaultcenter:10181"
 
 pct exec <CTID> -- bash -c "cd /root/veilkey-selfhosted && docker compose restart localvault"
-
-pct exec <CTID> -- bash -c "curl -sk -X POST https://localhost:<LV_PORT>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{\"password\":\"<MASTER_PASSWORD>\"}'"
 ```
+
+The unlock key is generated automatically; bootstrap and subsequent restarts use VC-managed unlock. See [registration.md](./registration.md).
 
 ## Standalone (on any LXC or host)
 
-Use the install script — handles build, TLS, init, systemd, auto-unlock, backup, and CLI:
+For first-time installation, use the token-aware common installer:
 
 ```bash
 cd veilkey-selfhosted
-VEILKEY_CENTER_URL=http://<VC_HOST>:<VC_PORT> \
-VEILKEY_PASSWORD='<MASTER_PASSWORD>' \
-VEILKEY_NAME=<VAULT_NAME> \
-VEILKEY_BULK_APPLY_ALLOWED_PATHS=<PATHS> \
-  bash install/proxmox-lxc-debian/install-localvault.sh
+VEILKEY_CENTER_URL=https://<VC_HOST>:<VC_PORT> \
+VEILKEY_REG_TOKEN='<REG_TOKEN>' \
+VEILKEY_LABEL=<VAULT_NAME> \
+  bash install/common/install-localvault.sh
 ```
 
-See [install-localvault.md](../../../install/proxmox-lxc-debian/install-localvault.md) for details.
+See [the common installer guide](../../../install/common/install-localvault.md). The legacy Proxmox installer does not pass a registration token and cannot initialize a new vault until its init invocation supplies `--token`. The management notes below describe existing installations using that legacy installer.
 
 ### What the installer sets up
 

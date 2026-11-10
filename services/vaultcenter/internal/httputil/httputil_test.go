@@ -152,15 +152,16 @@ func TestParseListWindow(t *testing.T) {
 }
 
 func TestIsSecureRequest(t *testing.T) {
+	t.Setenv("VEILKEY_ALLOW_INSECURE_COOKIES", "0")
 	tests := []struct {
 		name  string
 		setup func(r *http.Request)
 		want  bool
 	}{
 		{
-			"plain http is not secure",
+			"plain http retains secure cookie policy",
 			func(r *http.Request) {},
-			false,
+			true,
 		},
 		{
 			"x-forwarded-proto https is secure",
@@ -170,11 +171,11 @@ func TestIsSecureRequest(t *testing.T) {
 			true,
 		},
 		{
-			"x-forwarded-proto http is not secure",
+			"x-forwarded-proto http cannot downgrade cookies",
 			func(r *http.Request) {
 				r.Header.Set("X-Forwarded-Proto", "http")
 			},
-			false,
+			true,
 		},
 		{
 			"x-forwarded-proto HTTPS (case insensitive)",
