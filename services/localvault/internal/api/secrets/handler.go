@@ -46,12 +46,12 @@ func (h *Handler) Register(
 	ready := requireUnlocked
 	agentAuth := requireAgentSecret
 
-	mux.HandleFunc("POST /api/secrets", trusted(ready(h.handleSaveSecret)))
-	mux.HandleFunc("GET /api/secrets", ready(h.handleListSecrets))
-	mux.HandleFunc("GET /api/secrets/{name}", ready(h.handleGetSecret))
-	mux.HandleFunc("DELETE /api/secrets/{name}", trusted(ready(h.handleDeleteSecret)))
+	mux.HandleFunc("POST /api/secrets", agentAuth(trusted(ready(h.handleSaveSecret))))
+	mux.HandleFunc("GET /api/secrets", agentAuth(ready(h.handleListSecrets)))
+	mux.HandleFunc("GET /api/secrets/{name}", agentAuth(ready(h.handleGetSecret)))
+	mux.HandleFunc("DELETE /api/secrets/{name}", agentAuth(trusted(ready(h.handleDeleteSecret))))
 
-	mux.HandleFunc("GET /api/resolve/{ref}", ready(h.handleResolveSecret))
+	mux.HandleFunc("GET /api/resolve/{ref}", agentAuth(ready(h.handleResolveSecret)))
 	mux.HandleFunc("POST /api/rekey", agentAuth(trusted(ready(h.handleRekey))))
 
 	mux.HandleFunc("GET /api/cipher/{ref}", agentAuth(trusted(ready(h.handleCipher))))

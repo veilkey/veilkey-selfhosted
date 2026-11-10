@@ -22,14 +22,9 @@ docker compose restart localvault
 
 3. LocalVault appears in the vault list after heartbeat
 
-## Without token (trusted IP)
+## Trusted addresses and registration
 
-If the LocalVault is on a trusted IP network (default: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), registration tokens are not required:
-
-```bash
-echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-  --center <VC_URL>
-```
+The first registration requires a VaultCenter-issued registration token, including from trusted addresses. Configure `VEILKEY_TRUSTED_IPS` with only the VaultCenter source address; private-network ranges and localhost are not trusted by default. Trusted-IP access does not replace the agent secret required by post-registration APIs. Existing registered agents continue using their issued agent secret.
 
 ## Unlock after init
 

@@ -94,27 +94,8 @@ func runSetupServer(dbPath, dataDir string) {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 
-	server := api.NewServer(database, nil, []string{})
-
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		api.RenderInstallWizard(w)
-	})
-	mux.Handle("/assets/", http.FileServer(http.FS(api.InstallUIAssets())))
-
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
-		w.Write([]byte(`{"status":"setup"}`))
-	})
-
-	mux.HandleFunc("GET /api/install/status", server.HandleInstallStatus)
-	mux.HandleFunc("PATCH /api/install/vaultcenter-url", server.HandlePatchVaultcenterURL)
-	mux.HandleFunc("POST /api/install/init", func(w http.ResponseWriter, r *http.Request) {
+	server := api.NewServer(database, nil, strings.Split(os.Getenv("VEILKEY_TRUSTED_IPS"), ","))
+	handler := setupRoutes(server, func(w http.ResponseWriter, r *http.Request) {
 		handleInstallInit(w, r, database, dbPath, dataDir)
 	})
 
@@ -123,14 +104,38 @@ func runSetupServer(dbPath, dataDir string) {
 	tlsCert := os.Getenv("VEILKEY_TLS_CERT")
 	tlsKey := os.Getenv("VEILKEY_TLS_KEY")
 	if tlsCert != "" && tlsKey != "" {
-		if err := http.ListenAndServeTLS(addr, tlsCert, tlsKey, api.LogMiddleware(mux)); err != nil {
+		if err := http.ListenAndServeTLS(addr, tlsCert, tlsKey, api.LogMiddleware(handler)); err != nil {
 			log.Fatalf("Setup server failed: %v", err)
 		}
 	} else {
-		if err := http.ListenAndServe(addr, api.LogMiddleware(mux)); err != nil {
+		if err := http.ListenAndServe(addr, api.LogMiddleware(handler)); err != nil {
 			log.Fatalf("Setup server failed: %v", err)
 		}
 	}
+}
+
+// setupRoutes exposes health publicly and restricts all initialization access.
+func setupRoutes(server *api.Server, initialize http.HandlerFunc) http.Handler {
+	setup := http.NewServeMux()
+	setup.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		api.RenderInstallWizard(w)
+	})
+	setup.Handle("/assets/", http.FileServer(http.FS(api.InstallUIAssets())))
+	setup.HandleFunc("GET /api/install/status", server.HandleInstallStatus)
+	setup.HandleFunc("PATCH /api/install/vaultcenter-url", server.HandlePatchVaultcenterURL)
+	setup.HandleFunc("POST /api/install/init", initialize)
+
+	mux := http.NewServeMux()
+	mux.Handle("/", server.TrustedIPMiddleware(setup))
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", httputil.ContentTypeJSON)
+		_, _ = w.Write([]byte(`{"status":"setup"}`))
+	})
+	return mux
 }
 
 func handleInstallInit(w http.ResponseWriter, r *http.Request, database *db.DB, dbPath, dataDir string) {

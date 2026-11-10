@@ -9,7 +9,7 @@
 | `LOCALVAULT_HOST_PORT` | `11180` | LocalVault host port |
 | `VAULTCENTER_P2P_PORT` | `26656` | CometBFT P2P port |
 | `VAULTCENTER_RPC_PORT` | `26657` | CometBFT RPC port |
-| `VEILKEY_TRUSTED_IPS` | `10.0.0.0/8,...` | Trusted IP ranges (CIDR) |
+| `VEILKEY_TRUSTED_IPS` | **Required; no default trust** | Explicit VaultCenter source address for LocalVault (IP or narrow CIDR); do not trust entire private networks |
 | `VAULTCENTER_AUTO_COMPLETE_INSTALL_FLOW` | `0` | Auto-complete initial setup |
 | `LOCALVAULT_LABEL` | `localvault-01` | LocalVault display name |
 | `LOCALVAULT_CHAIN_PEERS` | - | CometBFT persistent peers |
@@ -39,4 +39,4 @@
 | `VEILKEY_VAULT_NAME` | `$(hostname)` | Vault display name |
 | `VEILKEY_VAULTCENTER_URL` | - | VaultCenter URL for heartbeat |
 | `VEILKEY_UNLOCK_PASSWORD` | - | Master password for auto-unlock on startup. If set, LocalVault unlocks via VaultCenter automatically after reboot |
-| `VEILKEY_TRUSTED_IPS` | `10.0.0.0/8,...,::1` | Always include `::1` (IPv6 loopback) to prevent localhost unlock failures |
+| `VEILKEY_TRUSTED_IPS` | **Required; no default trust** | Only the VaultCenter source IP or narrow CIDR. An empty list denies IP-restricted APIs, also in setup mode. Protected APIs additionally require the agent secret; localhost is not implicitly trusted |

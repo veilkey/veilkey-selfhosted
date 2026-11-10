@@ -15,7 +15,9 @@ var serverStartTime = time.Now().UTC()
 
 func (s *Server) registerAdminRoutes(mux *http.ServeMux) {
 	trusted := s.requireTrustedIP
-	ready := s.requireUnlocked
+	ready := func(next http.HandlerFunc) http.HandlerFunc {
+		return s.requireUnlocked(s.requireAgentSecret(next))
+	}
 
 	mux.HandleFunc("GET /api/admin/diagnostics", trusted(ready(s.handleDiagnostics)))
 	mux.HandleFunc("GET /api/admin/tls-info", trusted(ready(s.handleTLSInfo)))
@@ -29,18 +31,18 @@ func (s *Server) handleDiagnostics(w http.ResponseWriter, r *http.Request) {
 	runtime.ReadMemStats(&memStats)
 
 	s.respondJSON(w, http.StatusOK, map[string]any{
-		"status":        "ok",
-		"version":       os.Getenv("VEILKEY_VERSION"),
-		"uptime":        formatUptime(uptime),
+		"status":         "ok",
+		"version":        os.Getenv("VEILKEY_VERSION"),
+		"uptime":         formatUptime(uptime),
 		"uptime_seconds": int(uptime.Seconds()),
-		"go_version":    runtime.Version(),
-		"os":            runtime.GOOS,
-		"arch":          runtime.GOARCH,
-		"goroutines":    runtime.NumGoroutine(),
-		"memory_mb":     memStats.Alloc / 1024 / 1024,
-		"db_path":       os.Getenv("VEILKEY_DB_PATH"),
-		"addr":          os.Getenv("VEILKEY_ADDR"),
-		"vault_name":    os.Getenv("VEILKEY_VAULT_NAME"),
+		"go_version":     runtime.Version(),
+		"os":             runtime.GOOS,
+		"arch":           runtime.GOARCH,
+		"goroutines":     runtime.NumGoroutine(),
+		"memory_mb":      memStats.Alloc / 1024 / 1024,
+		"db_path":        os.Getenv("VEILKEY_DB_PATH"),
+		"addr":           os.Getenv("VEILKEY_ADDR"),
+		"vault_name":     os.Getenv("VEILKEY_VAULT_NAME"),
 	})
 }
 
@@ -117,4 +119,3 @@ func formatUptime(d time.Duration) string {
 	}
 	return strings.Join(parts, "")
 }
-

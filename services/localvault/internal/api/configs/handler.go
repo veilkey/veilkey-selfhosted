@@ -26,8 +26,12 @@ func NewHandler(deps Deps) *Handler {
 func (h *Handler) Register(
 	mux *http.ServeMux,
 	requireTrustedIP func(http.HandlerFunc) http.HandlerFunc,
+	requireUnlocked func(http.HandlerFunc) http.HandlerFunc,
+	requireAgentSecret func(http.HandlerFunc) http.HandlerFunc,
 ) {
-	trusted := requireTrustedIP
+	trusted := func(next http.HandlerFunc) http.HandlerFunc {
+		return requireTrustedIP(requireUnlocked(requireAgentSecret(next)))
+	}
 
 	mux.HandleFunc("GET /api/configs", trusted(h.handleListConfigs))
 	mux.HandleFunc("GET /api/configs/{key}", trusted(h.handleGetConfig))

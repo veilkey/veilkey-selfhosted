@@ -1,5 +1,5 @@
 ARG DOCKER_MIRROR=
-FROM ${DOCKER_MIRROR}golang:1.25-bookworm AS builder
+FROM ${DOCKER_MIRROR}golang:1.26.10-bookworm AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
