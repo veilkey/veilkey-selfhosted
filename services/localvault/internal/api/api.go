@@ -42,6 +42,7 @@ type Server struct {
 	dataDir       string // directory containing salt, agent_secret, vault_key files
 	kek           []byte
 	kekMu         sync.RWMutex
+	unlockMu      sync.Mutex
 	locked        bool
 	salt          []byte
 	trustedIPs    map[string]bool
@@ -197,6 +198,9 @@ func NewServer(database *db.DB, kek []byte, trustedIPs []string) *Server {
 	var cidrs []*net.IPNet
 	for _, entry := range trustedIPs {
 		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
 		if strings.Contains(entry, "/") {
 			_, cidr, err := net.ParseCIDR(entry)
 			if err == nil {
@@ -227,6 +231,8 @@ func (s *Server) SetSalt(salt []byte) {
 }
 
 func (s *Server) Unlock(kek []byte) error {
+	s.unlockMu.Lock()
+	defer s.unlockMu.Unlock()
 	// 1. Early check: already unlocked (race between autoUnlock and handleUnlock)
 	s.kekMu.RLock()
 	alreadyUnlocked := !s.locked
@@ -239,13 +245,15 @@ func (s *Server) Unlock(kek []byte) error {
 	dbKey := DeriveDBKeyFromKEK(kek)
 	_ = os.Setenv("VEILKEY_DB_KEY", dbKey)
 
+	migrated := false
 	database, err := db.New(s.dbPath)
 	if err != nil {
-		// Attempt plaintext → encrypted migration (#360)
-		if migErr := db.MigrateToEncrypted(s.dbPath, dbKey); migErr != nil {
+		// Only migrate a legacy database after validating its KEK.
+		if migErr := db.MigrateToEncrypted(s.dbPath, dbKey, kek); migErr != nil {
 			log.Printf("Unlock: encrypted open failed, migration also failed: %v", migErr)
 			return fmt.Errorf("invalid password (cannot open database)")
 		}
+		migrated = true
 		database, err = db.New(s.dbPath)
 		if err != nil {
 			return fmt.Errorf("invalid password (cannot open database after migration)")
@@ -277,6 +285,11 @@ func (s *Server) Unlock(kek []byte) error {
 	s.locked = false
 	s.kekMu.Unlock()
 
+	if migrated {
+		if err := os.Remove(s.dbPath + ".plaintext.bak"); err != nil {
+			log.Printf("Unlock: failed to remove legacy migration backup: %v", err)
+		}
+	}
 	return nil
 }
 
@@ -470,7 +483,7 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 				}
 			}
 		}
-		if (len(s.trustedIPs) > 0 || len(s.trustedCIDRs) > 0) && !allowed {
+		if !allowed {
 			log.Printf("BLOCKED %s %s %s (untrusted IP)", clientIP, r.Method, r.URL.Path)
 			s.respondError(w, http.StatusForbidden, "access denied")
 			return
@@ -480,7 +493,7 @@ func (s *Server) requireTrustedIP(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // requireAgentSecret validates the agent secret on incoming requests from VaultCenter.
-// If no agent secret is configured yet, requests pass through (allow initial setup).
+// Registration bootstrap uses the outbound heartbeat, not these protected routes.
 func (s *Server) requireAgentSecret(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if s.IsLocked() {
@@ -489,8 +502,7 @@ func (s *Server) requireAgentSecret(next http.HandlerFunc) http.HandlerFunc {
 		}
 		info, err := s.db.GetNodeInfo()
 		if err != nil || len(info.AgentSecret) == 0 {
-			// No agent secret configured yet, allow through
-			next(w, r)
+			s.respondError(w, http.StatusUnauthorized, "agent secret not configured")
 			return
 		}
 		authHeader := r.Header.Get("Authorization")
@@ -542,9 +554,13 @@ func (s *Server) SetupRoutes() http.Handler {
 		mux.Handle("/assets/", http.FileServer(http.FS(assets)))
 	}
 
-	// Install status/settings APIs
-	mux.HandleFunc("GET /api/install/status", s.requireTrustedIP(s.HandleInstallStatus))
-	mux.HandleFunc("PATCH /api/install/vaultcenter-url", s.requireTrustedIP(s.HandlePatchVaultcenterURL))
+	protected := func(next http.HandlerFunc) http.HandlerFunc {
+		return s.requireTrustedIP(s.requireUnlocked(s.requireAgentSecret(next)))
+	}
+
+	// Post-install settings require the registered agent credential.
+	mux.HandleFunc("GET /api/install/status", protected(s.HandleInstallStatus))
+	mux.HandleFunc("PATCH /api/install/vaultcenter-url", protected(s.HandlePatchVaultcenterURL))
 
 	// Health + unlock
 	mux.HandleFunc("/health", s.handleHealth)
@@ -552,21 +568,21 @@ func (s *Server) SetupRoutes() http.Handler {
 	mux.HandleFunc("POST /api/unlock", s.requireTrustedIP(s.unlockLimiter.Middleware(s.handleUnlock)))
 
 	// Status
-	mux.HandleFunc("GET /api/status", s.requireUnlocked(s.handleStatus))
-	mux.HandleFunc("GET /api/node-info", s.requireUnlocked(s.handleStatus))
+	mux.HandleFunc("GET /api/status", s.handleHealth)
+	mux.HandleFunc("GET /api/node-info", s.requireUnlocked(s.requireAgentSecret(s.handleStatus)))
 
 	// Lifecycle (reencrypt + status transitions — spans VK and VE)
-	mux.HandleFunc("POST /api/reencrypt", s.requireTrustedIP(s.requireUnlocked(s.handleReencrypt)))
-	mux.HandleFunc("POST /api/activate", s.requireTrustedIP(s.requireUnlocked(s.handleActivate)))
-	mux.HandleFunc("POST /api/archive", s.requireTrustedIP(s.requireUnlocked(s.handleArchive)))
-	mux.HandleFunc("POST /api/block", s.requireTrustedIP(s.requireUnlocked(s.handleBlock)))
-	mux.HandleFunc("POST /api/revoke", s.requireTrustedIP(s.requireUnlocked(s.handleRevoke)))
+	mux.HandleFunc("POST /api/reencrypt", protected(s.handleReencrypt))
+	mux.HandleFunc("POST /api/activate", protected(s.handleActivate))
+	mux.HandleFunc("POST /api/archive", protected(s.handleArchive))
+	mux.HandleFunc("POST /api/block", protected(s.handleBlock))
+	mux.HandleFunc("POST /api/revoke", protected(s.handleRevoke))
 
 	// Domain subpackage routes
 	s.secretsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP, s.requireAgentSecret)
-	s.configsHandler.Register(mux, s.requireTrustedIP)
-	s.bulkHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
-	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP)
+	s.configsHandler.Register(mux, s.requireTrustedIP, s.requireUnlocked, s.requireAgentSecret)
+	s.bulkHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP, s.requireAgentSecret)
+	s.functionsHandler.Register(mux, s.requireUnlocked, s.requireTrustedIP, s.requireAgentSecret)
 	s.registerAdminRoutes(mux)
 
 	return recoveryMiddleware(securityHeadersMiddleware(logMiddleware(mux)))

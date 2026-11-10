@@ -10,6 +10,11 @@ import (
 	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
+// validCipherLengths checks the AES-GCM wire format without decrypting it.
+func validCipherLengths(ciphertext, nonce []byte) bool {
+	return len(nonce) == 12 && len(ciphertext) >= 16
+}
+
 func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name       string `json:"name"`
@@ -26,6 +31,10 @@ func (h *Handler) handleSaveCipher(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" || len(req.Ciphertext) == 0 || len(req.Nonce) == 0 {
 		respondError(w, http.StatusBadRequest, "name, ciphertext, and nonce are required")
+		return
+	}
+	if !validCipherLengths(req.Ciphertext, req.Nonce) {
+		respondError(w, http.StatusBadRequest, "ciphertext must include a GCM tag and nonce must be 12 bytes")
 		return
 	}
 	if !isValidResourceName(req.Name) {

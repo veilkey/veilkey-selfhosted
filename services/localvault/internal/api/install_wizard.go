@@ -101,6 +101,11 @@ func (s *Server) HandlePatchVaultcenterURL(w http.ResponseWriter, r *http.Reques
 	s.HandleInstallStatus(w, r)
 }
 
+// TrustedIPMiddleware restricts setup handlers to explicitly configured addresses.
+func (s *Server) TrustedIPMiddleware(next http.Handler) http.Handler {
+	return s.requireTrustedIP(next.ServeHTTP)
+}
+
 // LogMiddleware wraps an http.Handler with request logging.
 func LogMiddleware(next http.Handler) http.Handler {
 	return logMiddleware(next)

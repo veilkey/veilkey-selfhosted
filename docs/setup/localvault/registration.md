@@ -26,6 +26,10 @@ Initialization validates the token with VaultCenter before creating or replacing
 
 The LocalVault setup endpoint `POST /api/install/init` also requires the encoded token in the `registration_token` JSON field, together with `vaultcenter_url` when the token has no embedded URL. Initialization rejects a missing or invalid token before changing local data. A setup client must submit both fields; setting only the VaultCenter URL is insufficient.
 
+## Trusted addresses and registration
+
+The first registration requires a VaultCenter-issued registration token, including from trusted addresses. Configure `VEILKEY_TRUSTED_IPS` with only the VaultCenter source address; private-network ranges and localhost are not trusted by default. Trusted-IP access does not replace the agent secret required by post-registration APIs. Existing registered agents continue using their issued agent secret.
+
 ## Unlock after init
 
 LocalVault generates its unlock key automatically and transfers it to VaultCenter during authenticated registration. After restarting, bootstrap unlock uses the local `vault_key` file; subsequent restarts use the saved agent secret to obtain the VaultCenter-managed unlock key. No password needs to be piped into `init`, and `VEILKEY_DB_KEY` is derived automatically.

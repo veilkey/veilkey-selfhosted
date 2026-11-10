@@ -9,24 +9,12 @@ import (
 // ── Source analysis: apply.go ────────────────────────────────────────────────
 
 func TestSource_AllowedTargetPaths_Whitelist(t *testing.T) {
-	src, err := os.ReadFile("apply.go")
-	if err != nil {
-		t.Fatalf("failed to read apply.go: %v", err)
+	if len(defaultBulkApplyTargets) != 0 {
+		t.Error("bulk apply targets must be explicitly configured")
 	}
-	content := string(src)
-
-	if !strings.Contains(content, "defaultBulkApplyTargets") {
-		t.Error("apply.go must define defaultBulkApplyTargets allowlist")
-	}
-	expectedPaths := []string{
-		"/opt/mattermost/config/config.json",
-		"/opt/mattermost/.env",
-		"/etc/systemd/system/mattermost.service.d/override.conf",
-		"/etc/gitlab/gitlab.rb",
-	}
-	for _, path := range expectedPaths {
-		if !strings.Contains(content, path) {
-			t.Errorf("defaultBulkApplyTargets must include: %s", path)
+	for _, path := range []string{"/opt/mattermost/config/config.json", "/etc/gitlab/gitlab.rb"} {
+		if isAllowedBulkApplyTarget(path) {
+			t.Errorf("unconfigured target allowed: %s", path)
 		}
 	}
 }
@@ -74,23 +62,12 @@ func TestSource_IsAllowedBulkApplyTarget_ChecksBothMaps(t *testing.T) {
 }
 
 func TestSource_AllowedHooks_Whitelist(t *testing.T) {
-	src, err := os.ReadFile("apply.go")
-	if err != nil {
-		t.Fatalf("failed to read apply.go: %v", err)
+	if len(defaultBulkApplyHooks) != 0 {
+		t.Error("bulk apply hooks must be explicitly configured")
 	}
-	content := string(src)
-
-	if !strings.Contains(content, "defaultBulkApplyHooks") {
-		t.Error("apply.go must define defaultBulkApplyHooks allowlist")
-	}
-	expectedHooks := []string{
-		"reload_systemd",
-		"restart_mattermost",
-		"reconfigure_gitlab",
-	}
-	for _, hook := range expectedHooks {
-		if !strings.Contains(content, hook) {
-			t.Errorf("defaultBulkApplyHooks must include: %s", hook)
+	for _, hook := range []string{"reload_systemd", "restart_mattermost", "reconfigure_gitlab"} {
+		if _, ok := getAllowedBulkApplyHook(hook); ok {
+			t.Errorf("unconfigured hook allowed: %s", hook)
 		}
 	}
 }

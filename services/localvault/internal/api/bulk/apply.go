@@ -14,11 +14,11 @@ import (
 )
 
 type bulkApplyStep struct {
-	Name       string `json:"name"`
-	Format     string `json:"format"`
-	TargetPath string `json:"target_path"`
-	Content    string `json:"content"`
-	Hook       string `json:"hook"`
+	Name       string            `json:"name"`
+	Format     string            `json:"format"`
+	TargetPath string            `json:"target_path"`
+	Content    string            `json:"content"`
+	Hook       string            `json:"hook"`
 	HookEnv    map[string]string `json:"hook_env,omitempty"`
 }
 
@@ -27,24 +27,15 @@ type bulkApplyWorkflowRequest struct {
 	Steps []bulkApplyStep `json:"steps"`
 }
 
-// defaultBulkApplyTargets are always allowed.
-var defaultBulkApplyTargets = map[string]struct{}{
-	"/opt/mattermost/config/config.json":                     {},
-	"/opt/mattermost/.env":                                   {},
-	"/etc/systemd/system/mattermost.service.d/override.conf": {},
-	"/etc/gitlab/gitlab.rb":                                  {},
-}
+// No file targets are enabled without explicit operator configuration.
+var defaultBulkApplyTargets = map[string]struct{}{}
 
 // extraBulkApplyTargets is populated from VEILKEY_BULK_APPLY_ALLOWED_PATHS env var
 // (comma-separated absolute paths) at init time.
 var extraBulkApplyTargets = map[string]struct{}{}
 
-// defaultBulkApplyHooks are always allowed.
-var defaultBulkApplyHooks = map[string][]string{
-	"reload_systemd":     {"systemctl", "daemon-reload"},
-	"restart_mattermost": {"systemctl", "restart", "mattermost"},
-	"reconfigure_gitlab": {"gitlab-ctl", "reconfigure"},
-}
+// No hooks are enabled without explicit operator configuration.
+var defaultBulkApplyHooks = map[string][]string{}
 
 // extraBulkApplyHooks is populated from VEILKEY_BULK_APPLY_ALLOWED_HOOKS env var
 // (comma-separated name:cmd pairs, e.g. "restart_nginx:systemctl restart nginx")
@@ -129,8 +120,8 @@ func writeAtomically(path string, content []byte) error {
 	dir := filepath.Dir(path)
 	var (
 		mode     os.FileMode = 0644
-		uid              = -1
-		gid              = -1
+		uid                  = -1
+		gid                  = -1
 		haveStat bool
 	)
 	if info, err := os.Stat(path); err == nil {
@@ -168,6 +159,15 @@ func writeAtomically(path string, content []byte) error {
 }
 
 func validateBulkApplyStep(step bulkApplyStep, registry *FormatRegistry) error {
+	if len(step.HookEnv) != 0 {
+		return fmt.Errorf("request hook_env is not supported")
+	}
+	if strings.TrimSpace(step.Format) == "raw" {
+		resolved, _ := filepath.EvalSymlinks(step.TargetPath)
+		if filepath.Base(step.TargetPath) == "gitlab.rb" || filepath.Base(resolved) == "gitlab.rb" {
+			return fmt.Errorf("raw format is not supported for gitlab.rb")
+		}
+	}
 	if strings.TrimSpace(step.Name) == "" {
 		return fmt.Errorf("step name is required")
 	}
@@ -284,13 +284,6 @@ func hookEnv(req bulkApplyWorkflowRequest, hook string) map[string]string {
 			"hook":        step.Hook,
 		})
 		targets = append(targets, step.TargetPath)
-		for key, value := range step.HookEnv {
-			key = strings.TrimSpace(key)
-			if key == "" {
-				continue
-			}
-			envVars[key] = value
-		}
 	}
 	payloadJSON, _ := json.Marshal(payload)
 	envVars["VEILKEY_BULK_APPLY_WORKFLOW"] = req.Name

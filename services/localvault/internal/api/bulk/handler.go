@@ -20,9 +20,12 @@ func (h *Handler) Register(
 	mux *http.ServeMux,
 	requireUnlocked func(http.HandlerFunc) http.HandlerFunc,
 	requireTrustedIP func(http.HandlerFunc) http.HandlerFunc,
+	requireAgentSecret func(http.HandlerFunc) http.HandlerFunc,
 ) {
 	trusted := requireTrustedIP
-	ready := requireUnlocked
+	ready := func(next http.HandlerFunc) http.HandlerFunc {
+		return requireUnlocked(requireAgentSecret(next))
+	}
 
 	mux.HandleFunc("POST /api/bulk-apply/precheck", trusted(ready(h.handleBulkApplyPrecheck)))
 	mux.HandleFunc("POST /api/bulk-apply/execute", trusted(ready(h.handleBulkApplyExecute)))

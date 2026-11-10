@@ -65,6 +65,15 @@ If multiple sources contain differing values, a drift warning is logged at start
 
 ## Security Boundary
 
+- Requests to configs, lifecycle actions, bulk-apply precheck/execute, secret inventory, functions, node-info, lock, diagnostics, TLS info, and post-install settings require `Authorization: Bearer <agent_secret>` issued by VaultCenter. Trusted IPs alone are not credentials; protected routes fail closed before registration.
+- `/health`, `/ready`, and `/api/status` remain credential-free liveness/readiness endpoints. `/api/status` returns only the health state; use authenticated `/api/node-info` for vault identity and counts.
+- Set `VEILKEY_TRUSTED_IPS` explicitly to the VaultCenter source address, not a private-network range or localhost. An empty list denies IP-restricted requests. Before initialization, the wizard and install APIs are available only to configured trusted addresses; health remains public. If temporary setup access is needed, explicitly configure the operator's address and remove it after setup.
+- Generic config create/update/bulk/delete APIs reject reserved `VEILKEY_` keys. Use the authenticated install settings API or deployment configuration to change the VaultCenter URL.
+- Bulk-apply has no enabled targets or hooks by default. Opt in using `VEILKEY_BULK_APPLY_ALLOWED_PATHS` (comma-separated absolute paths) and `VEILKEY_BULK_APPLY_ALLOWED_HOOKS` (comma-separated `name:command` entries). Request-supplied `hook_env` and raw `gitlab.rb` writes are rejected. Hooks receive only server-generated workflow metadata in addition to their service environment.
+- Ciphertext writes, including companion fields, require a 12-byte AES-GCM nonce and at least the 16-byte authentication tag (lengths are checked after base64 decoding).
+- Legacy plaintext databases are migrated only after their stored DEK authenticates the supplied KEK. A failed password leaves the legacy database unchanged; migration backups are removed only after a successful unlock.
+- TLS certificate verification is enabled by default. Configure `VEILKEY_TLS_CA` for a private CA; do not use `VEILKEY_TLS_INSECURE=1` for multi-host deployments.
+
 - Plaintext encryption/decryption is not performed in LocalVault. LocalVault is a ciphertext store; plaintext handling belongs to VaultCenter.
 - The following endpoints are blocked (`403`):
   - `POST /api/secrets`, `GET /api/secrets/{name}`, `GET /api/resolve/{ref}`, `POST /api/encrypt`, `POST /api/rekey`
@@ -159,7 +168,8 @@ Deploy via Docker container. See the `Dockerfile` in this directory.
 | `PUT /api/configs` | `{"key":"k","value":"v"}` | Store config; default lifecycle is `VE:LOCAL:*` + `active` |
 | `DELETE /api/configs/{key}` | | Delete config |
 | `POST /api/rekey` | | Blocked (`403`) |
-| `GET /api/status` | | Vault identity, `key_version`, `mode=vault` status |
+| `GET /api/status` | | Credential-free health state only |
+| `GET /api/node-info` | | Agent-authenticated vault identity and inventory counts |
 | `GET /health` | | Health check |
 
 ### List vs Meta Read Model

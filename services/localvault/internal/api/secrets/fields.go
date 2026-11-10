@@ -64,8 +64,8 @@ func (h *Handler) handleSaveSecretFields(w http.ResponseWriter, r *http.Request)
 			respondError(w, http.StatusBadRequest, "field key must match [A-Z_][A-Z0-9_]*")
 			return
 		}
-		if len(field.Ciphertext) == 0 || len(field.Nonce) == 0 {
-			respondError(w, http.StatusBadRequest, "field ciphertext and nonce are required")
+		if !validCipherLengths(field.Ciphertext, field.Nonce) {
+			respondError(w, http.StatusBadRequest, "field ciphertext must include a GCM tag and nonce must be 12 bytes")
 			return
 		}
 		fieldType := normalizeSecretFieldType(field.Type)

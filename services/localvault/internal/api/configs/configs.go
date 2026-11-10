@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/veilkey/veilkey-go-package/httputil"
 )
@@ -87,6 +88,10 @@ func (h *Handler) handleSaveConfig(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "key must match [A-Z_][A-Z0-9_]*")
 		return
 	}
+	if strings.HasPrefix(req.Key, "VEILKEY_") {
+		respondError(w, http.StatusBadRequest, "VEILKEY_ keys are reserved for service configuration")
+		return
+	}
 	if req.Value == nil {
 		respondError(w, http.StatusBadRequest, "value is required (use DELETE to remove a config)")
 		return
@@ -127,6 +132,10 @@ func (h *Handler) handleSaveConfigsBulk(w http.ResponseWriter, r *http.Request) 
 	}
 
 	for k := range req.Configs {
+		if strings.HasPrefix(k, "VEILKEY_") {
+			respondError(w, http.StatusBadRequest, "VEILKEY_ keys are reserved for service configuration")
+			return
+		}
 		if !isValidResourceName(k) {
 			respondError(w, http.StatusBadRequest, fmt.Sprintf("invalid key: %s (must match [A-Z_][A-Z0-9_]*)", k))
 			return
@@ -155,6 +164,10 @@ func (h *Handler) handleDeleteConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if strings.HasPrefix(key, "VEILKEY_") {
+		respondError(w, http.StatusBadRequest, "VEILKEY_ keys are reserved for service configuration")
+		return
+	}
 	if err := h.deps.DB().DeleteConfig(key); err != nil {
 		respondError(w, http.StatusNotFound, "config not found")
 		return

@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/veilkey/veilkey-go-package/crypto"
 )
 
 // MigrateToEncrypted converts a plaintext SQLite DB to an encrypted SQLCipher DB.
@@ -14,7 +16,28 @@ import (
 //
 // Returns nil if migration succeeded (caller should retry db.New).
 // Returns error if DB is not plaintext or migration failed.
-func MigrateToEncrypted(dbPath, dbKey string) error {
+func MigrateToEncrypted(dbPath, dbKey string, kek []byte) error {
+	// Verify the KEK through a read-only connection before changing the legacy file.
+	path := &url.URL{Scheme: "file", Path: dbPath, RawQuery: "mode=ro"}
+	legacy, err := sql.Open("sqlite3", path.String())
+	if err != nil {
+		return fmt.Errorf("open legacy database: %w", err)
+	}
+	var dek, nonce []byte
+	err = legacy.QueryRow("SELECT dek, dek_nonce FROM node_info LIMIT 1").Scan(&dek, &nonce)
+	_ = legacy.Close()
+	if err != nil {
+		return fmt.Errorf("read legacy node info: %w", err)
+	}
+	plaintext, err := crypto.Decrypt(kek, dek, nonce)
+	if err != nil {
+		return fmt.Errorf("verify legacy KEK: %w", err)
+	}
+	clear(plaintext)
+	if _, err := os.Stat(dbPath + ".plaintext.bak"); !os.IsNotExist(err) {
+		return fmt.Errorf("plaintext migration backup already exists or cannot be checked")
+	}
+
 	// 1. Open plaintext
 	dsn := dbPath + "?_journal_mode=wal&_busy_timeout=5000"
 	plainDB, err := sql.Open("sqlite3", dsn)
@@ -72,10 +95,7 @@ func MigrateToEncrypted(dbPath, dbKey string) error {
 		return fmt.Errorf("replace with encrypted: %w", err)
 	}
 
-	// Clean up
-	_ = os.Remove(bakPath + "-wal")
-	_ = os.Remove(bakPath + "-shm")
-	_ = os.Remove(bakPath)
+	// Keep the backup until the caller has successfully unlocked the encrypted DB.
 
 	log.Println("migrate: plaintext DB encrypted successfully")
 	return nil
