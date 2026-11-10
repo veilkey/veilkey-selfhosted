@@ -53,3 +53,22 @@ fn load_file(path: &str) -> Option<ProjectConfig> {
     let data = fs::read_to_string(path).ok()?;
     serde_yaml::from_str(&data).ok()
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn maintained_yaml_parser_loads_project_options() {
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("config.yml");
+        std::fs::write(
+            &path,
+            "patterns: custom.yml\nexclude_paths:\n  - vendor\nformat: json\nexit_code: true\n",
+        )
+        .unwrap();
+        let config = super::load_project_config(Some(path.to_str().unwrap())).unwrap();
+        assert_eq!(config.patterns_file, "custom.yml");
+        assert_eq!(config.exclude_paths, vec!["vendor"]);
+        assert_eq!(config.format, "json");
+        assert!(config.exit_code);
+    }
+}
