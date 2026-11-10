@@ -3,6 +3,7 @@ package hkm
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -78,6 +79,12 @@ func (h *Handler) handleMaskMap(w http.ResponseWriter, r *http.Request) {
 // RebuildMaskCache builds the mask-map and stores it in cache.
 // Called after unlock and on heartbeat dirty detection.
 func (h *Handler) RebuildMaskCache() {
+	defer func() {
+		if recover() != nil {
+			// Do not publish a partial snapshot or include decrypted data in logs.
+			log.Printf("mask-map: cache rebuild interrupted")
+		}
+	}()
 	entries := h.buildMaskMapEntries()
 	if entries == nil {
 		return
@@ -205,19 +212,25 @@ func (h *Handler) buildMaskMapEntries() []maskEntry {
 			continue
 		}
 		go func(ag *db.Agent) {
+			var result veResult
+			defer func() {
+				if recover() != nil {
+					log.Printf("mask-map: config fetch interrupted")
+					result = veResult{}
+				}
+				veCh <- result
+			}()
 			ai := agentToInfo(ag)
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 			defer cancel()
 			configURL := ai.URL() + "/api/configs"
 			req, reqErr := http.NewRequestWithContext(ctx, http.MethodGet, configURL, nil)
 			if reqErr != nil {
-				veCh <- veResult{}
 				return
 			}
 			h.setAgentAuthHeader(req, ai)
 			configResp, configErr := h.deps.HTTPClient().Do(req)
 			if configErr != nil {
-				veCh <- veResult{}
 				return
 			}
 			defer configResp.Body.Close()
@@ -230,10 +243,9 @@ func (h *Handler) buildMaskMapEntries() []maskEntry {
 				} `json:"configs"`
 			}
 			if err := json.NewDecoder(configResp.Body).Decode(&data); err != nil {
-				veCh <- veResult{}
 				return
 			}
-			veCh <- veResult{vaultName: ag.VaultName, configs: data.Configs}
+			result = veResult{vaultName: ag.VaultName, configs: data.Configs}
 		}(agent)
 	}
 	for range agents {

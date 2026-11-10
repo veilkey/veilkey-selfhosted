@@ -13,10 +13,8 @@ import (
 // ══════════════════════════════════════════════════════════════════
 // Cookie Secure flag tests
 //
-// These tests verify that the session cookie Secure flag is derived
-// from the request's TLS state, not hardcoded. A hardcoded Secure: true
-// breaks HTTP clients (e.g. vaultcenter-tui) because Go's cookie jar
-// refuses to send Secure cookies over plain HTTP.
+// Session cookies are Secure by default. Plain HTTP development clients
+// must explicitly enable VEILKEY_ALLOW_INSECURE_COOKIES.
 // ══════════════════════════════════════════════════════════════════
 
 const testAdminPassword = "test-admin-pw-2026!"
@@ -61,7 +59,8 @@ func parseCookieSecure(header string) (found bool, secure bool) {
 
 // ── Login over HTTP ─────────────────────────────────────────────
 
-func TestCookie_Login_HTTP_NoSecureFlag(t *testing.T) {
+func TestCookie_Login_HTTP_DevelopmentNoSecureFlag(t *testing.T) {
+	t.Setenv("VEILKEY_ALLOW_INSECURE_COOKIES", "1")
 	_, mux := newTestServer(t)
 
 	req := loginRequest(testAdminPassword)
@@ -86,6 +85,7 @@ func TestCookie_Login_HTTP_NoSecureFlag(t *testing.T) {
 // ── Login over HTTPS (TLS) ──────────────────────────────────────
 
 func TestCookie_Login_HTTPS_HasSecureFlag(t *testing.T) {
+	t.Setenv("VEILKEY_ALLOW_INSECURE_COOKIES", "1")
 	_, mux := newTestServer(t)
 
 	req := loginRequest(testAdminPassword)
@@ -128,7 +128,8 @@ func TestCookie_Login_ForwardedHTTPS_HasSecureFlag(t *testing.T) {
 	}
 }
 
-func TestCookie_Login_ForwardedHTTP_NoSecureFlag(t *testing.T) {
+func TestCookie_Login_ForwardedHTTP_DevelopmentNoSecureFlag(t *testing.T) {
+	t.Setenv("VEILKEY_ALLOW_INSECURE_COOKIES", "1")
 	_, mux := newTestServer(t)
 
 	req := loginRequest(testAdminPassword)
@@ -149,7 +150,8 @@ func TestCookie_Login_ForwardedHTTP_NoSecureFlag(t *testing.T) {
 
 // ── Logout cookie matches request TLS state ─────────────────────
 
-func TestCookie_Logout_HTTP_NoSecureFlag(t *testing.T) {
+func TestCookie_Logout_HTTP_DevelopmentNoSecureFlag(t *testing.T) {
+	t.Setenv("VEILKEY_ALLOW_INSECURE_COOKIES", "1")
 	_, mux := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/logout", nil)

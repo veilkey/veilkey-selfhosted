@@ -458,7 +458,7 @@ func TestDefense_RemoteIP_IgnoresProxyHeadersFromPublicIP(t *testing.T) {
 	}
 }
 
-func TestDefense_RemoteIP_TrustsProxyHeadersFromPrivateIP(t *testing.T) {
+func TestDefense_RemoteIP_IgnoresProxyHeadersFromPrivateIP(t *testing.T) {
 	r := &http.Request{
 		RemoteAddr: "127.0.0.1:12345", // loopback (proxy)
 		Header:     http.Header{},
@@ -466,8 +466,8 @@ func TestDefense_RemoteIP_TrustsProxyHeadersFromPrivateIP(t *testing.T) {
 	r.Header.Set("X-Real-IP", "203.0.113.50")
 
 	ip := remoteIP(r)
-	if ip != "203.0.113.50" {
-		t.Errorf("remoteIP = %q, want %q (should trust X-Real-IP from loopback)", ip, "203.0.113.50")
+	if ip != "127.0.0.1" {
+		t.Errorf("remoteIP = %q, want transport peer 127.0.0.1", ip)
 	}
 }
 

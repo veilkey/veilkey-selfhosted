@@ -475,16 +475,17 @@ impl VeilKeyClient {
             .unwrap_or(false)
     }
 
-    /// Check if VaultCenter is locked by probing /api/mask-map.
+    /// Check lock status before login without accessing the protected mask map.
     pub fn is_locked(&self) -> bool {
-        let url = format!("{}/api/mask-map", self.base_url);
-        matches!(
-            self.agent
-                .get(&url)
-                .timeout(std::time::Duration::from_secs(5))
-                .call(),
-            Err(ureq::Error::Status(503, _))
-        )
+        let url = format!("{}/api/status", self.base_url);
+        self.agent
+            .get(&url)
+            .timeout(std::time::Duration::from_secs(5))
+            .call()
+            .ok()
+            .and_then(|response| response.into_json::<serde_json::Value>().ok())
+            .and_then(|status| status["locked"].as_bool())
+            .unwrap_or(false)
     }
 
     /// Unlock VaultCenter with master password (KEK).
@@ -887,6 +888,37 @@ fn resolve_candidates(token: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::enrich_mask_map;
+
+    #[test]
+    fn lock_status_uses_public_status_before_login() {
+        use std::io::{Read, Write};
+        use std::net::TcpListener;
+        use std::time::Duration;
+
+        for locked in [true, false] {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind test server");
+            let address = listener.local_addr().expect("server address");
+            let server = std::thread::spawn(move || {
+                let (mut stream, _) = listener.accept().expect("accept status request");
+                stream
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                let mut request = [0u8; 4096];
+                let size = stream.read(&mut request).expect("read status request");
+                let request = String::from_utf8_lossy(&request[..size]);
+                let body = format!("{{\"locked\":{locked}}}");
+                write!(stream, "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body).unwrap();
+                request.starts_with("GET /api/status HTTP/1.1\r\n")
+            });
+            let client = super::VeilKeyClient::new(&format!("http://{address}"));
+            let actual = client.is_locked();
+            assert!(
+                server.join().expect("status server"),
+                "must not probe the protected mask map"
+            );
+            assert_eq!(actual, locked);
+        }
+    }
 
     // ── Retain filter ───────────────────────────────────────────────
 

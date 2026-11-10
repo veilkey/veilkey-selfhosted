@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -42,19 +41,7 @@ var (
 	loginAttempts = map[string]*loginAttempt{}
 )
 
-// privateRanges are RFC1918 + loopback used for proxy detection.
-var privateRanges []*net.IPNet
-
 func init() {
-	for _, cidr := range []string{
-		"127.0.0.0/8", "::1/128",
-		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-		"fc00::/7",
-	} {
-		_, network, _ := net.ParseCIDR(cidr)
-		privateRanges = append(privateRanges, network)
-	}
-
 	// Background cleanup: remove stale entries every loginCleanupInterval.
 	go func() {
 		for {
@@ -71,38 +58,11 @@ func init() {
 	}()
 }
 
-func isPrivateIP(ip net.IP) bool {
-	for _, network := range privateRanges {
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
-// remoteIP returns the client IP address.
-// When the direct connection comes from a private/loopback address (i.e. a
-// reverse proxy on the same host or local network), it trusts X-Real-IP and
-// then the leftmost entry of X-Forwarded-For. This is safe for self-hosted
-// deployments; do not expose this server directly to the internet without a
-// trusted proxy in front.
+// remoteIP keys login throttling on the transport peer, never forwarded headers.
 func remoteIP(r *http.Request) string {
 	addr, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		addr = r.RemoteAddr
-	}
-	if ip := net.ParseIP(addr); ip != nil && isPrivateIP(ip) {
-		if h := r.Header.Get(httputil.HeaderXRealIP); h != "" {
-			if parsed := net.ParseIP(strings.TrimSpace(h)); parsed != nil && !parsed.IsLoopback() {
-				return parsed.String()
-			}
-		}
-		if h := r.Header.Get(httputil.HeaderXForwardedFor); h != "" {
-			first := strings.TrimSpace(strings.SplitN(h, ",", 2)[0])
-			if parsed := net.ParseIP(first); parsed != nil && !parsed.IsLoopback() {
-				return parsed.String()
-			}
-		}
 	}
 	return addr
 }

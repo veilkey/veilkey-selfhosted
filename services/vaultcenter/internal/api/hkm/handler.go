@@ -88,7 +88,9 @@ func (h *Handler) Register(
 ) {
 	ready := requireReadyForOps
 	trusted := requireTrustedIP
-	_ = requireAdminAuth // registered via admin handler
+	operator := func(next http.HandlerFunc) http.HandlerFunc {
+		return trusted(ready(requireAdminAuth(next)))
+	}
 
 	// Parent API (called by root/parent to manage this node's children)
 	mux.HandleFunc("POST /api/register", trusted(ready(h.handleRegister)))
@@ -98,8 +100,8 @@ func (h *Handler) Register(
 	mux.HandleFunc("DELETE /api/children/{node_id}", trusted(ready(h.handleDeleteChild)))
 	mux.HandleFunc("GET /api/registry", ready(h.handleListRegistry))
 
-	// Resolve scoped VK ref → plaintext value — trusted IP only (veil CLI needs this without admin session)
-	mux.HandleFunc("GET /api/resolve/{ref}", trusted(ready(h.handleResolveSecret)))
+	// Plaintext resolution requires a trusted operator with an admin session.
+	mux.HandleFunc("GET /api/resolve/{ref}", operator(h.handleResolveSecret))
 
 	// Child heartbeat (report URL)
 	mux.HandleFunc("POST /api/heartbeat", trusted(ready(h.handleHeartbeat)))
@@ -110,8 +112,8 @@ func (h *Handler) Register(
 	// Key rotation (root triggers full tree rotation)
 	mux.HandleFunc("POST /api/federation/rotate", trusted(ready(h.handleFederatedRotate)))
 
-	// Mask map for veil-cli PTY masking — trusted IP only
-	mux.HandleFunc("GET /api/mask-map", trusted(ready(h.handleMaskMap)))
+	// Mask maps contain plaintext and require an authenticated operator.
+	mux.HandleFunc("GET /api/mask-map", operator(h.handleMaskMap))
 
 	// Agent management (Hub-only decryption)
 	agentAuth := h.requireAgentAuth
@@ -120,8 +122,8 @@ func (h *Handler) Register(
 	mux.HandleFunc("DELETE /api/agents/by-node/{node_id}", trusted(ready(h.handleAgentUnregisterByNode)))
 	mux.HandleFunc("POST /api/agents/by-node/{node_id}/archive", trusted(ready(h.handleAgentArchive)))
 	mux.HandleFunc("POST /api/agents/by-node/{node_id}/unarchive", trusted(ready(h.handleAgentUnarchive)))
-	mux.HandleFunc("GET /api/resolve-agent/{token}", ready(h.handleAgentResolve))
-	mux.HandleFunc("GET /api/agents", ready(h.handleAgentList))
+	mux.HandleFunc("GET /api/resolve-agent/{token}", operator(h.handleAgentResolve))
+	mux.HandleFunc("GET /api/agents", trusted(ready(h.handleAgentList)))
 	mux.HandleFunc("GET /api/agents/{agent}/rebind-plan", trusted(ready(h.handleAgentRebindPlan)))
 	mux.HandleFunc("POST /api/agents/rotate-all", trusted(ready(h.handleAgentRotateAll)))
 	mux.HandleFunc("GET /api/tracked-refs/audit", ready(h.handleTrackedRefAudit))
@@ -154,12 +156,12 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/agents/{agent}/secrets/{name}/fields/{field}", agentAuth(ready(h.handleAgentGetSecretField)))
 	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}/fields/{field}", agentAuth(trusted(ready(h.handleAgentDeleteSecretField))))
 	mux.HandleFunc("DELETE /api/agents/{agent}/secrets/{name}", agentAuth(trusted(ready(h.handleAgentDeleteSecret))))
-	mux.HandleFunc("GET /api/vaults", ready(h.handleVaultList))
-	mux.HandleFunc("GET /api/vaults/{vault}", ready(h.handleVaultGet))
+	mux.HandleFunc("GET /api/vaults", trusted(ready(h.handleVaultList)))
+	mux.HandleFunc("GET /api/vaults/{vault}", trusted(ready(h.handleVaultGet)))
 	mux.HandleFunc("PATCH /api/vaults/{vault}", trusted(ready(h.handleVaultPatch)))
 	mux.HandleFunc("GET /api/vaults/{vault}/audit", ready(h.handleVaultAudit))
-	mux.HandleFunc("GET /api/vaults/{vault}/keys", ready(h.handleVaultKeys))
-	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}", ready(h.handleVaultKeyGet))
+	mux.HandleFunc("GET /api/vaults/{vault}/keys", trusted(ready(h.handleVaultKeys)))
+	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}", operator(h.handleVaultKeyGet))
 	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}/meta", ready(h.handleVaultKeyMeta))
 	mux.HandleFunc("PATCH /api/vaults/{vault}/keys/{name}/meta", trusted(ready(h.handleVaultKeyMetaPatch)))
 	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}/summary", ready(h.handleVaultKeySummary))
@@ -173,18 +175,17 @@ func (h *Handler) Register(
 	mux.HandleFunc("PUT /api/vaults/{vault}/keys/{name}", trusted(ready(h.handleVaultKeyUpdate)))
 	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}/fields", ready(h.handleVaultKeyFields))
 	mux.HandleFunc("PUT /api/vaults/{vault}/keys/{name}/fields", trusted(ready(h.handleVaultKeyFieldsUpdate)))
-	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}/fields/{field}", ready(h.handleVaultKeyFieldGet))
+	mux.HandleFunc("GET /api/vaults/{vault}/keys/{name}/fields/{field}", operator(h.handleVaultKeyFieldGet))
 	mux.HandleFunc("PUT /api/vaults/{vault}/keys/{name}/fields/{field}", trusted(ready(h.handleVaultKeyFieldUpdate)))
 	mux.HandleFunc("DELETE /api/vaults/{vault}/keys/{name}/fields/{field}", trusted(ready(h.handleVaultKeyFieldDelete)))
 	mux.HandleFunc("DELETE /api/vaults/{vault}/keys/{name}/bindings/{binding_id}", trusted(ready(h.handleVaultKeyBindingDelete)))
 	mux.HandleFunc("POST /api/vaults/{vault}/keys/{name}/activate", trusted(ready(h.handleVaultKeyActivate)))
 	mux.HandleFunc("DELETE /api/vaults/{vault}/keys/{name}", trusted(ready(h.handleVaultKeyDelete)))
 	mux.HandleFunc("POST /api/agents/{agent}/migrate", agentAuth(trusted(ready(h.handleAgentMigrate))))
-	mux.HandleFunc("POST /api/agents/{agent}/approve-rebind", trusted(ready(h.handleAgentApproveRebind)))
 
 	// Configs aggregate (cross-agent search/bulk-update)
 	mux.HandleFunc("GET /api/configs/summary", ready(h.handleConfigsSummary))
-	mux.HandleFunc("GET /api/configs/search/{key}", ready(h.handleConfigsSearch))
+	mux.HandleFunc("GET /api/configs/search/{key}", operator(h.handleConfigsSearch))
 	mux.HandleFunc("POST /api/configs/bulk-update", trusted(ready(h.handleConfigsBulkUpdate)))
 	mux.HandleFunc("POST /api/configs/bulk-set", trusted(ready(h.handleConfigsBulkSet)))
 
