@@ -65,6 +65,7 @@ jobs:
         with:
           working-directory: services/vaultcenter
           version: "v2.4.0"
+          install-mode: goinstall
       - name: Build
         run: CGO_ENABLED=1 go build -o veilkey-vaultcenter ./cmd
       - name: Upload artifact
@@ -93,6 +94,7 @@ jobs:
         with:
           working-directory: services/localvault
           version: "v2.4.0"
+          install-mode: goinstall
       - name: Build
         run: CGO_ENABLED=1 go build -o veilkey-localvault ./cmd
       - name: Upload artifact
