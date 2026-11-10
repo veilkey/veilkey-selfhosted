@@ -8,22 +8,21 @@ import (
 
 // ── Source analysis: hkm_agent_heartbeat.go ──────────────────────────────────
 
-func TestSource_Heartbeat_NewAgentRequiresRegistrationTokenOrTrustedIP(t *testing.T) {
+func TestSource_Heartbeat_NewAgentRequiresRegistrationToken(t *testing.T) {
 	src, err := os.ReadFile("hkm_agent_heartbeat.go")
 	if err != nil {
 		t.Fatalf("failed to read hkm_agent_heartbeat.go: %v", err)
 	}
 	content := string(src)
 
-	// New agent registration requires token or trusted IP
 	if !strings.Contains(content, "RegistrationToken") {
 		t.Error("heartbeat must accept registration_token field for new agent registration")
 	}
-	if !strings.Contains(content, "IsTrustedIPString") {
-		t.Error("heartbeat must check trusted IP as alternative to registration token")
+	if strings.Contains(content, "else if !trusted") {
+		t.Error("trusted IP must not substitute for a registration token")
 	}
 	if !strings.Contains(content, "registration_token is required for first-time agent registration") {
-		t.Error("heartbeat must reject new agents without registration_token and non-trusted IP")
+		t.Error("heartbeat must reject new agents without registration_token")
 	}
 }
 

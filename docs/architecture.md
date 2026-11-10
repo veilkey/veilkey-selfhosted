@@ -215,10 +215,16 @@ Host ports: 11181 (VC), 11180 (LV), 26656 (P2P), 26657 (RPC)
 | POST | `/api/admin/change-password` | owner+trusted | Change admin password |
 | GET | `/api/agents/{hash}/secrets` | agent | List agent secrets |
 | GET | `/api/agents/{hash}/secrets/{name}` | agent | Get secret value |
-| GET | `/api/resolve/{ref}` | - | Resolve VK ref |
+| GET | `/api/resolve/{ref}` | admin+trusted | Resolve VK ref |
+| GET | `/api/resolve-agent/{token}` | admin+trusted | Resolve agent ref |
+| GET | `/api/mask-map` | admin+trusted | Plaintext mask map for authenticated CLI sessions |
+| GET | `/api/agents`, `/api/vaults` | trusted | List agents or vaults |
 | GET | `/api/vault-inventory` | - | List vaults |
-| GET | `/api/vaults/{hash}/keys` | - | List vault keys |
-| GET | `/api/vaults/{hash}/keys/{name}` | - | Get key value |
+| GET | `/api/vaults/{hash}/keys` | trusted | List vault keys |
+| GET | `/api/vaults/{hash}/keys/{name}` | admin+trusted | Get key value |
+| GET | `/api/vaults/{hash}/keys/{name}/fields/{field}` | admin+trusted | Get secret field value |
+| GET | `/api/configs/search/{key}` | admin+trusted | Search config values across agents |
+| POST | `/api/agents/{agent}/approve-rebind` | admin+trusted+evidence | Compatibility route for admin rebind approval |
 
 ### LocalVault
 
@@ -249,7 +255,7 @@ Each LocalVault authenticates to VaultCenter with an `agent_secret` Bearer token
 | LV → VC | `Authorization: Bearer {agent_secret}` — VC verifies SHA256(token) → agent_hash |
 | VC → LV | Same token — LV verifies via constant-time comparison |
 
-Unauthenticated requests to agent APIs are rejected. `mask-map` endpoint remains open (trusted IP only) for PTY masking.
+Unauthenticated requests to agent APIs are rejected. First registration also requires a valid, unused registration token, including from trusted IPs; existing registrations do not need a new token. Cross-vault operator plaintext reads, including `mask-map`, require an admin session and a trusted source IP. The veil CLI authenticates before its initial mask fetch and reuses the session cookie for long polling and resolution. A vault's agent Bearer token continues to authorize only that vault's agent-scoped APIs.
 
 ### Admin Password
 

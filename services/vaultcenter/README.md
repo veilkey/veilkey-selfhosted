@@ -123,6 +123,31 @@ Agent 상태 전이는 모두 체인 TX로 기록된다. DEK(암호화 키)는 �
 
 See [docs/setup/](../../docs/setup/README.md) for usage guides.
 
+Operator plaintext reads (`/api/resolve`, `/api/resolve-agent`, vault key and field values, cross-vault config search, and `/api/mask-map`) require both an admin session and a trusted source IP. Inventory reads at `/api/agents`, `/api/vaults`, and vault key lists require a trusted source IP. Agent-scoped secret APIs retain Bearer agent authentication and vault isolation. The veil CLI logs in before resolution and mask-map access; web UI and TUI clients use their admin session. Lock status remains available through `/api/status` before login.
+
+Admin sessions are local to the issuing VaultCenter and are not delegated to another server. Legacy parent/child resolve requests without credentials cannot resolve through another protected VaultCenter; connect and authenticate directly to the VaultCenter managing the reference. LocalVault remains storage-only and is not a plaintext resolve destination.
+
+Rebind approval, including the legacy `/api/agents/{agent}/approve-rebind` URL, uses the admin approval handler: a valid admin session, exact `APPROVE <RUNTIME_HASH>` confirmation, a nonempty reason, and submitted secure-input evidence are required. GET plugin API requests now have the same trusted-IP restriction as plugin writes.
+
+Temporary encryption requests create independent references rather than deduplicating by plaintext hash. New token-reference transactions contain no plaintext hash. Existing chain history is immutable; this change does not remove historical transaction data.
+
+### Session transport and login limits
+
+Session cookies are `Secure` by default, including behind TLS-terminating proxies that omit forwarded headers. Use HTTPS for production web and TUI sessions. Local HTTP development may explicitly set `VEILKEY_ALLOW_INSECURE_COOKIES=1` on VaultCenter; TLS requests still receive Secure cookies. This setting is disabled in `.env.example`. Forwarded headers do not affect cookie protection or login attempt accounting. Password login limits use the transport peer IP, so clients behind one reverse proxy share that peer's login budget.
+
+### Email approval limits
+
+Set the following VaultCenter environment variables before using email OTP approval; `.env.example` contains the recommended values. Missing or invalid policy values return 503 rather than enabling an unrestricted flow.
+
+| Variable | Example policy |
+|----------|----------------|
+| `VEILKEY_EMAIL_OTP_EXPIRY` | `5m` code lifetime |
+| `VEILKEY_EMAIL_OTP_MAX_ATTEMPTS` | `6` failed verifications per challenge |
+| `VEILKEY_EMAIL_OTP_SEND_COOLDOWN` | `1m` between code deliveries |
+| `VEILKEY_EMAIL_OTP_MAX_RESENDS` | `3` additional deliveries after the first |
+
+Counters persist in the database. Reaching the verification limit permanently locks that challenge (429); start a new approval challenge rather than resending. Resends and failed mail deliveries do not reset the verification budget. Delivery attempts consume the cooldown and resend budget even if mail delivery fails.
+
 ## Environment
 
 See [docs/setup/env-vars.md](../../docs/setup/env-vars.md).

@@ -155,7 +155,7 @@ func RunInit() {
 		fmt.Println("")
 		fmt.Printf("  Password ref: %s\n", tempRef)
 		fmt.Println("  This ref expires in 1 hour. Retrieve your password before then:")
-		fmt.Printf("    curl -s http://localhost:<port>/api/resolve/%s\n", tempRef)
+		fmt.Println("    Sign in to the admin console, then open Keycenter to retrieve the temporary reference.")
 	}
 	fmt.Println("")
 	fmt.Println("  WARNING: Your password is the only way to unlock this server.")

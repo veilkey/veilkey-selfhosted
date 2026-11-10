@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "node --test src/store.test.js",
     "build": "vite build"
   },
   "dependencies": {

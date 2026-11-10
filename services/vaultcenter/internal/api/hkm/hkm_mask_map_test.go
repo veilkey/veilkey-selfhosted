@@ -236,8 +236,8 @@ func TestSource_MaskMap_TrustedIPOnly(t *testing.T) {
 		t.Fatalf("failed to read handler.go: %v", err)
 	}
 	content := string(handlerSrc)
-	if !strings.Contains(content, `trusted(ready(h.handleMaskMap))`) {
-		t.Error("mask-map endpoint must be wrapped in trusted() middleware")
+	if !strings.Contains(content, `operator(h.handleMaskMap)`) || !strings.Contains(content, `trusted(ready(requireAdminAuth(next)))`) {
+		t.Error("mask-map endpoint must require a trusted IP and admin session")
 	}
 }
 

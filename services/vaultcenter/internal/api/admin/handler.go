@@ -66,6 +66,8 @@ func (h *Handler) Register(
 	mux.HandleFunc("GET /api/admin/approvals/rebind", readyForOps(h.RequireAdminSession(h.handleAdminRebindApprovalsList)))
 	mux.HandleFunc("GET /api/admin/approvals/rebind/{agent}", readyForOps(h.RequireAdminSession(h.handleAdminRebindPlan)))
 	mux.HandleFunc("POST /api/admin/approvals/rebind/{agent}/approve", readyForOps(h.RequireAdminSession(h.handleAdminApproveRebind)))
+	// Keep the legacy approval URL on the same session and evidence checks.
+	mux.HandleFunc("POST /api/agents/{agent}/approve-rebind", trusted(readyForOps(h.RequireAdminSession(h.handleAdminApproveRebind))))
 	mux.HandleFunc("POST /api/admin/rotations/{agent}/schedule", readyForOps(h.RequireAdminSession(h.handleAdminScheduleRotation)))
 	mux.HandleFunc("POST /api/admin/rotations/schedule-all", readyForOps(h.RequireAdminSession(h.handleAdminScheduleAllRotations)))
 	mux.HandleFunc("POST /api/admin/reveal-authorize", readyForOps(h.RequireAdminSession(h.handleAdminRevealAuthorize)))

@@ -120,7 +120,7 @@
 
         <div class="retrieve-box">
           <div class="retrieve-label">{{ t.retrieveLabel }}</div>
-          <code class="retrieve-cmd">curl {{ origin }}/api/resolve/{{ tempRef }}</code>
+          <p class="retrieve-cmd">{{ t.retrieveHelp }}</p>
         </div>
 
         <div class="warning-box">
@@ -178,7 +178,8 @@ const i18n = {
     adminTempRefLabel: '관리자 비밀번호 임시 참조 (VK:TEMP)',
     copy: '복사',
     expiresAt: '만료',
-    retrieveLabel: '비밀번호 조회 명령어',
+    retrieveLabel: '비밀번호 조회',
+    retrieveHelp: '관리자 비밀번호로 관리 콘솔에 로그인한 뒤 Keycenter에서 임시 참조를 조회하세요.',
     adminPassword: '관리자 비밀번호',
     adminPasswordDesc: '웹 관리 콘솔 로그인에 사용됩니다. 마스터 비밀번호와 달리 변경 가능합니다.',
     adminPasswordConfirm: '관리자 비밀번호 확인',
@@ -205,7 +206,8 @@ const i18n = {
     adminTempRefLabel: 'Admin Password Ref (VK:TEMP)',
     copy: 'Copy',
     expiresAt: 'Expires',
-    retrieveLabel: 'Retrieve password command',
+    retrieveLabel: 'Retrieve password',
+    retrieveHelp: 'Sign in to the admin console with your admin password, then open Keycenter to retrieve the temporary reference.',
     adminPassword: 'Admin Password',
     adminPasswordDesc: 'Used to log in to the web admin console. Can be changed later, unlike the master password.',
     adminPasswordConfirm: 'Confirm Admin Password',

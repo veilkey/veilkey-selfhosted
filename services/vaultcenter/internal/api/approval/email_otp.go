@@ -5,11 +5,14 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"math/big"
 	"net/http"
 	"net/mail"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,7 +20,6 @@ import (
 	"veilkey-vaultcenter/internal/httputil"
 	"veilkey-vaultcenter/internal/mailer"
 
-	"github.com/veilkey/veilkey-go-package/cmdutil"
 	vcrypto "github.com/veilkey/veilkey-go-package/crypto"
 )
 
@@ -139,17 +141,20 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 		respondErr(w, http.StatusNotFound, "challenge not found")
 		return
 	}
+	policy, err := loadEmailOTPPolicy()
+	if err != nil {
+		respondErr(w, http.StatusServiceUnavailable, "email otp policy is not configured")
+		return
+	}
 	switch action {
 	case "send-code":
 		code := fmt.Sprintf("%06d", secureRandInt(1000000))
-		otpExpiry := cmdutil.ParseDurationEnv("VEILKEY_EMAIL_OTP_EXPIRY", 5*time.Minute)
-		expiresAt := time.Now().UTC().Add(otpExpiry)
-		if _, err := h.db.UpdateEmailOTPCode(token, hashEmailOTPCode(code), expiresAt); err != nil {
-			log.Printf("email-otp: failed to update code: %v", err)
-			respondErr(w, http.StatusInternalServerError, "failed to send code")
+		expiresAt := time.Now().UTC().Add(policy.expiry)
+		if err := h.db.IssueEmailOTPCode(token, hashEmailOTPCode(code), expiresAt, policy.maxAttempts, policy.maxResends, policy.cooldown); err != nil {
+			respondEmailOTPError(w, err)
 			return
 		}
-		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: %d seconds\n", code, int(otpExpiry.Seconds()))
+		body := fmt.Sprintf("VeilKey one-time code\n\nCode: %s\nExpires in: %d seconds\n", code, int(policy.expiry.Seconds()))
 		if err := mailer.Send(challenge.Email, "VeilKey one-time code", body); err != nil {
 			log.Printf("email-otp: failed to send code email: %v", err)
 			respondErr(w, http.StatusBadGateway, "failed to send code")
@@ -159,19 +164,57 @@ func (h *Handler) handleSubmitEmailOTP(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, emailOTPCodeHTML, challenge.Email, defaultEmailOTPReason(challenge.Reason), token)
 	case "verify":
 		code := strings.TrimSpace(r.FormValue("code"))
-		if !validateEmailOTPChallenge(challenge, code) {
-			respondErr(w, http.StatusForbidden, "code is invalid or expired")
-			return
-		}
-		if _, err := h.db.MarkEmailOTPVerified(token); err != nil {
-			log.Printf("email-otp: failed to mark verified: %v", err)
-			respondErr(w, http.StatusInternalServerError, "verification failed")
+		if err := h.db.VerifyEmailOTPChallenge(token, policy.maxAttempts, func(current *db.EmailOTPChallenge) bool {
+			return validateEmailOTPChallenge(current, code)
+		}); err != nil {
+			respondEmailOTPError(w, err)
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = fmt.Fprint(w, emailOTPSuccessHTML)
 	default:
 		respondErr(w, http.StatusBadRequest, "unsupported action")
+	}
+}
+
+type emailOTPPolicy struct {
+	maxAttempts int
+	maxResends  int
+	cooldown    time.Duration
+	expiry      time.Duration
+}
+
+func loadEmailOTPPolicy() (emailOTPPolicy, error) {
+	var policy emailOTPPolicy
+	var err error
+	policy.maxAttempts, err = strconv.Atoi(strings.TrimSpace(os.Getenv("VEILKEY_EMAIL_OTP_MAX_ATTEMPTS")))
+	if err != nil || policy.maxAttempts <= 0 {
+		return policy, fmt.Errorf("VEILKEY_EMAIL_OTP_MAX_ATTEMPTS must be a positive integer")
+	}
+	policy.maxResends, err = strconv.Atoi(strings.TrimSpace(os.Getenv("VEILKEY_EMAIL_OTP_MAX_RESENDS")))
+	if err != nil || policy.maxResends < 0 {
+		return policy, fmt.Errorf("VEILKEY_EMAIL_OTP_MAX_RESENDS must be a nonnegative integer")
+	}
+	policy.cooldown, err = time.ParseDuration(strings.TrimSpace(os.Getenv("VEILKEY_EMAIL_OTP_SEND_COOLDOWN")))
+	if err != nil || policy.cooldown <= 0 {
+		return policy, fmt.Errorf("VEILKEY_EMAIL_OTP_SEND_COOLDOWN must be a positive duration")
+	}
+	policy.expiry, err = time.ParseDuration(strings.TrimSpace(os.Getenv("VEILKEY_EMAIL_OTP_EXPIRY")))
+	if err != nil || policy.expiry <= 0 {
+		return policy, fmt.Errorf("VEILKEY_EMAIL_OTP_EXPIRY must be a positive duration")
+	}
+	return policy, nil
+}
+
+func respondEmailOTPError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, db.ErrEmailOTPLimited):
+		respondErr(w, http.StatusTooManyRequests, "email otp challenge limit reached")
+	case errors.Is(err, db.ErrEmailOTPInvalid):
+		respondErr(w, http.StatusForbidden, "code is invalid or expired")
+	default:
+		log.Printf("email-otp: challenge update failed")
+		respondErr(w, http.StatusInternalServerError, "email otp operation failed")
 	}
 }
 

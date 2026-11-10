@@ -137,11 +137,18 @@ async function approveRebind() {
     approvalSetResult("confirm rebind approval before submitting the action", false);
     return;
   }
+  const loaded = await loadRebindPlan();
+  if (!loaded) return;
+  const runtimeHash = loaded.plan.vault_runtime_hash || "";
+  const confirm = window.prompt("Type APPROVE " + runtimeHash.toUpperCase());
+  if (!confirm) return;
+  const reason = window.prompt("Reason for approving this rebind");
+  if (!reason || !reason.trim()) return;
   approvalSetChip("Approving");
-  const result = await approvalFetchJSON("/api/agents/" + encodeURIComponent(agent) + "/approve-rebind", {
+  const result = await approvalFetchJSON("/api/admin/approvals/rebind/" + encodeURIComponent(agent) + "/approve", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
-    body: "{}",
+    body: JSON.stringify({confirm, reason}),
   });
   approvalRenderPlan({
     status: result.status,

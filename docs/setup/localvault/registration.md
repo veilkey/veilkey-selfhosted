@@ -1,26 +1,30 @@
 # LocalVault — Registration
 
-## With registration token (Web UI)
+## Required registration token
+
+Every first-time LocalVault registration requires a valid, unused registration token, including Docker networks, localhost, and other trusted IPs. A trusted IP or `--center` URL never replaces the token. Existing registered agents continue using their saved identity and agent secret; they do not need another registration token for normal heartbeats or restarts.
 
 In the keycenter UI (`https://<HOST>:<VC_PORT>/keycenter`):
 
-1. Click "+ 등록 토큰" to issue a registration token
-2. Run inside the localvault container:
+1. Click "+ 등록 토큰" to issue a registration token.
+2. Initialize LocalVault with the issued token. Replace `<REG_TOKEN>` below with that token; do not commit it to source control.
 
 ```bash
-# Self-signed cert 환경에서는 TLS_INSECURE 설정 필수
-export VEILKEY_TLS_INSECURE=1
-
-docker compose exec -T localvault sh -c \
-  "echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-    --token <REG_TOKEN> \
-    --center https://vaultcenter:10181"
+docker compose exec -T localvault veilkey-localvault init --root \
+  --token '<REG_TOKEN>' \
+  --center https://vaultcenter:10181
 docker compose restart localvault
 ```
 
-> **Note:** `VEILKEY_DB_KEY`는 unlock 시 마스터 비밀번호(KEK)에서 자동 파생됩니다. 수동 설정이 필요 없습니다.
+The token's embedded VaultCenter URL takes precedence. `--center` is required only when the token does not include a URL. For a self-signed development certificate, configure `VEILKEY_TLS_INSECURE=1` in the LocalVault container before initialization.
 
-3. LocalVault appears in the vault list after heartbeat
+Initialization validates the token with VaultCenter before creating or replacing local state, including when `--force` is used. The token ID is saved for the first heartbeat, where VaultCenter atomically consumes it. Invalid, expired, revoked, or already used tokens cannot register a new agent.
+
+3. LocalVault appears in the vault list after its first successful heartbeat.
+
+## Web setup
+
+The LocalVault setup endpoint `POST /api/install/init` also requires the encoded token in the `registration_token` JSON field, together with `vaultcenter_url` when the token has no embedded URL. Initialization rejects a missing or invalid token before changing local data. A setup client must submit both fields; setting only the VaultCenter URL is insufficient.
 
 ## Trusted addresses and registration
 
@@ -28,11 +32,7 @@ The first registration requires a VaultCenter-issued registration token, includi
 
 ## Unlock after init
 
-```bash
-curl -sk -X POST <LV_URL>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"<MASTER_PASSWORD>"}'
-```
+LocalVault generates its unlock key automatically and transfers it to VaultCenter during authenticated registration. After restarting, bootstrap unlock uses the local `vault_key` file; subsequent restarts use the saved agent secret to obtain the VaultCenter-managed unlock key. No password needs to be piped into `init`, and `VEILKEY_DB_KEY` is derived automatically.
 
 ## Verify
 

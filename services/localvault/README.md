@@ -110,14 +110,15 @@ LocalVault stores vault-local function rows:
 CGO_ENABLED=1 go build -ldflags="-s -w" -o veilkey-localvault .
 ```
 
-Initialization is performed automatically via the VaultCenter `init --child` command:
+First-time initialization requires a valid registration token issued from the VaultCenter keycenter UI, even on trusted networks. `--center` supplies the URL only; it does not replace the token. Existing registrations keep working without a new token.
 
 ```bash
-# Via registration token (issued from keycenter UI)
-echo 'password' | veilkey-localvault init --root \
-  --token vk_reg_xxx \
+veilkey-localvault init --root \
+  --token '<REG_TOKEN>' \
   --center https://vaultcenter:10181
 ```
+
+The unlock key is auto-generated; no password is read from stdin. Web setup (`POST /api/install/init`) must submit the encoded token in `registration_token` as well. See [registration setup](../../docs/setup/localvault/registration.md).
 
 Place a `.veilkey/context.json` at the project/service root. The cron heartbeat uses this context file.
 
