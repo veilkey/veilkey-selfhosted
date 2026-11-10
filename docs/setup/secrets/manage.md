@@ -1,5 +1,7 @@
 # Secrets — Create, Promote, Change
 
+> Provision [CA trust](../tls.md) before using HTTPS examples. Keep TLS verification enabled for host and remote connections.
+
 ## Create (Web UI)
 
 In the keycenter UI:
@@ -12,24 +14,24 @@ In the keycenter UI:
 
 ```bash
 # Login as admin
-curl -sk -X POST <VC_URL>/api/admin/login \
+curl -sS -X POST <VC_URL>/api/admin/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"<ADMIN_PASSWORD>"}' \
   -c /tmp/vk-cookies.txt
 
 # Create temp ref
-curl -sk -X POST <VC_URL>/api/keycenter/temp-refs \
+curl -sS -X POST <VC_URL>/api/keycenter/temp-refs \
   -H 'Content-Type: application/json' \
   -b /tmp/vk-cookies.txt \
   -d '{"name":"<SECRET_NAME>","value":"<SECRET_VALUE>"}'
 # Returns: {"ref":"VK:TEMP:xxxxxxxx", ...}
 
 # List agents to get vault_hash
-curl -sk <VC_URL>/api/agents
+curl -sS <VC_URL>/api/agents
 # Returns: {"agents":[{"agent_hash":"xxxxxxxx", ...}]}
 
 # Promote to vault
-curl -sk -X POST <VC_URL>/api/keycenter/promote \
+curl -sS -X POST <VC_URL>/api/keycenter/promote \
   -H 'Content-Type: application/json' \
   -b /tmp/vk-cookies.txt \
   -d '{"ref":"VK:TEMP:xxxxxxxx","name":"<SECRET_NAME>","vault_hash":"<AGENT_HASH>"}'
@@ -42,13 +44,13 @@ Promote the same name with a new value — it overwrites the existing secret:
 
 ```bash
 # Create temp ref with new value
-curl -sk -X POST <VC_URL>/api/keycenter/temp-refs \
+curl -sS -X POST <VC_URL>/api/keycenter/temp-refs \
   -H 'Content-Type: application/json' \
   -b /tmp/vk-cookies.txt \
   -d '{"name":"<SECRET_NAME>","value":"<NEW_VALUE>"}'
 
 # Promote (same name, same vault — overwrites)
-curl -sk -X POST <VC_URL>/api/keycenter/promote \
+curl -sS -X POST <VC_URL>/api/keycenter/promote \
   -H 'Content-Type: application/json' \
   -b /tmp/vk-cookies.txt \
   -d '{"ref":"VK:TEMP:xxxxxxxx","name":"<SECRET_NAME>","vault_hash":"<AGENT_HASH>"}'

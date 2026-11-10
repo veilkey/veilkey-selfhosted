@@ -210,35 +210,16 @@ Write-Host "  VaultCenter health check 대기 중 (최대 5분)..." -ForegroundC
 $health = $null
 for ($i = 1; $i -le 60; $i++) {
     try {
-        if ($PSVersionTable.PSVersion.Major -ge 6) {
-            $health = Invoke-RestMethod -Uri "https://localhost:$VaultCenterPort/health" `
-                          -SkipCertificateCheck -TimeoutSec 3 -ErrorAction Stop
-        } else {
-            # PowerShell 5.1: TLS 인증서 검증 우회
-            if (-not ([System.Management.Automation.PSTypeName]'TrustAllCerts').Type) {
-                Add-Type @"
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-public class TrustAllCerts : ICertificatePolicy {
-    public bool CheckValidationResult(ServicePoint sp, X509Certificate cert,
-        WebRequest req, int err) { return true; }
-}
-"@ -ErrorAction SilentlyContinue
-            }
-            [System.Net.ServicePointManager]::CertificatePolicy = New-Object TrustAllCerts
-            [System.Net.ServicePointManager]::SecurityProtocol  =
-                [System.Net.SecurityProtocolType]::Tls12 -bor
-                [System.Net.SecurityProtocolType]::Tls11
-            $health = Invoke-RestMethod -Uri "https://localhost:$VaultCenterPort/health" `
-                          -TimeoutSec 3 -ErrorAction Stop
+        # Limit the self-signed health-check exception to the local container.
+        $healthOutput = docker compose --project-directory $InstallDir exec -T vaultcenter `
+            curl -fsk --max-time 3 https://localhost:10181/health 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $health = $healthOutput | ConvertFrom-Json
         }
         if ($health.status) { break }
     } catch {}
     Start-Sleep -Seconds 5
 }
-
-# Restore default certificate validation
-[System.Net.ServicePointManager]::CertificatePolicy = $null
 
 $localIp = (Get-NetIPAddress -AddressFamily IPv4 |
     Where-Object { $_.InterfaceAlias -notmatch 'Loopback' -and
@@ -256,12 +237,12 @@ if ($health -and $health.status) {
     Write-Host ""
     Write-Host "다음 단계:"
     Write-Host "  1. 초기 설정 (최초 1회):"
-    Write-Host "     curl.exe -sk -X POST https://localhost:${VaultCenterPort}/api/setup/init ``"
+    Write-Host "     curl.exe -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VaultCenterPort}/api/setup/init ``"
     Write-Host "       -H `"Content-Type: application/json`" ``"
     Write-Host "       -d `'{`"password`":`"<MASTER_PASSWORD>`",`"admin_password`":`"<ADMIN_PASSWORD>`"}`'"
     Write-Host ""
     Write-Host "  2. 이후 재시작 시 unlock:"
-    Write-Host "     curl.exe -sk -X POST https://localhost:${VaultCenterPort}/api/unlock ``"
+    Write-Host "     curl.exe -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VaultCenterPort}/api/unlock ``"
     Write-Host "       -H `"Content-Type: application/json`" ``"
     Write-Host "       -d `'{`"password`":`"<MASTER_PASSWORD>`"}`'"
     Write-Host ""

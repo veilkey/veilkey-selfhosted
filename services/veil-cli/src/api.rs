@@ -3,9 +3,43 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
+fn private_ca_config(pem: &[u8]) -> Result<rustls::ClientConfig, String> {
+    use rustls::pki_types::pem::PemObject;
+    let mut roots = rustls::RootCertStore::empty();
+    for certificate in rustls::pki_types::CertificateDer::pem_slice_iter(pem) {
+        let certificate = certificate.map_err(|_| "invalid CA PEM certificate".to_string())?;
+        roots
+            .add(certificate)
+            .map_err(|_| "invalid CA certificate".to_string())?;
+    }
+    if roots.is_empty() {
+        return Err("CA bundle contains no certificates".to_string());
+    }
+    Ok(rustls::ClientConfig::builder()
+        .with_root_certificates(roots)
+        .with_no_client_auth())
+}
+
 fn build_agent() -> ureq::Agent {
     let insecure = std::env::var("VEILKEY_TLS_INSECURE").unwrap_or_default() == "1";
     let timeout = std::time::Duration::from_secs(10);
+    if let Ok(path) = std::env::var("VEILKEY_CA_CERT") {
+        if !path.is_empty() {
+            let config = std::fs::read(path)
+                .map_err(|_| "cannot read CA bundle".to_string())
+                .and_then(|pem| private_ca_config(&pem))
+                .unwrap_or_else(|error| {
+                    eprintln!("veilkey: {}", error);
+                    std::process::exit(1);
+                });
+            return ureq::AgentBuilder::new()
+                .tls_config(Arc::new(config))
+                .timeout_connect(timeout)
+                .timeout_read(timeout)
+                .timeout_write(timeout)
+                .build();
+        }
+    }
     if insecure {
         let config = rustls::ClientConfig::builder()
             .dangerous()
@@ -888,6 +922,61 @@ fn resolve_candidates(token: &str) -> Vec<String> {
 mod tests {
     use super::enrich_mask_map;
 
+    #[test]
+    fn private_ca_rejects_empty_and_invalid_bundles() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        for pem in [
+            b"".as_slice(),
+            b"not a certificate",
+            b"-----BEGIN CERTIFICATE-----\ninvalid\n-----END CERTIFICATE-----",
+        ] {
+            assert!(super::private_ca_config(pem).is_err());
+        }
+    }
+
+    #[test]
+    fn private_ca_preserves_certificate_and_hostname_verification() {
+        use rustls::client::danger::ServerCertVerifier;
+        use rustls::pki_types::pem::PemObject;
+        use std::sync::Arc;
+        let _ = rustls::crypto::ring::default_provider().install_default();
+        let ca = include_bytes!("../tests/fixtures/ca.pem");
+        assert!(super::private_ca_config(ca).is_ok());
+        let mut roots = rustls::RootCertStore::empty();
+        for cert in rustls::pki_types::CertificateDer::pem_slice_iter(ca) {
+            roots.add(cert.unwrap()).unwrap();
+        }
+        let verifier = rustls::client::WebPkiServerVerifier::builder(Arc::new(roots))
+            .build()
+            .unwrap();
+        let cert = rustls::pki_types::CertificateDer::from_pem_slice(include_bytes!(
+            "../tests/fixtures/server.pem"
+        ))
+        .unwrap();
+        // Fixed instant within this public test certificate's validity window.
+        let now = rustls::pki_types::UnixTime::since_unix_epoch(std::time::Duration::from_secs(
+            1_800_000_000,
+        ));
+        assert!(verifier
+            .verify_server_cert(&cert, &[], &"localhost".try_into().unwrap(), &[], now)
+            .is_ok());
+        assert!(verifier
+            .verify_server_cert(&cert, &[], &"other.invalid".try_into().unwrap(), &[], now)
+            .is_err());
+        let mut altered = cert.as_ref().to_vec();
+        let last = altered.len() - 1;
+        altered[last] ^= 1;
+        assert!(verifier
+            .verify_server_cert(
+                &altered.into(),
+                &[],
+                &"localhost".try_into().unwrap(),
+                &[],
+                now
+            )
+            .is_err());
+    }
+
     // ── Retain filter ───────────────────────────────────────────────
 
     #[test]
@@ -1458,7 +1547,6 @@ mod tests {
 
 #[cfg(test)]
 mod connection_domain_tests {
-    use super::*;
 
     /// DOMAIN: admin_login must target VaultCenter (/api/admin/login).
     /// LocalVault does NOT have this endpoint.

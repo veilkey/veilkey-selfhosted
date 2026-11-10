@@ -3,7 +3,9 @@
 ## Quick start
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 bash install/macos/bootstrap/install-all.sh
 ```
@@ -49,9 +51,12 @@ See [Post-Install Setup](../../../docs/setup/README.md) for full initialization 
 ## Update
 
 ```bash
-npm update -g veilkey              # CLI update
-cd veilkey-selfhosted && git pull  # Server update
-docker compose up --build -d       # Docker rebuild
+cd veilkey-selfhosted
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git fetch --depth 1 origin tag "$RELEASE_TAG"
+git checkout --detach "$RELEASE_TAG"
+bash install/macos/bootstrap/install-all.sh
 ```
 
 ## Uninstall

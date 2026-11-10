@@ -1,3 +1,8 @@
+# Single-host Docker-internal TLS exception: the three containers below use
+# generated self-signed certificates on this Compose network only. Never reuse
+# VEILKEY_TLS_INSECURE=1 for host clients, remote LocalVaults, or multi-host links.
+# Provision CA-signed service certificates and disable the exception before
+# spanning hosts; see docs/setup/tls.md. Host CLI installers verify TLS by default.
 services:
   vaultcenter:
     build:

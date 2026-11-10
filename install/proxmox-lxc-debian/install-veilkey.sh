@@ -144,7 +144,8 @@ echo "  Services starting (first build may take a few minutes)..."
 echo "[6/6] Waiting for VaultCenter health check..."
 HEALTH=""
 for i in $(seq 1 30); do
-    HEALTH=$(pct exec "$CTID" -- curl -sk https://localhost:${VC_PORT}/health 2>/dev/null || true)
+    # Self-signed health-check exception stays inside the local container.
+    HEALTH=$(pct exec "$CTID" -- bash -c 'cd /root/veilkey-selfhosted && docker compose exec -T vaultcenter curl -fsk --max-time 3 https://localhost:10181/health' 2>/dev/null || true)
     if echo "$HEALTH" | grep -q '"status"'; then
         break
     fi
@@ -163,12 +164,12 @@ if echo "$HEALTH" | grep -q '"status"'; then
     echo ""
     echo "Next steps:"
     echo "  1. Initial setup (headless):"
-    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:${VC_PORT}/api/setup/init \\"
+    echo "     pct exec $CTID -- bash -c \"curl -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VC_PORT}/api/setup/init \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\\\"password\\\":\\\"<MASTER_PASSWORD>\\\",\\\"admin_password\\\":\\\"<ADMIN_PASSWORD>\\\"}'\""
     echo ""
     echo "  2. Or unlock (if already initialized):"
-    echo "     pct exec $CTID -- bash -c \"curl -sk -X POST https://localhost:${VC_PORT}/api/unlock \\"
+    echo "     pct exec $CTID -- bash -c \"curl -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VC_PORT}/api/unlock \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\\\"password\\\":\\\"<MASTER_PASSWORD>\\\"}'\""
     echo ""

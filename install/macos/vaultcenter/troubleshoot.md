@@ -1,97 +1,59 @@
 # macOS — VaultCenter Setup Troubleshooting
 
-VaultCenter uses auto-generated self-signed TLS certificates. On macOS, this causes browser and CLI trust issues that require manual steps.
+Host clients verify HTTPS certificates by default. Before initial setup or unlock, follow [TLS certificate provisioning](../../../docs/setup/tls.md). Do not bypass a browser warning or disable TLS verification to submit credentials.
 
-## Browser: HTTPS certificate warning
+## Browser or curl rejects the certificate
 
-When you open the VaultCenter URL (default `https://localhost:11181`), your browser will show a security warning.
-
-### Chrome
-
-1. On the warning page, type `thisisunsafe` (no input field — just type it)
-2. Or: click "Advanced" → "Proceed to localhost (unsafe)"
-
-### Safari
-
-1. Click "Show Details" → "visit this website"
-2. Enter your macOS password to confirm
-
-### Firefox
-
-1. Click "Advanced" → "Accept the Risk and Continue"
-
-## CLI: self-signed cert rejection
-
-The `veil` CLI and `curl` will reject self-signed certs by default.
-
-### Option 1: Environment variable (recommended for development)
+Use a CA-issued certificate with SANs matching the VaultCenter URL. Obtain the verified public CA certificate through an authenticated administrative channel, check its fingerprint independently, then add it to Keychain:
 
 ```bash
-export VEILKEY_TLS_INSECURE=1
-```
-
-This is already set in `.veilkey/env` by the installer script (`install/macos/veil-cli/install.sh`).
-
-### Option 2: Trust the certificate system-wide
-
-```bash
-# Extract the cert from the running container
-docker compose cp vaultcenter:/data/tls/cert.pem /tmp/veilkey-cert.pem
-
-# Add to macOS Keychain
 sudo security add-trusted-cert -d -r trustRoot \
-  -k /Library/Keychains/System.keychain /tmp/veilkey-cert.pem
+  -k /Library/Keychains/System.keychain /path/to/verified-ca.pem
 ```
 
-After this, browsers and CLI tools will trust the certificate without `VEILKEY_TLS_INSECURE=1`.
+For an individual curl request:
 
-> **Note:** The certificate is regenerated if you delete `/data/tls/` or recreate the container. You'll need to re-trust it.
+```bash
+curl --cacert /path/to/verified-ca.pem https://localhost:${VAULTCENTER_HOST_PORT:-11181}/health
+```
+
+If deliberately trusting a generated self-signed certificate for a local deployment, copy it through the locally authenticated Docker connection and verify its fingerprint before trusting it. Do not fetch it over an unverified network connection. Re-provision trust after certificate rotation.
+
+## CLI rejects the certificate
+
+The Rust CLI uses its own root bundle. Configure the verified PEM CA path, even if Keychain already trusts your private CA:
+
+```bash
+export VEILKEY_TLS_INSECURE=0
+export VEILKEY_CA_CERT=/path/to/verified-ca.pem
+veilkey-cli status
+```
+
+Pass `VEILKEY_CA_CERT` when running `install/macos/veil-cli/install.sh` to retain that public path in `~/.veilkey/env` (owner-only). A custom `VEILKEY_CONFIG_DIR` requires explicit `VEILKEY_ENV=/absolute/path/env` when launching; project-local `.veilkey/env` is no longer auto-loaded. Host installers no longer enable insecure TLS. The bundled Compose exception applies only to single-host Docker-internal traffic, not host clients.
 
 ## Codesign (macOS Sequoia+)
 
-macOS Sequoia introduced stricter Gatekeeper checks. Unsigned binaries are blocked even from terminal.
-
-The installer script handles this automatically, but if you installed manually:
+The installer ad-hoc signs the local checkout's native CLI binaries. If a manual install was not signed:
 
 ```bash
 sudo codesign --force --sign - $(npm prefix -g)/lib/node_modules/veilkey-cli/native/*
 ```
-
-This ad-hoc signs all native binaries so Gatekeeper allows execution.
 
 ## Docker Desktop: port binding
 
 If port 11181 is already in use:
 
 ```bash
-# Check what's using the port
 lsof -i :${VAULTCENTER_HOST_PORT:-11181}
-
-# Use a different port
 VAULTCENTER_HOST_PORT=11182 docker compose up -d
-
-# Then access https://localhost:11182
 ```
 
-## Common errors
+Use `https://localhost:11182` and ensure the certificate includes `localhost` in its SANs.
 
-### `curl: (60) SSL certificate problem: self-signed certificate`
-
-Set `VEILKEY_TLS_INSECURE=1` or trust the cert (see above).
-
-### `Error: killed` or `operation not permitted` when running veil
-
-Binary not codesigned. Run the codesign command above.
-
-### VaultCenter URL shows nothing / connection refused
+## VaultCenter connection refused
 
 ```bash
-# Check if services are running
 docker compose ps
-
-# Check VaultCenter logs
 docker compose logs vaultcenter
-
-# Verify health (adjust port if changed in .env)
-curl -sk https://localhost:${VAULTCENTER_HOST_PORT:-11181}/health
+curl --cacert /path/to/verified-ca.pem https://localhost:${VAULTCENTER_HOST_PORT:-11181}/health
 ```

@@ -1,18 +1,14 @@
 # LocalVault — macOS
 
-Docker Compose wrapping for [registration.md](./registration.md):
+Use the release checkout and obtain a token as described in [registration.md](./registration.md). First registration requires a token even on the Docker-internal network.
 
 ```bash
-# Init (Docker internal network = trusted IP, no token needed)
-docker compose exec -T localvault sh -c \
-  "echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-    --center https://vaultcenter:10181"
-
-# Restart to apply
+docker compose exec -T localvault veilkey-localvault init --root \
+  --token '<REGISTRATION_TOKEN>' \
+  --center https://vaultcenter:10181
 docker compose restart localvault
-
-# Unlock
-curl -sk -X POST <LV_URL>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"<MASTER_PASSWORD>"}'
 ```
+
+LocalVault generates a VaultCenter-managed unlock key; no master password is supplied or saved by this flow. Unlock VaultCenter interactively after a restart.
+
+The bundled TLS exception is single-host Docker-internal only. Provision [CA trust](../tls.md) for host clients and remote connections; keep TLS verification enabled.

@@ -1,5 +1,7 @@
 # Secrets — Bulk Apply
 
+> Provision [CA trust](../tls.md) before using HTTPS examples. Keep TLS verification enabled for host and remote connections.
+
 Deploy secrets to files on LocalVault hosts. VaultCenter renders templates with real values and pushes to LocalVault, which writes files atomically.
 
 ## Prerequisites
@@ -11,7 +13,7 @@ Deploy secrets to files on LocalVault hosts. VaultCenter renders templates with 
 ## 1. Create template
 
 ```bash
-curl -sk -X PUT <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/templates/<TEMPLATE_NAME> \
+curl -sS -X PUT <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/templates/<TEMPLATE_NAME> \
   -H 'Content-Type: application/json' \
   -H 'Cookie: <SESSION>' \
   -d '{
@@ -52,7 +54,7 @@ EOF'
 ## 3. Preview (optional)
 
 ```bash
-curl -sk -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/templates/<TEMPLATE_NAME>/preview \
+curl -sS -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/templates/<TEMPLATE_NAME>/preview \
   -H 'Cookie: <SESSION>'
 ```
 
@@ -62,11 +64,11 @@ Shows placeholders without revealing values.
 
 ```bash
 # Precheck
-curl -sk -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/precheck \
+curl -sS -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/precheck \
   -H 'Cookie: <SESSION>'
 
 # Run
-curl -sk -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/run \
+curl -sS -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/run \
   -H 'Cookie: <SESSION>'
 ```
 
@@ -84,7 +86,7 @@ Response:
 2. Re-run the workflow — the template re-renders with the new value
 
 ```bash
-curl -sk -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/run \
+curl -sS -X POST <VC_URL>/api/vaults/<AGENT_HASH>/bulk-apply/workflows/<WORKFLOW_NAME>/run \
   -H 'Cookie: <SESSION>'
 ```
 
@@ -94,7 +96,7 @@ Run the same workflow across multiple vaults:
 
 ```bash
 for AGENT in <AGENT_1> <AGENT_2> <AGENT_3>; do
-  curl -sk -X POST <VC_URL>/api/vaults/$AGENT/bulk-apply/workflows/<WORKFLOW_NAME>/run \
+  curl -sS -X POST <VC_URL>/api/vaults/$AGENT/bulk-apply/workflows/<WORKFLOW_NAME>/run \
     -H 'Cookie: <SESSION>'
 done
 ```

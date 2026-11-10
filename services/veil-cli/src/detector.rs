@@ -11,7 +11,6 @@ pub const VEILKEY_RE_STR: &str =
     r"VK:(?:(?:TEMP|LOCAL|EXTERNAL|SSH):[0-9A-Fa-f]{4,64}|[0-9a-f]{8})";
 
 const MIN_SECRET_LEN: usize = 6;
-const PREVIEW_LEN: usize = 4;
 const WATCHLIST_CONFIDENCE: i32 = 100;
 const SCAN_ONLY_PLACEHOLDER: &str = "[detected]";
 
@@ -188,7 +187,7 @@ impl<'a> SecretDetector<'a> {
 
         if pruned {
             let content = kept.join("\n") + if kept.is_empty() { "" } else { "\n" };
-            let _ = fs::write(&path, content);
+            let _ = crate::state::write_private_file(&path, content.as_bytes());
         }
     }
 
@@ -357,18 +356,7 @@ impl<'a> SecretDetector<'a> {
                     }
                     replaced.insert(det.value.clone());
                     self.stats.detections += 1;
-                    let preview = if det.value.chars().count() > PREVIEW_LEN {
-                        let end: usize = det
-                            .value
-                            .char_indices()
-                            .nth(PREVIEW_LEN)
-                            .map(|(i, _)| i)
-                            .unwrap_or(det.value.len());
-                        format!("{}***", &det.value[..end])
-                    } else {
-                        "***".to_string()
-                    };
-                    self.logger.log(&vk, &det.pattern, det.confidence, &preview);
+                    self.logger.log(&vk, &det.pattern, det.confidence);
                 }
             }
         }
@@ -384,18 +372,7 @@ impl<'a> SecretDetector<'a> {
                 if line.contains(&value) {
                     line = line.replace(&value, &vk);
                     self.stats.detections += 1;
-                    let preview = if value.chars().count() > PREVIEW_LEN {
-                        let end: usize = value
-                            .char_indices()
-                            .nth(PREVIEW_LEN)
-                            .map(|(i, _)| i)
-                            .unwrap_or(value.len());
-                        format!("{}***", &value[..end])
-                    } else {
-                        "***".to_string()
-                    };
-                    self.logger
-                        .log(&vk, "watchlist", WATCHLIST_CONFIDENCE, &preview);
+                    self.logger.log(&vk, "watchlist", WATCHLIST_CONFIDENCE);
                 }
             }
         }
@@ -451,6 +428,29 @@ mod tests {
             group: 1,
         });
         cfg
+    }
+
+    #[test]
+    fn watchlist_session_log_contains_no_secret_fragments() {
+        init_crypto();
+        let root = tempfile::tempdir().unwrap();
+        let path = root.path().join("session.log");
+        let config = empty_config();
+        let client = VeilKeyClient::new("http://localhost:0");
+        let logger = SessionLogger::new(path.to_str().unwrap());
+        let mut detector = SecretDetector::new(&config, &client, &logger, false);
+        // Synthetic fixture; never a live credential.
+        let value = "fixture-only-watchlist-value";
+        detector.watchlist.push(WatchEntry {
+            value: value.to_string(),
+            vk: "VK:LOCAL:regression".to_string(),
+        });
+        assert!(detector.process_line(value).contains("VK:LOCAL:regression"));
+        let data = fs::read_to_string(path).unwrap();
+        assert!(!data.contains(value));
+        assert!(!data.contains(&value[..4]));
+        assert!(!data.contains("preview"));
+        assert_eq!(logger.count(), 1);
     }
 
     // ── Detection evasion ────────────────────────────────────────────

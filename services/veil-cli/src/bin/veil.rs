@@ -1,4 +1,5 @@
 use std::env;
+use std::io::Write;
 use std::process;
 
 fn find_bin(env_key: &str, name: &str) -> String {
@@ -32,55 +33,58 @@ fn exec_replace(bin: &str, args: &[String]) -> ! {
     process::exit(1);
 }
 
-/// Find and load .veilkey/env
-/// Priority: VEILKEY_ENV > walk up from cwd > ~/.veilkey/env > ~/veilkey-selfhosted/.veilkey/env
-fn auto_load_env() {
-    // 1. Explicit path
-    if let Ok(p) = env::var("VEILKEY_ENV") {
-        if !p.is_empty() && std::path::Path::new(&p).exists() {
-            load_env_file(&p);
-            return;
+/// Load only operator-selected configuration, never files discovered in a project.
+fn auto_load_env() -> std::io::Result<()> {
+    if let Ok(path) = env::var("VEILKEY_ENV") {
+        if !path.is_empty() {
+            return load_env_file(std::path::Path::new(&path));
         }
     }
-
-    // 2. Walk up from current dir
-    let mut dir = env::current_dir().ok();
-    while let Some(d) = &dir {
-        let env_file = d.join(".veilkey").join("env");
-        if env_file.exists() {
-            load_env_file(&env_file.to_string_lossy());
-            return;
-        }
-        dir = d.parent().map(|p| p.to_path_buf());
-    }
-
-    // 3. Home fallback paths
     if let Ok(home) = env::var("HOME") {
-        for sub in &[".veilkey/env", "veilkey-selfhosted/.veilkey/env"] {
-            let p = format!("{}/{}", home, sub);
-            if std::path::Path::new(&p).exists() {
-                load_env_file(&p);
-                return;
-            }
+        let path = std::path::Path::new(&home).join(".veilkey/env");
+        if path.exists() {
+            return load_env_file(&path);
         }
     }
+    Ok(())
 }
 
-fn load_env_file(path: &str) {
-    if let Ok(content) = std::fs::read_to_string(path) {
-        for line in content.lines() {
-            let line = line.trim();
-            if line.starts_with('#') || line.is_empty() || line.starts_with("#!/") {
+fn load_env_file(path: &std::path::Path) -> std::io::Result<()> {
+    let content = std::fs::read_to_string(path)?;
+    for line in content.lines() {
+        let line = line.trim();
+        if line.starts_with('#') || line.is_empty() {
+            continue;
+        }
+        let line = line.strip_prefix("export ").unwrap_or(line);
+        if let Some((key, value)) = line.split_once('=') {
+            let key = key.trim();
+            if key.is_empty()
+                || !key.bytes().enumerate().all(|(i, c)| {
+                    c == b'_' || c.is_ascii_alphabetic() || (i > 0 && c.is_ascii_digit())
+                })
+            {
                 continue;
             }
-            let line = line.strip_prefix("export ").unwrap_or(line);
-            if let Some((k, v)) = line.split_once('=') {
-                let k = k.trim();
-                let v = v.trim().trim_matches('"').trim_matches('\'');
-                env::set_var(k, v);
-            }
+            env::set_var(key, value.trim().trim_matches('"').trim_matches('\''));
         }
     }
+    Ok(())
+}
+
+fn shell_rcfile() -> std::io::Result<tempfile::NamedTempFile> {
+    let mut file = tempfile::Builder::new().prefix("veil-bashrc-").tempfile()?;
+    file.write_all(
+        br#"
+[ -f ~/.bashrc ] && source ~/.bashrc
+[ -f ~/.bash_profile ] && source ~/.bash_profile
+export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
+# Keep command history in memory for this protected session only.
+unset HISTFILE
+"#,
+    )?;
+    file.flush()?;
+    Ok(file)
 }
 
 fn find_repo_install_script() -> Option<String> {
@@ -105,9 +109,10 @@ fn find_repo_install_script() -> Option<String> {
 }
 
 fn main() {
-    // Auto-load .veilkey/env from current or parent dirs
-    // Clear legacy env vars first so .veilkey/env takes precedence
-    auto_load_env();
+    if let Err(error) = auto_load_env() {
+        eprintln!("veil: cannot load operator configuration: {}", error);
+        process::exit(1);
+    }
     // If VEILKEY_LOCALVAULT_URL is set, ensure VEILKEY_API matches
     if let Ok(url) = env::var("VEILKEY_LOCALVAULT_URL") {
         env::set_var("VEILKEY_API", &url);
@@ -120,39 +125,23 @@ fn main() {
     let args: Vec<String> = env::args().skip(1).collect();
 
     if args.is_empty() {
-        // Create temp rcfile for custom prompt
-        let rc_path = format!("{}/veil-bashrc", env::temp_dir().display());
-        let hist_path = format!(
-            "{}/veil-history.{}",
-            env::temp_dir().display(),
-            std::process::id()
-        );
-        let rc_content = format!(
-            r#"
-[ -f ~/.bashrc ] && source ~/.bashrc
-[ -f ~/.bash_profile ] && source ~/.bash_profile
-export PS1="\[\033[36m\](VEIL)\[\033[0m\] \h:\W \u\$ "
-# Session-only history: works within session, deleted on exit
-export HISTFILE="{}"
-export HISTSIZE=500
-export HISTFILESIZE=0
-export HISTCONTROL=ignoreboth:erasedups
-trap 'rm -f "$HISTFILE"' EXIT
-"#,
-            hist_path
-        );
-        let _ = std::fs::write(&rc_path, rc_content);
-
-        // veil → enter protected shell with custom prompt
-        exec_replace(
-            &cli_bin,
-            &[
-                "wrap-pty".to_string(),
-                "bash".to_string(),
-                "--rcfile".to_string(),
-                rc_path,
-            ],
-        );
+        let rc = shell_rcfile().unwrap_or_else(|error| {
+            eprintln!("veil: cannot create shell configuration: {}", error);
+            process::exit(1);
+        });
+        // Keep the owner-only rcfile alive until the protected shell exits.
+        let status = process::Command::new(&cli_bin)
+            .args(["wrap-pty", "bash", "--rcfile"])
+            .arg(rc.path())
+            .status();
+        drop(rc);
+        match status {
+            Ok(status) => process::exit(status.code().unwrap_or(1)),
+            Err(error) => {
+                eprintln!("veil: cannot start protected shell: {}", error);
+                process::exit(1);
+            }
+        }
     }
 
     match args[0].as_str() {
@@ -197,18 +186,9 @@ trap 'rm -f "$HISTFILE"' EXIT
                             .env("VEILKEY_PORT", port.to_string())
                             .status()
                     } else {
-                        let gist_url = "https://gist.githubusercontent.com/dalsoop/11e00346263678340189cdfdc79644b5/raw/install-localvault.sh";
-                        let script = format!(
-                            "VEILKEY_CENTER_URL='{}' VEILKEY_PORT='{}' curl -sL '{}?{}' | bash",
-                            center_url,
-                            port,
-                            gist_url,
-                            std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_secs()
-                        );
-                        process::Command::new("bash").arg("-c").arg(&script).status()
+                        eprintln!("veil localvault: no local installer found");
+                        eprintln!("  Clone the latest release tag and run its install script.");
+                        process::exit(1);
                     }
                     .unwrap_or_else(|e| {
                         eprintln!("veil localvault: failed to run installer: {}", e);

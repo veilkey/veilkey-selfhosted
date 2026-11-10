@@ -1,5 +1,7 @@
 # Ubuntu / Debian Installation
 
+> Provision [CA trust](../../docs/setup/tls.md) before using HTTPS examples. Keep TLS verification enabled for host and remote connections.
+
 Run VeilKey Self-Hosted directly on an Ubuntu or Debian server using Docker.
 
 > **Tested on:** Ubuntu 22.04 LTS, Ubuntu 24.04 LTS, Debian 12 (bookworm), Docker 26+
@@ -7,7 +9,9 @@ Run VeilKey Self-Hosted directly on an Ubuntu or Debian server using Docker.
 ## Quick Start (script)
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 sudo bash install/ubuntu-debian/install-veilkey.sh
 ```
@@ -59,7 +63,9 @@ sudo systemctl enable --now docker
 ## 2. Clone and Configure
 
 ```bash
-sudo git clone https://github.com/veilkey/veilkey-selfhosted.git /opt/veilkey
+sudo # Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git /opt/veilkey
 cd /opt/veilkey
 sudo cp .env.example .env
 ```
@@ -86,7 +92,7 @@ First run builds all images (VaultCenter, LocalVault, veil CLI). This takes a fe
 sudo docker compose -f /opt/veilkey/docker-compose.yml ps
 
 # Health check
-curl -sk https://localhost:<VC_PORT>/health
+curl -sS https://localhost:<VC_PORT>/health
 # Expected: {"status":"setup"}
 ```
 
@@ -96,36 +102,33 @@ curl -sk https://localhost:<VC_PORT>/health
 
 ```bash
 # First run (status: "setup")
-curl -sk -X POST https://localhost:<VC_PORT>/api/setup/init \
+curl -sS -X POST https://localhost:<VC_PORT>/api/setup/init \
   -H 'Content-Type: application/json' \
   -d '{"password":"<MASTER_PASSWORD>","admin_password":"<ADMIN_PASSWORD>"}'
 
 # Subsequent unlocks (status: "locked")
-curl -sk -X POST https://localhost:<VC_PORT>/api/unlock \
+curl -sS -X POST https://localhost:<VC_PORT>/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{"password":"<MASTER_PASSWORD>"}'
 ```
 
 ### LocalVault registration
 
-```bash
-# Init LocalVault
-cd /opt/veilkey
-sudo docker compose exec -T localvault sh -c \
-  'echo "<MASTER_PASSWORD>" | veilkey-localvault init --root --center https://vaultcenter:10181'
+First registration requires a token issued by VaultCenter, including Docker-internal callers:
 
-# Restart and unlock
+```bash
+cd /opt/veilkey
+sudo docker compose exec -T localvault veilkey-localvault init --root \
+  --token '<REGISTRATION_TOKEN>' --center https://vaultcenter:10181
 sudo docker compose restart localvault
-sleep 3
-curl -sk -X POST https://localhost:<LV_PORT>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"<MASTER_PASSWORD>"}'
 ```
+
+LocalVault generates its VaultCenter-managed unlock key. No master password is supplied or stored. Unlock VaultCenter interactively after restart. See [registration](../../docs/setup/localvault/registration.md).
 
 ### Verify both services
 
 ```bash
-curl -sk https://localhost:<VC_PORT>/health && echo '' && curl -sk https://localhost:<LV_PORT>/health
+curl -sS https://localhost:<VC_PORT>/health && echo '' && curl -sS https://localhost:<LV_PORT>/health
 # Expected: {"status":"ok"} for both
 ```
 

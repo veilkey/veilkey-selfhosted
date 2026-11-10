@@ -175,9 +175,13 @@ pub fn run(args: &[String], api_url: &str, _log_path: &str, patterns_file: Optio
 
     // Save PID file
     let sd = state_dir();
-    let _ = std::fs::create_dir_all(&sd);
     let pid_path = sd.join("guard.pid");
-    let _ = std::fs::write(&pid_path, format!("{}", std::process::id()));
+    if let Err(error) =
+        crate::state::write_private_file(&pid_path, std::process::id().to_string().as_bytes())
+    {
+        eprintln!("[veilkey] cannot write private session state: {}", error);
+        std::process::exit(1);
+    }
 
     // 1. Fetch mask_map (fail-closed) — runs in parallel with pattern compilation
     let mut mask_map: Vec<(String, String)> = match client.fetch_all_secrets_mask_map() {

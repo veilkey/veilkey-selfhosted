@@ -144,3 +144,13 @@ pub fn load_config(path: Option<&str>) -> Result<CompiledConfig, String> {
 
     Ok(compiled)
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn maintained_yaml_parser_loads_embedded_patterns() {
+        let config = super::load_config(None).unwrap();
+        assert!(config.patterns.len() >= 200);
+        assert!(!config.sensitive_keywords.is_empty());
+    }
+}

@@ -13,7 +13,7 @@ Open `https://<HOST>:<VC_PORT>` in your browser.
 ### CLI (headless)
 
 ```bash
-curl -sk -X POST <VC_URL>/api/setup/init \
+curl -sS -X POST <VC_URL>/api/setup/init \
   -H 'Content-Type: application/json' \
   -d '{"password":"<MASTER_PASSWORD>","admin_password":"<ADMIN_PASSWORD>"}'
 ```
@@ -33,18 +33,20 @@ Enter master password on the lock screen.
 ### CLI
 
 ```bash
-curl -sk -X POST <VC_URL>/api/unlock \
+curl -sS -X POST <VC_URL>/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{"password":"<MASTER_PASSWORD>"}'
 ```
 
-### Auto-unlock
+### Restart behavior
 
-Set `VEILKEY_PASSWORD_FILE` in `.env` (securing this file is your responsibility).
+Unlock VaultCenter interactively through the web UI or TUI after restart. Master passwords must remain in memory: do not put them in `.env`, launchd/systemd configuration, password files, or RAM-disk files. The old password-file helper is disabled. LocalVault uses VaultCenter-managed unlock after VaultCenter itself is unlocked.
+
+Provision [CA trust](../tls.md) before using the HTTPS examples; never bypass verification when submitting passwords.
 
 ## Verify
 
 ```bash
-curl -sk <VC_URL>/health
+curl -sS <VC_URL>/health
 # Expected: {"status":"ok"}
 ```

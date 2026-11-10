@@ -1,5 +1,6 @@
+use crate::state::open_private_file;
 use serde::{Deserialize, Serialize};
-use std::fs::{self, OpenOptions};
+use std::fs;
 use std::io::Write;
 use std::path::Path;
 
@@ -9,7 +10,6 @@ pub struct LogEntry {
     pub veilkey: String,
     pub pattern: String,
     pub confidence: i32,
-    pub preview: String,
 }
 
 pub struct SessionLogger {
@@ -18,31 +18,26 @@ pub struct SessionLogger {
 
 impl SessionLogger {
     pub fn new(path: &str) -> Self {
-        if let Some(dir) = Path::new(path).parent() {
-            let _ = fs::create_dir_all(dir);
-        }
         Self {
             path: path.to_string(),
         }
     }
 
-    pub fn log(&self, veilkey: &str, pattern: &str, confidence: i32, preview: &str) {
+    pub fn log(&self, veilkey: &str, pattern: &str, confidence: i32) {
         let entry = LogEntry {
             timestamp: chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             veilkey: veilkey.to_string(),
             pattern: pattern.to_string(),
             confidence,
-            preview: preview.to_string(),
         };
 
-        if let Ok(data) = serde_json::to_string(&entry) {
-            if let Ok(mut f) = OpenOptions::new()
-                .append(true)
-                .create(true)
-                .open(&self.path)
-            {
-                let _ = writeln!(f, "{}", data);
-            }
+        let result = (|| -> std::io::Result<()> {
+            let mut file = open_private_file(Path::new(&self.path), true)?;
+            let data = serde_json::to_string(&entry)?;
+            writeln!(file, "{}", data)
+        })();
+        if result.is_err() {
+            eprintln!("[veilkey] cannot write private session log");
         }
     }
 
