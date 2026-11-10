@@ -80,7 +80,9 @@ Environment:
   VEILKEY_API                  Legacy endpoint variable (fallback)
   VEILKEY_PASSWORD_FILE        Read admin password from file for VaultCenter commands
   VEILKEY_MASTER_PASSWORD_FILE Read master password from file for unlock
-  VEILKEY_STATE_DIR            State directory (default: $TMPDIR/veilkey-cli)
+  VEILKEY_CA_CERT              PEM CA bundle for a private server CA
+  VEILKEY_STATE_DIR            Private state (default: $XDG_STATE_HOME/veilkey-cli
+                              or $HOME/.local/state/veilkey-cli)
 "#
     );
 }
@@ -135,7 +137,6 @@ fn main() {
     }
 
     let sd = state_dir();
-    let _ = std::fs::create_dir_all(&sd);
     let log_path = sd.join("session.log").to_string_lossy().to_string();
 
     // Parse global flags

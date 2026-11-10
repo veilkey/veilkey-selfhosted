@@ -1,5 +1,7 @@
 # Windows Installation
 
+> Provision [CA trust](../../docs/setup/tls.md) before using HTTPS examples. Keep TLS verification enabled for host and remote connections.
+
 Run VeilKey Self-Hosted on Windows using Docker Desktop.
 
 > **Tested on:** Windows 10 21H2+, Windows 11, Docker Desktop 4.x+
@@ -9,7 +11,8 @@ Run VeilKey Self-Hosted on Windows using Docker Desktop.
 관리자 PowerShell에서 실행:
 
 ```powershell
-git clone https://github.com/veilkey/veilkey-selfhosted.git C:\veilkey
+$releaseTag = "<latest-release-tag>"  # Latest published release tag
+git clone --depth 1 --branch $releaseTag https://github.com/veilkey/veilkey-selfhosted.git C:\veilkey
 cd C:\veilkey
 powershell -ExecutionPolicy Bypass -File install\windows\install-veilkey.ps1
 ```
@@ -68,7 +71,8 @@ winget install --id Docker.DockerDesktop -e
 ## 3. 저장소 클론 및 환경 설정
 
 ```powershell
-git clone https://github.com/veilkey/veilkey-selfhosted.git C:\veilkey
+$releaseTag = "<latest-release-tag>"  # Latest published release tag
+git clone --depth 1 --branch $releaseTag https://github.com/veilkey/veilkey-selfhosted.git C:\veilkey
 cd C:\veilkey
 Copy-Item .env.example .env
 notepad .env   # 필요 시 편집
@@ -102,11 +106,11 @@ docker compose up -d
 docker compose ps
 
 # Health check (curl.exe 사용 — PowerShell 의 curl 별칭 아님)
-curl.exe -sk https://localhost:11181/health
+curl.exe -sS --cacert C:\path\to\verified-ca.pem https://localhost:11181/health
 # Expected: {"status":"setup"}
 
 # PowerShell 7+ 사용 시
-Invoke-RestMethod -Uri https://localhost:11181/health -SkipCertificateCheck
+Invoke-RestMethod -Uri https://localhost:11181/health   # verified CA imported into Windows trust store
 ```
 
 ## 6. 초기 설정
@@ -115,32 +119,28 @@ Invoke-RestMethod -Uri https://localhost:11181/health -SkipCertificateCheck
 
 ```powershell
 # 최초 실행 (status: "setup")
-curl.exe -sk -X POST https://localhost:11181/api/setup/init `
+curl.exe -sS --cacert C:\path\to\verified-ca.pem -X POST https://localhost:11181/api/setup/init `
   -H "Content-Type: application/json" `
   -d "{`"password`":`"<MASTER_PASSWORD>`",`"admin_password`":`"<ADMIN_PASSWORD>`"}"
 
 # 재시작 후 unlock (status: "locked")
-curl.exe -sk -X POST https://localhost:11181/api/unlock `
+curl.exe -sS --cacert C:\path\to\verified-ca.pem -X POST https://localhost:11181/api/unlock `
   -H "Content-Type: application/json" `
   -d "{`"password`":`"<MASTER_PASSWORD>`"}"
 ```
 
 ### LocalVault 등록
 
+First registration requires a VaultCenter-issued token, including Docker-internal callers:
+
 ```powershell
 cd C:\veilkey
-
-# Init
-docker compose exec -T localvault sh -c `
-  'echo "<MASTER_PASSWORD>" | veilkey-localvault init --root --center https://vaultcenter:10181'
-
-# 재시작 후 unlock
+docker compose exec -T localvault veilkey-localvault init --root `
+  --token "<REGISTRATION_TOKEN>" --center https://vaultcenter:10181
 docker compose restart localvault
-Start-Sleep 3
-curl.exe -sk -X POST https://localhost:11180/api/unlock `
-  -H "Content-Type: application/json" `
-  -d "{`"password`":`"<MASTER_PASSWORD>`"}"
 ```
+
+LocalVault generates its VaultCenter-managed unlock key; no master password is supplied or stored. Unlock VaultCenter interactively after restart. See [registration](../../docs/setup/localvault/registration.md).
 
 ## 7. PTY 마스킹 (wrap-pty) — Windows 제약 및 우회 방법
 

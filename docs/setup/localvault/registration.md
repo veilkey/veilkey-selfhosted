@@ -1,47 +1,47 @@
 # LocalVault — Registration
 
-## With registration token (Web UI)
+Every first registration requires a VaultCenter-issued registration token, including Docker-internal, trusted-IP, and localhost callers. Already registered agents continue using their issued agent credentials. IP trust does not replace authentication.
 
-In the keycenter UI (`https://<HOST>:<VC_PORT>/keycenter`):
+## Obtain a registration token
 
-1. Click "+ 등록 토큰" to issue a registration token
-2. Run inside the localvault container:
+In the keycenter UI (`https://<HOST>:<VC_PORT>/keycenter`), authenticate as admin and click "+ 등록 토큰". Use the token only for the intended LocalVault. Keep VaultCenter unlocked while registering.
+
+## Bundled single-host Docker deployment
+
+Run inside the release checkout:
 
 ```bash
-# Self-signed cert 환경에서는 TLS_INSECURE 설정 필수
-export VEILKEY_TLS_INSECURE=1
-
-docker compose exec -T localvault sh -c \
-  "echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-    --token <REG_TOKEN> \
-    --center https://vaultcenter:10181"
+docker compose exec -T localvault veilkey-localvault init --root \
+  --token '<REGISTRATION_TOKEN>' \
+  --center https://vaultcenter:10181
 docker compose restart localvault
 ```
 
-> **Note:** `VEILKEY_DB_KEY`는 unlock 시 마스터 비밀번호(KEK)에서 자동 파생됩니다. 수동 설정이 필요 없습니다.
+The bundled Compose TLS exception applies only to this single-host Docker-internal connection; see [TLS provisioning](../tls.md). Do not copy it to a remote installer or host CLI environment.
 
-3. LocalVault appears in the vault list after heartbeat
+## Standalone LocalVault
 
-## Without token (trusted IP)
-
-If the LocalVault is on a trusted IP network (default: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), registration tokens are not required:
+Provision the verified CA bundle before initialization. Go uses the system trust store or `SSL_CERT_FILE`:
 
 ```bash
-echo '<MASTER_PASSWORD>' | veilkey-localvault init --root \
-  --center <VC_URL>
+export VEILKEY_TLS_INSECURE=0
+export SSL_CERT_FILE=/path/to/verified-ca.pem
+veilkey-localvault init --root \
+  --token '<REGISTRATION_TOKEN>' \
+  --center https://<VC_HOST>:<VC_PORT>
 ```
 
-## Unlock after init
+Alternatively, use the [standalone installer](../../../install/common/install-localvault.md) with `VEILKEY_CENTER_URL` and `VEILKEY_REG_TOKEN`.
+
+## Unlock and verification
+
+LocalVault generates its own unlock key and registers it with VaultCenter. Do not supply or save a master password for LocalVault initialization. Unlock VaultCenter interactively after restart; registered LocalVaults retrieve their managed keys. No plaintext password belongs in `.env` or a password file.
+
+LocalVault appears in the vault list after heartbeat. After provisioning CA trust, check health without disabling verification:
 
 ```bash
-curl -sk -X POST <LV_URL>/api/unlock \
-  -H 'Content-Type: application/json' \
-  -d '{"password":"<MASTER_PASSWORD>"}'
+curl --cacert /path/to/verified-ca.pem https://<VC_HOST>:<VC_PORT>/health
+curl --cacert /path/to/verified-ca.pem https://<LV_HOST>:<LV_PORT>/health
 ```
 
-## Verify
-
-```bash
-curl -sk <VC_URL>/health   # VaultCenter: {"status":"ok"}
-curl -sk <LV_URL>/health   # LocalVault: {"status":"ok"}
-```
+Management and secret routes still require an admin session or the appropriate agent Bearer token; health/status access is not proof of authorization.

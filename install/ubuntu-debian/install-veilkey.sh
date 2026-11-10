@@ -111,7 +111,8 @@ docker compose up -d 2>&1 | tail -5
 echo "[5/5] VaultCenter health check 대기 중..."
 HEALTH=""
 for i in $(seq 1 30); do
-    HEALTH=$(curl -sk "https://localhost:${VC_PORT}/health" 2>/dev/null || true)
+    # Self-signed health-check exception stays inside the local container.
+    HEALTH=$(docker compose exec -T vaultcenter curl -fsk --max-time 3 https://localhost:10181/health 2>/dev/null || true)
     if echo "$HEALTH" | grep -q '"status"'; then
         break
     fi
@@ -128,12 +129,12 @@ if echo "$HEALTH" | grep -q '"status"'; then
     echo ""
     echo "다음 단계:"
     echo "  1. 초기 설정 (최초 1회):"
-    echo "     curl -sk -X POST https://localhost:${VC_PORT}/api/setup/init \\"
+    echo "     curl -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VC_PORT}/api/setup/init \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\"password\":\"<MASTER_PASSWORD>\",\"admin_password\":\"<ADMIN_PASSWORD>\"}'"
     echo ""
     echo "  2. 이미 초기화된 경우 unlock:"
-    echo "     curl -sk -X POST https://localhost:${VC_PORT}/api/unlock \\"
+    echo "     curl -sS --cacert <VERIFIED_CA_PEM> -X POST https://localhost:${VC_PORT}/api/unlock \\"
     echo "       -H 'Content-Type: application/json' \\"
     echo "       -d '{\"password\":\"<MASTER_PASSWORD>\"}'"
     echo ""

@@ -17,6 +17,8 @@ Ports depend on your `.env` settings (`VAULTCENTER_HOST_PORT`, `LOCALVAULT_HOST_
 
 ## Setup order
 
+Provision [TLS certificates and CA trust](./tls.md) before registration or any host-side HTTPS request containing credentials. Host installers verify TLS by default. Never save a master password in `.env` or a password file; LocalVault uses VaultCenter-managed unlock.
+
 | Step | Service | Guide |
 |------|---------|-------|
 | 1 | VaultCenter | [vaultcenter/setup.md](./vaultcenter/setup.md) — initial setup + unlock |

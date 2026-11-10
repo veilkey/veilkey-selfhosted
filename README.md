@@ -5,10 +5,11 @@
   <p>
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
-    <a href="https://www.npmjs.com/package/veilkey-cli"><img src="https://img.shields.io/npm/v/veilkey-cli?color=cb3837" alt="npm"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-2563eb.svg" alt="AGPL-3.0"></a>
   </p>
 </div>
+
+> Provision [CA trust](docs/setup/tls.md) before using HTTPS examples. Keep TLS verification enabled for host and remote connections.
 
 ## The Problem
 
@@ -60,7 +61,9 @@ VeilKey detects **222 secret patterns** automatically — AWS keys, GitHub token
 ### macOS
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 bash install/macos/bootstrap/install-all.sh
 ```
@@ -68,7 +71,9 @@ bash install/macos/bootstrap/install-all.sh
 ### Proxmox LXC (Debian)
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 CT_IP=<IP>/<MASK> CT_GW=<GATEWAY> bash install/proxmox-lxc-debian/install-veilkey.sh
 ```
@@ -91,22 +96,22 @@ veil scan file.env            # Find secrets in files (222 patterns)
 
 ```bash
 # Login to VaultCenter
-curl -sk -X POST https://<VC>:11181/api/admin/login \
+curl -sS -X POST https://<VC>:11181/api/admin/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"<ADMIN_PASSWORD>"}' -c /tmp/vk-cookies.txt
 
 # Create temp ref
-curl -sk -X POST https://<VC>:11181/api/keycenter/temp-refs \
+curl -sS -X POST https://<VC>:11181/api/keycenter/temp-refs \
   -H 'Content-Type: application/json' -b /tmp/vk-cookies.txt \
   -d '{"name":"MY_API_KEY","value":"sk-actual-key-value"}'
 # → {"ref":"VK:TEMP:xxxxxxxx"}
 
 # Get vault hash
-curl -sk https://<VC>:11181/api/agents
+curl -sS https://<VC>:11181/api/agents
 # → {"agents":[{"agent_hash":"a0a761c6", ...}]}
 
 # Promote to vault
-curl -sk -X POST https://<VC>:11181/api/keycenter/promote \
+curl -sS -X POST https://<VC>:11181/api/keycenter/promote \
   -H 'Content-Type: application/json' -b /tmp/vk-cookies.txt \
   -d '{"ref":"VK:TEMP:xxxxxxxx","name":"MY_API_KEY","vault_hash":"a0a761c6"}'
 # → {"token":"VK:LOCAL:yyyyyyyy"}
@@ -168,7 +173,7 @@ veil exec pct create 105 local:vztmpl/debian-13.tar.zst \
 veil exec ssh -i VK:LOCAL:ssh-private-key user@host
 
 # Login to VaultCenter using a VK ref for the admin password
-veil exec curl -sk -X POST https://vc:11181/api/admin/login \
+veil exec curl -sS -X POST https://vc:11181/api/admin/login \
   -d '{"password":"VK:LOCAL:6da25530"}'
 ```
 
@@ -238,7 +243,7 @@ The master password (KEK) exists only in memory. No password file, no environmen
 When the server restarts, secrets are locked. You must enter the master password to unlock.
 
 ```bash
-curl -sk -X POST https://<server>:10180/api/unlock \
+curl -sS -X POST https://<server>:10180/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{"password":"<master-password>"}'
 ```

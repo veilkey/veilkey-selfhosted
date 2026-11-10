@@ -13,8 +13,8 @@ set -euo pipefail
 #   VEILKEY_LABEL            볼트 이름 (default: hostname)
 #   VEILKEY_DATA_DIR         데이터 경로 (default: /data/localvault)
 #   VEILKEY_BIN_DIR          바이너리 경로 (default: /usr/local/bin)
-#   VEILKEY_TLS_INSECURE     TLS 검증 스킵 (default: 1)
-#   VEILKEY_TRUSTED_IPS      허용 IP (default: private ranges)
+#   VEILKEY_TLS_INSECURE     TLS 검증 스킵 (default: 0; provision a trusted CA)
+#   VEILKEY_TRUSTED_IPS      허용 IP (default: resolved VaultCenter address only)
 #   VEILKEY_SYSTEMD          systemd 서비스 생성 (default: 1)
 #   VEILKEY_BINARY_URL       바이너리 다운로드 URL
 
@@ -35,8 +35,9 @@ PORT="${VEILKEY_PORT:-10180}"
 LABEL="${VEILKEY_LABEL:-$(hostname)}"
 DATA_DIR="${VEILKEY_DATA_DIR:-/data/localvault}"
 BIN_DIR="${VEILKEY_BIN_DIR:-/usr/local/bin}"
-TLS_INSECURE="${VEILKEY_TLS_INSECURE:-1}"
-TRUSTED_IPS="${VEILKEY_TRUSTED_IPS:-10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1}"
+TLS_INSECURE="${VEILKEY_TLS_INSECURE:-0}"
+source "$(dirname "${BASH_SOURCE[0]}")/localvault-trusted-ip.sh"
+TRUSTED_IPS="${VEILKEY_TRUSTED_IPS:-$(veilkey_center_ip "$CENTER_URL")}"
 USE_SYSTEMD="${VEILKEY_SYSTEMD:-1}"
 BINARY_URL="${VEILKEY_BINARY_URL:-}"
 BIN="$BIN_DIR/veilkey-localvault"
@@ -114,7 +115,7 @@ VEILKEY_TLS_CERT=$TLS_CERT
 VEILKEY_TLS_KEY=$TLS_KEY
 VEILKEY_TRUSTED_IPS=$TRUSTED_IPS
 ENVEOF
-for extra_key in VEILKEY_BULK_APPLY_ALLOWED_PATHS VEILKEY_BULK_APPLY_ALLOWED_HOOKS VEILKEY_MANAGED_PATHS VEILKEY_CONTEXT_DIR VEILKEY_CONTEXT_FILE; do
+for extra_key in SSL_CERT_FILE SSL_CERT_DIR VEILKEY_BULK_APPLY_ALLOWED_PATHS VEILKEY_BULK_APPLY_ALLOWED_HOOKS VEILKEY_MANAGED_PATHS VEILKEY_CONTEXT_DIR VEILKEY_CONTEXT_FILE; do
     if [[ -n "${!extra_key:-}" ]]; then
         printf '%s=%s\n' "$extra_key" "${!extra_key}" >> "$ENV_FILE"
     fi
@@ -156,7 +157,7 @@ fi
 
 HEALTH=""
 for _ in $(seq 1 20); do
-    HEALTH=$(curl -sk "$HEALTH_URL" 2>/dev/null || true)
+    HEALTH=$(curl -sS --cacert "$TLS_CERT" "$HEALTH_URL" 2>/dev/null || true)
     if [[ "$HEALTH" == *'"status":"ok"'* ]]; then
         echo "=== 완료 ==="
         echo "  Health: $HEALTH"

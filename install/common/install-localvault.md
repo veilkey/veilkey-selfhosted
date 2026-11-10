@@ -8,9 +8,16 @@ Add a LocalVault to an existing VaultCenter.
 - A running VaultCenter instance
 - Registration token from VaultCenter admin
 
+Provision [CA trust](../../docs/setup/tls.md) before registration. Go uses system roots or a verified `SSL_CERT_FILE` bundle; TLS verification is enabled by default. The Linux installer uses `getent` to resolve only VaultCenter's address.
+
 ## Install
 
 ```bash
+# Choose the latest published release tag.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
+cd veilkey-selfhosted
+export VEILKEY_REPO_DIR="$PWD"
 VEILKEY_CENTER_URL=https://<VC_HOST>:<VC_PORT> \
 VEILKEY_REG_TOKEN=vk_reg_... \
 bash install/common/install-localvault.sh
@@ -26,8 +33,9 @@ bash install/common/install-localvault.sh
 | `VEILKEY_LABEL` | `$(hostname)` | Vault display name |
 | `VEILKEY_DATA_DIR` | `/data/localvault` | Data directory |
 | `VEILKEY_BIN_DIR` | `/usr/local/bin` | Binary install path |
-| `VEILKEY_TLS_INSECURE` | `1` | Skip TLS verification |
-| `VEILKEY_TRUSTED_IPS` | private ranges | Allowed IP CIDRs |
+| `VEILKEY_TLS_INSECURE` | `0` | Verify TLS; provision CA trust before installation |
+| `SSL_CERT_FILE` | system roots | Verified PEM CA bundle for Go (persisted for the service) |
+| `VEILKEY_TRUSTED_IPS` | resolved VaultCenter address only | Exact source address; no private-range or loopback defaults |
 | `VEILKEY_SYSTEMD` | `1` | Create systemd service |
 | `VEILKEY_BINARY_URL` | - | Pre-built binary URL (skip build) |
 

@@ -1,70 +1,11 @@
 #!/usr/bin/env node
-const { execFileSync, execSync } = require("child_process");
+const { execFileSync } = require("child_process");
+const { loadEnv } = require("./env");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
 
-const nativeDir = path.join(__dirname, "..", "native");
-const veilBin = path.join(nativeDir, "veil");
-const cliBin = path.join(nativeDir, "veilkey-cli");
-const pkg = require("../package.json");
-
-// Check for updates (non-blocking, silent on error)
-try {
-  const latest = execSync("npm view veilkey-cli version 2>/dev/null", { encoding: "utf8", timeout: 3000 }).trim();
-  if (latest && latest !== pkg.version) {
-    console.log(`\x1b[33m[veilkey] 새 버전 ${latest} 사용 가능 (현재 ${pkg.version})\x1b[0m`);
-    console.log(`\x1b[33m  npm install -g veilkey-cli\x1b[0m`);
-    console.log("");
-  }
-} catch (_) {}
-
-// Auto-load .veilkey/env
-function loadEnv() {
-  let dir = process.cwd();
-  while (dir !== "/") {
-    const envFile = path.join(dir, ".veilkey", "env");
-    if (fs.existsSync(envFile)) {
-      const content = fs.readFileSync(envFile, "utf8");
-      for (const line of content.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const clean = trimmed.replace(/^export\s+/, "");
-        const eq = clean.indexOf("=");
-        if (eq > 0) {
-          const k = clean.slice(0, eq).trim();
-          const v = clean.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-          process.env[k] = v;
-        }
-      }
-      return;
-    }
-    dir = path.dirname(dir);
-  }
-  // Fallback
-  const home = process.env.HOME || "";
-  for (const sub of [".veilkey/env", "veilkey-selfhosted/.veilkey/env"]) {
-    const p = path.join(home, sub);
-    if (fs.existsSync(p)) {
-      loadEnvFile(p);
-      return;
-    }
-  }
-}
-
-function loadEnvFile(filePath) {
-  const content = fs.readFileSync(filePath, "utf8");
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const clean = trimmed.replace(/^export\s+/, "");
-    const eq = clean.indexOf("=");
-    if (eq > 0) {
-      const k = clean.slice(0, eq).trim();
-      const v = clean.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
-      process.env[k] = v;
-    }
-  }
-}
+const cliBin = path.join(__dirname, "..", "native", "veilkey-cli");
 
 loadEnv();
 process.env.VEILKEY_VEIL = "1";
@@ -76,27 +17,31 @@ if (process.env.VEILKEY_LOCALVAULT_URL) {
 const args = process.argv.slice(2);
 
 if (args.length === 0) {
-  // Create temp rcfile for custom prompt
-  const os = require("os");
-  const rcPath = path.join(os.tmpdir(), `veil-bashrc-${process.pid}`);
-  fs.writeFileSync(rcPath, `
+  let rcDir;
+  let exitCode = 0;
+  try {
+    rcDir = fs.mkdtempSync(path.join(os.tmpdir(), "veil-shell-"));
+    fs.chmodSync(rcDir, 0o700);
+    const rcPath = path.join(rcDir, "bashrc");
+    fs.writeFileSync(rcPath, `
 [ -f ~/.bashrc ] && source ~/.bashrc
 [ -f ~/.bash_profile ] && source ~/.bash_profile
 export PS1="\\[\\033[36m\\](VEIL)\\[\\033[0m\\] \\h:\\W \\u\\$ "
-`);
-  try {
+unset HISTFILE
+`, { flag: "wx", mode: 0o600 });
     execFileSync(cliBin, ["wrap-pty", "bash", "--rcfile", rcPath], { stdio: "inherit" });
   } catch (e) {
-    if (e.status === null || e.signal === 'SIGKILL') {
+    if (e.status === null || e.signal === "SIGKILL") {
       console.error("[veilkey] Binary was killed by macOS. Run:");
       console.error("  sudo codesign --force --sign -", cliBin);
-    } else if (e.status) {
-      console.error("[veilkey] exit:", e.status);
+    } else {
+      console.error("[veilkey] Protected shell failed:", e.code || e.status || "unknown error");
     }
-    process.exit(e.status || 1);
+    exitCode = e.status || 1;
   } finally {
-    try { fs.unlinkSync(rcPath); } catch (_) {}
+    if (rcDir) fs.rmSync(rcDir, { recursive: true, force: true });
   }
+  process.exitCode = exitCode;
 } else {
   const cmd = args[0];
   const rest = args.slice(1);
@@ -116,13 +61,13 @@ export PS1="\\[\\033[36m\\](VEIL)\\[\\033[0m\\] \\h:\\W \\u\\$ "
     scan: () => execFileSync(cliBin, ["scan", ...rest], { stdio: "inherit" }),
   };
 
-  if (map[cmd]) {
-    try { map[cmd](); } catch (e) { process.exit(e.status || 1); }
-  } else {
-    try {
+  try {
+    if (Object.hasOwn(map, cmd)) {
+      map[cmd]();
+    } else {
       execFileSync(cliBin, ["wrap-pty", ...args], { stdio: "inherit" });
-    } catch (e) {
-      process.exit(e.status || 1);
     }
+  } catch (e) {
+    process.exitCode = e.status || 1;
   }
 }

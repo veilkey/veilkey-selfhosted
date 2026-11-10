@@ -8,7 +8,8 @@
     "veilkey-cli": "bin/veilkey-cli.js"
   },
   "scripts": {
-    "postinstall": "node scripts/postinstall.js"
+    "postinstall": "node scripts/postinstall.js",
+    "test": "node --test test/*.test.js"
   },
   "os": ["darwin", "linux"],
   "cpu": ["arm64", "x64"]

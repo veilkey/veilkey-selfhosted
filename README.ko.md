@@ -5,10 +5,11 @@
   <p>
     <a href="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml"><img src="https://github.com/veilkey/veilkey-selfhosted/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
     <a href="https://github.com/veilkey/veilkey-selfhosted/releases"><img src="https://img.shields.io/github/v/release/veilkey/veilkey-selfhosted?display_name=tag" alt="GitHub release"></a>
-    <a href="https://www.npmjs.com/package/veilkey-cli"><img src="https://img.shields.io/npm/v/veilkey-cli?color=cb3837" alt="npm"></a>
     <a href="./LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT"></a>
   </p>
 </div>
+
+> HTTPS 예제를 실행하기 전에 [CA 신뢰 설정](docs/setup/tls.md)을 완료하세요. 호스트·원격 연결에서는 TLS 검증을 유지합니다.
 
 [English](./README.md) | 한국어
 
@@ -57,7 +58,9 @@ VeilKey는 **222가지 시크릿 패턴**을 자동 감지합니다 — AWS 키,
 ### macOS
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# 최신 공개 릴리스 태그로 바꾸세요.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 bash install/macos/bootstrap/install-all.sh
 ```
@@ -65,7 +68,9 @@ bash install/macos/bootstrap/install-all.sh
 ### Proxmox LXC (Debian)
 
 ```bash
-git clone https://github.com/veilkey/veilkey-selfhosted.git
+# 최신 공개 릴리스 태그로 바꾸세요.
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
 CT_IP=<IP>/<MASK> CT_GW=<GATEWAY> bash install/proxmox-lxc-debian/install-veilkey.sh
 ```
@@ -88,18 +93,18 @@ veil scan file.env            # 파일에서 시크릿 찾기 (222 패턴)
 
 ```bash
 # VaultCenter 로그인
-curl -sk -X POST https://<VC>:11181/api/admin/login \
+curl -sS -X POST https://<VC>:11181/api/admin/login \
   -H 'Content-Type: application/json' \
   -d '{"password":"<ADMIN_PASSWORD>"}' -c /tmp/vk-cookies.txt
 
 # 임시 ref 생성
-curl -sk -X POST https://<VC>:11181/api/keycenter/temp-refs \
+curl -sS -X POST https://<VC>:11181/api/keycenter/temp-refs \
   -H 'Content-Type: application/json' -b /tmp/vk-cookies.txt \
   -d '{"name":"MY_API_KEY","value":"sk-actual-key-value"}'
 # → {"ref":"VK:TEMP:xxxxxxxx"}
 
 # vault로 승격
-curl -sk -X POST https://<VC>:11181/api/keycenter/promote \
+curl -sS -X POST https://<VC>:11181/api/keycenter/promote \
   -H 'Content-Type: application/json' -b /tmp/vk-cookies.txt \
   -d '{"ref":"VK:TEMP:xxxxxxxx","name":"MY_API_KEY","vault_hash":"a0a761c6"}'
 # → {"token":"VK:LOCAL:yyyyyyyy"}
@@ -180,7 +185,7 @@ VaultCenter                    LocalVault
 서버가 재시작되면 시크릿이 잠깁니다. 마스터 비밀번호로 unlock해야 합니다.
 
 ```bash
-curl -sk -X POST https://<server>:10180/api/unlock \
+curl -sS -X POST https://<server>:10180/api/unlock \
   -H 'Content-Type: application/json' \
   -d '{"password":"<master-password>"}'
 ```

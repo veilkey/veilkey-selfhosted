@@ -38,10 +38,13 @@ export VEILKEY_LOCALVAULT_URL=https://vaultcenter:10181
 # Set in docker-compose.yml by default
 ```
 
-For self-signed certs:
+For a private CA or a verified self-signed service certificate, provision [CA trust](./setup/tls.md) first:
 ```bash
-export VEILKEY_TLS_INSECURE=1
+export VEILKEY_TLS_INSECURE=0
+export VEILKEY_CA_CERT=/path/to/verified-ca.pem
 ```
+
+Host installers verify TLS by default. The bundled Compose exception is restricted to single-host Docker-internal traffic; never copy it to host or remote clients.
 
 ## Commands
 
@@ -185,14 +188,16 @@ scan:
 
 | Variable | Description |
 |----------|-------------|
+| `VEILKEY_ENV` | Explicit trusted environment file override; otherwise only `$HOME/.veilkey/env` is auto-loaded, never a project file |
 | `VEILKEY_LOCALVAULT_URL` | Primary API endpoint |
 | `VEILKEY_API` | Alias for `VEILKEY_LOCALVAULT_URL` |
 | `VEILKEY_HUB_URL` | Fallback API endpoint |
 | `VEILKEY_STATE_DIR` | Session state directory (default: `$TMPDIR/veilkey-cli`) |
 | `VEILKEY_FUNCTION_DIR` | Function wrapper directory |
 | `VEILKEY_DB_KEY` | Derived from master password (KEK) during unlock. No manual setting needed |
-| `VEILKEY_TLS_INSECURE` | Set `1` to skip TLS certificate verification |
-| `VEILKEY_CURL_OPTS` | Custom curl options for bulk-apply sync (default: `-sk`) |
+| `VEILKEY_TLS_INSECURE` | Defaults to `0` (verify TLS); do not disable for host/remote traffic |
+| `VEILKEY_CA_CERT` | Verified PEM CA bundle for the Rust CLI; public roots used when unset |
+| `VEILKEY_CURL_OPTS` | Custom curl options for bulk-apply sync; keep verification enabled and use `--cacert` for private CAs |
 
 ## Standalone CLI (without Docker)
 
@@ -200,21 +205,24 @@ The `veilkey` CLI can run directly on a host or LXC without Docker.
 
 ### Install
 
-The [install-localvault.sh](../install/proxmox-lxc-debian/install-localvault.sh) script builds and installs automatically. To build manually:
+Clone the latest published release tag (replace the placeholder), then run the installation script. The CLI is built from the checkout, not installed from an npm registry package.
 
 ```bash
+RELEASE_TAG="<latest-release-tag>"
+git clone --depth 1 --branch "$RELEASE_TAG" https://github.com/veilkey/veilkey-selfhosted.git
 cd veilkey-selfhosted
-cargo build --release -p veil-cli-rs --bin veilkey-cli
-cp target/release/veilkey-cli /usr/local/bin/veilkey-cli
-ln -sf /usr/local/bin/veilkey-cli /usr/local/bin/veilkey
+VEILKEY_URL=https://<VC_HOST>:<VC_PORT> bash install/common/install-veil-cli.sh
 ```
+
+On macOS, use `bash install/macos/veil-cli/install.sh`; that installer retains local `npm install -g "$REPO_ROOT/packages/veil-cli"` linking and codesigning. To update, check out the latest release tag and rerun the same installer. The [standalone LocalVault installer](../install/proxmox-lxc-debian/install-localvault.sh) can also build the CLI.
 
 ### Setup
 
 ```bash
 # Point to your LocalVault
 export VEILKEY_LOCALVAULT_URL=https://<LV_IP>:10180
-export VEILKEY_TLS_INSECURE=1    # for self-signed certs
+export VEILKEY_TLS_INSECURE=0
+export VEILKEY_CA_CERT=/path/to/verified-ca.pem
 
 # Verify
 veilkey status

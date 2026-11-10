@@ -7,20 +7,21 @@ set -euo pipefail
 # Re-running updates (git pull + rebuild + restart).
 #
 # Usage:
-#   VEILKEY_CENTER_URL=http://<HOST>:<VC_PORT> \
+#   VEILKEY_CENTER_URL=https://<HOST>:<VC_PORT> \
 #     bash install/proxmox-lxc-debian/install-localvault.sh
 #
 # Options (env vars):
 #   VEILKEY_CENTER_URL=                         VaultCenter URL (required)
 #   VEILKEY_PORT=10180                          LocalVault listen port
 #   VEILKEY_NAME=$(hostname)                    Vault display name
-#   VEILKEY_PASSWORD=                           Master password (prompted if not set)
+#   VEILKEY_REG_TOKEN=                          Registration token (required for first init)
+#   VEILKEY_TRUSTED_IPS=                        Defaults to the resolved VaultCenter address only
 #   VEILKEY_BULK_APPLY_ALLOWED_PATHS=           Comma-separated absolute paths for bulk-apply
 #
 # Changes (v0.5.1):
-#   - trusted IP에 ::1 (IPv6 loopback) 추가
+#   - Trust only the VaultCenter address by default
 #   - systemd 서비스 등록 (nohup/PID 방식 폐기)
-#   - auto-unlock 설정 (VEILKEY_UNLOCK_PASSWORD)
+#   - VaultCenter-managed unlock (no master password files)
 #   - 일일 백업 cron 자동 등록
 #   - veilkey CLI 빌드/설치
 #   - 설치 후 health check
@@ -39,18 +40,12 @@ if [[ -z "$CENTER_URL" ]]; then
     echo "ERROR: VEILKEY_CENTER_URL is required."
     echo ""
     echo "Usage:"
-    echo "  VEILKEY_CENTER_URL=http://<HOST>:<VC_PORT> bash install/proxmox-lxc-debian/install-localvault.sh"
+    echo "  VEILKEY_CENTER_URL=https://<HOST>:<VC_PORT> bash install/proxmox-lxc-debian/install-localvault.sh"
     exit 1
 fi
 
-if [[ -z "${VEILKEY_PASSWORD:-}" ]]; then
-    read -s -p "Master password: " VEILKEY_PASSWORD
-    echo ""
-    if [[ -z "$VEILKEY_PASSWORD" ]]; then
-        echo "ERROR: Password cannot be empty."
-        exit 1
-    fi
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/../common/localvault-trusted-ip.sh"
+TRUSTED_IPS="${VEILKEY_TRUSTED_IPS:-$(veilkey_center_ip "$CENTER_URL")}"
 
 REPO_ROOT="$(pwd)"
 INSTALL_DIR="$REPO_ROOT/.localvault"
@@ -62,6 +57,11 @@ BIN="$INSTALL_DIR/veilkey-localvault"
 ENV_FILE="$INSTALL_DIR/.env"
 SERVICE_NAME="veilkey-localvault"
 SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
+
+if [ ! -f "$DATA_DIR/salt" ] && [[ -z "${VEILKEY_REG_TOKEN:-}" ]]; then
+    echo "ERROR: VEILKEY_REG_TOKEN is required for initial registration."
+    exit 1
+fi
 
 echo "=== LocalVault installer ==="
 echo ""
@@ -137,18 +137,11 @@ mkdir -p "$DATA_DIR" "$BACKUP_DIR"
 
 if [ -f "$ENV_FILE" ]; then
     echo "  Existing config preserved: $ENV_FILE"
-    # Ensure ::1 is in trusted IPs
-    if grep -q "^VEILKEY_TRUSTED_IPS=" "$ENV_FILE" && ! grep -q "::1" "$ENV_FILE"; then
-        sed -i 's|^VEILKEY_TRUSTED_IPS=\(.*\)|VEILKEY_TRUSTED_IPS=\1,::1|' "$ENV_FILE"
-        echo "  Added ::1 to trusted IPs."
-    fi
-    # Ensure auto-unlock password
-    if ! grep -q "^VEILKEY_UNLOCK_PASSWORD=" "$ENV_FILE"; then
-        echo "" >> "$ENV_FILE"
-        echo "# Auto-unlock on startup" >> "$ENV_FILE"
-        echo "VEILKEY_UNLOCK_PASSWORD=$VEILKEY_PASSWORD" >> "$ENV_FILE"
-        echo "  Added auto-unlock password."
-    fi
+    # Remove obsolete plaintext credentials without creating a backup copy.
+    sed -i -e '/^[[:space:]]*\(export[[:space:]][[:space:]]*\)\{0,1\}VEILKEY_[A-Z_]*PASSWORD[A-Z_]*=/d' \
+        -e '/^VEILKEY_TRUSTED_IPS=/d' -e '/^VEILKEY_TLS_INSECURE=/d' "$ENV_FILE"
+    printf '\nVEILKEY_TRUSTED_IPS=%s\nVEILKEY_TLS_INSECURE=0\n' "$TRUSTED_IPS" >> "$ENV_FILE"
+    echo "  Updated trust settings; removed legacy password configuration."
     # Update bulk-apply paths if provided
     if [[ -n "$BULK_PATHS" ]]; then
         if grep -q "^VEILKEY_BULK_APPLY_ALLOWED_PATHS=" "$ENV_FILE" 2>/dev/null; then
@@ -162,16 +155,13 @@ else
     cat > "$ENV_FILE" << ENVEOF
 VEILKEY_DB_PATH=$DATA_DIR/veilkey.db
 VEILKEY_ADDR=:$PORT
-VEILKEY_TRUSTED_IPS=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,127.0.0.1,::1
+VEILKEY_TRUSTED_IPS=$TRUSTED_IPS
 VEILKEY_MODE=root
 VEILKEY_VAULT_NAME=$VAULT_NAME
 VEILKEY_VAULTCENTER_URL=$CENTER_URL
-VEILKEY_TLS_INSECURE=1
+VEILKEY_TLS_INSECURE=0
 VEILKEY_TLS_CERT=$TLS_DIR/cert.pem
 VEILKEY_TLS_KEY=$TLS_DIR/key.pem
-
-# Auto-unlock on startup
-VEILKEY_UNLOCK_PASSWORD=$VEILKEY_PASSWORD
 ENVEOF
     if [[ -n "$BULK_PATHS" ]]; then
         echo "" >> "$ENV_FILE"
@@ -179,6 +169,14 @@ ENVEOF
     fi
     echo "  Config created: $ENV_FILE"
 fi
+
+# Preserve only public CA paths, never credentials, for the service process.
+for ca_key in SSL_CERT_FILE SSL_CERT_DIR; do
+    if [[ -n "${!ca_key:-}" ]]; then
+        sed -i "/^${ca_key}=/d" "$ENV_FILE"
+        printf '%s=%s\n' "$ca_key" "${!ca_key}" >> "$ENV_FILE"
+    fi
+done
 
 # --- [7/10] Stop existing process ---
 echo "[7/10] Stopping existing process..."
@@ -204,7 +202,7 @@ if [ -f "$DATA_DIR/salt" ]; then
 else
     cd "$INSTALL_DIR"
     set -a; source "$ENV_FILE"; set +a
-    echo "$VEILKEY_PASSWORD" | "$BIN" init --root --center "$CENTER_URL"
+    "$BIN" init --root --center "$CENTER_URL" --token "$VEILKEY_REG_TOKEN"
     cd "$REPO_ROOT"
 fi
 
@@ -260,7 +258,7 @@ fi
 # --- Verify ---
 echo ""
 sleep 3
-HEALTH=$(curl -sk "https://127.0.0.1:$PORT/api/status" 2>/dev/null || echo '{"error":"unreachable"}')
+HEALTH=$(curl -sS --cacert "$TLS_DIR/cert.pem" "https://127.0.0.1:$PORT/api/status" 2>/dev/null || echo '{"error":"unreachable"}')
 LOCKED=$(echo "$HEALTH" | grep -o '"locked":[a-z]*' | cut -d: -f2)
 
 if [[ "$LOCKED" == "false" ]]; then
@@ -286,10 +284,9 @@ if [[ "$LOCKED" == "false" ]]; then
     echo ""
 elif [[ "$LOCKED" == "true" ]]; then
     echo "⚠️  Started but still LOCKED."
-    echo "  Auto-unlock may have failed. Check:"
+    echo "  Unlock VaultCenter and check registration and CA trust:"
     echo "    journalctl -u $SERVICE_NAME -n 20"
-    echo "  Manual unlock:"
-    echo "    curl -sk -X POST https://127.0.0.1:$PORT/api/unlock -H 'Content-Type: application/json' -d '{\"password\":\"<PASSWORD>\"}'"
+    echo "  See docs/setup/tls.md and docs/setup/localvault/registration.md."
 else
     echo "❌ Health check failed: $HEALTH"
     echo "  journalctl -u $SERVICE_NAME -n 20"
